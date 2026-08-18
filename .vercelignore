@@ -1,0 +1,19 @@
+# Files that must never be uploaded to a deployment.
+#
+# This matters most for drag-and-drop deploys: they upload the folder as it is
+# on disk and do NOT apply .gitignore, so anything sitting here goes up.
+#
+# .data/ is the local development datastore. It contains the demo seed —
+# fake clients, fake appointments, and a SUPER_ADMIN whose password is in the
+# source. Uploaded, it makes a deployment *look* like it has a database:
+# pages render, sign-in works, and every write silently fails because the
+# filesystem is read-only. Real data belongs in Postgres via DATABASE_URL.
+.data/
+
+# Secrets, build output and dependencies — restored by the build itself.
+.env
+.env.*
+.next/
+node_modules/
+*.tsbuildinfo
+.DS_Store
