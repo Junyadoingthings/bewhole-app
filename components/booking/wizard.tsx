@@ -1059,6 +1059,7 @@ export function BookingWizard({
           paymentMethod={paymentMethod}
           requiresQuote={service?.requiresQuote ?? false}
           isFree={service?.rateBand === 'free'}
+          acceptedMethods={acceptedMethods}
         />
       </aside>
 
@@ -1195,6 +1196,7 @@ function SummaryCard({
   paymentMethod,
   requiresQuote,
   isFree,
+  acceptedMethods,
 }: {
   service: Service | null;
   category: ServiceCategory | null;
@@ -1206,6 +1208,7 @@ function SummaryCard({
   paymentMethod: 'card' | 'medical_aid';
   requiresQuote: boolean;
   isFree: boolean;
+  acceptedMethods: readonly PaymentMethodMark[];
 }) {
   const rows: { label: string; value: React.ReactNode }[] = [];
   if (service) rows.push({ label: 'Service', value: service.name });
@@ -1284,6 +1287,27 @@ function SummaryCard({
           <Badge tone="success" size="sm" className="mt-4">
             <ShieldCheck className="h-3 w-3" /> Card details never stored
           </Badge>
+
+          {/*
+            What the practice can actually take, shown alongside the amount
+            rather than only on the last step. Someone deciding whether to book
+            wants to know they can pay the way they normally do before they
+            invest six steps in the form.
+
+            The marks come from the active gateway, so this cannot promise a
+            method the practice cannot accept. When no gateway is connected the
+            list is empty and the honest alternative is shown instead: the
+            session is still booked, and the fee is settled with the practice.
+          */}
+          {!isFree && !requiresQuote && (
+            acceptedMethods.length > 0 ? (
+              <PaymentMethods methods={acceptedMethods} compact className="mt-4" />
+            ) : (
+              <p className="mt-4 text-xs leading-relaxed text-ink-soft">
+                The practice will send payment details before your appointment.
+              </p>
+            )
+          )}
         </div>
       )}
     </div>

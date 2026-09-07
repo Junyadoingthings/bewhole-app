@@ -81,6 +81,38 @@ export function simulatedPaymentsAreExposed(): boolean {
   return isProductionRuntime() && getPaymentProvider().name === 'mock';
 }
 
+/**
+ * Marks to display as "we accept these", for the footer and other trust copy.
+ *
+ * Deliberately a different question from acceptedMethods(). That one asks
+ * "what can we charge with right now?" and is strict, because it appears
+ * beside an amount at the moment someone is about to pay — promising Visa
+ * there and then failing to take a card would be a lie told at the worst
+ * possible time.
+ *
+ * This one asks "what does the practice intend to accept?", which is what a
+ * footer badge row actually communicates. It falls back to the methods of the
+ * provider named in PAYMENT_PROVIDER even when the keys are not in place yet,
+ * because naming a provider is an explicit statement by the practice — not a
+ * silent default. With PAYMENT_PROVIDER unset and no gateway configured this
+ * still returns nothing, so the row never invents a claim on its own.
+ */
+export function displayMethods(): readonly PaymentMethodMark[] {
+  const live = acceptedMethods();
+  if (live.length) return live;
+
+  switch (process.env.PAYMENT_PROVIDER?.toLowerCase()) {
+    case 'yoco':
+      return yocoProvider.methods;
+    case 'peach':
+      return peachProvider.methods;
+    case 'payfast':
+      return payfastProvider.methods;
+    default:
+      return [];
+  }
+}
+
 export function paymentProviderName(): PaymentProvider['name'] {
   return getPaymentProvider().name;
 }

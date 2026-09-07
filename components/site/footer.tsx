@@ -1,7 +1,9 @@
 import Link from 'next/link';
-import { Instagram, Mail, MapPin, Phone } from 'lucide-react';
+import { Instagram, Mail, MapPin, Phone, ShieldCheck } from 'lucide-react';
 
 import { Logo } from '@/components/brand/logo';
+import { PaymentMethods } from '@/components/booking/payment-methods';
+import { displayMethods } from '@/services/payments';
 import { BUSINESS, CRISIS_SUPPORT, HOURS_SUMMARY, LOCATIONS } from '@/config/business';
 import { cn } from '@/lib/utils';
 
@@ -34,6 +36,9 @@ const COLUMNS = [
 ];
 
 export function SiteFooter({ className }: { className?: string }) {
+  // Server component: reads the gateway configuration directly, no prop drilling.
+  const paymentMarks = displayMethods();
+
   return (
     <footer
       className={cn(
@@ -186,6 +191,44 @@ export function SiteFooter({ className }: { className?: string }) {
             </ul>
           </div>
         </div>
+
+        {/*
+          Accepted payment methods.
+
+          A quiet band above the sign-off, in the manner of any retail footer —
+          it answers "can I pay the way I normally do?" without anyone having
+          to start a booking to find out.
+
+          Monochrome on purpose. The brand-coloured marks used inside the
+          booking flow would sit on this dark ground as a row of bright tiles
+          and out-shout the crisis contacts directly above them, which are the
+          most important thing in this footer. Rendered in the same muted cream
+          as the surrounding text, the row reads as reassurance rather than
+          advertising.
+
+          The list comes from the configured gateway, so it cannot promise a
+          method the practice does not take; with none configured it renders
+          nothing at all rather than a hopeful guess.
+        */}
+        {paymentMarks.length > 0 && (
+          <div className="mt-12 border-t border-cream-100/10 pt-8">
+            <p className="text-2xs font-medium uppercase tracking-[0.18em] text-forest-300">
+              Payment methods
+            </p>
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-x-8 gap-y-4">
+              <PaymentMethods
+                methods={paymentMarks}
+                compact
+                tone="muted"
+                className="text-cream-100/55"
+              />
+              <p className="flex items-center gap-1.5 text-xs text-cream-100/40">
+                <ShieldCheck className="h-3.5 w-3.5" />
+                Secured by our payment provider — card details never reach this site.
+              </p>
+            </div>
+          </div>
+        )}
 
         <div className="mt-12 flex flex-col gap-4 border-t border-cream-100/10 pt-8 sm:flex-row sm:items-center sm:justify-between">
           <p className="font-display text-lg text-cream-200">{BUSINESS.tagline}</p>
