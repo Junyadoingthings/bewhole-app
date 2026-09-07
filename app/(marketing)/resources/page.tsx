@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { ArrowUpRight, BookOpen, Headphones, Sparkles } from 'lucide-react';
 
+import { ResourceCta } from '@/components/home/resource-cta';
 import { PodcastInvite } from '@/components/home/welcome-sections';
 import { ArcMotif } from '@/components/site/decor';
 import { Reveal, Stagger, StaggerItem } from '@/components/motion';
@@ -10,6 +11,20 @@ import { Badge, EmptyState } from '@/components/ui/primitives';
 import { listResources } from '@/lib/db';
 import { formatShortDate } from '@/lib/date';
 import { parts } from '@/lib/date';
+
+/**
+ * Revalidated, not frozen.
+ *
+ * This page reads published content from the database. Without this export
+ * Next prerenders it once at build time and serves that snapshot forever, so
+ * publishing or unpublishing an item in the admin dashboard would not reach
+ * the public site until someone happened to redeploy.
+ *
+ * 300s keeps the page effectively static for speed (served from the CDN,
+ * regenerated in the background) while guaranteeing an admin change shows up
+ * within five minutes without a deploy.
+ */
+export const revalidate = 300;
 
 export const metadata: Metadata = {
   title: 'Wellness resources',
@@ -53,6 +68,8 @@ export default async function ResourcesPage() {
         deliberately down to three sections. It carries its own section and
         shell, so it is placed directly rather than wrapped.
       */}
+      <ResourceCta />
+
       <PodcastInvite />
 
       <section className="shell pb-section">

@@ -12,6 +12,20 @@ import { CRISIS_SUPPORT } from '@/config/business';
 import { formatFullDate, parts } from '@/lib/date';
 import { getResourceBySlug, listResources } from '@/lib/db';
 
+/**
+ * Revalidated, not frozen.
+ *
+ * This page reads published content from the database. Without this export
+ * Next prerenders it once at build time and serves that snapshot forever, so
+ * publishing or unpublishing an item in the admin dashboard would not reach
+ * the public site until someone happened to redeploy.
+ *
+ * 300s keeps the page effectively static for speed (served from the CDN,
+ * regenerated in the background) while guaranteeing an admin change shows up
+ * within five minutes without a deploy.
+ */
+export const revalidate = 300;
+
 export async function generateStaticParams() {
   const resources = await listResources();
   return resources.map((r) => ({ slug: r.slug }));

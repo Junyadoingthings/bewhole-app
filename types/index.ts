@@ -38,6 +38,15 @@ export interface Profile {
   lastName: string;
   phone?: string | null;
   dateOfBirth?: ISODate | null;
+  /** Collected at booking. Optional — an online client needs no address. */
+  address?: string | null;
+  /**
+   * Required at booking. A counselling practice may need to reach someone on
+   * the client's behalf; these are kept on the profile rather than the
+   * appointment so they are findable from the client record.
+   */
+  emergencyContactName?: string | null;
+  emergencyContactPhone?: string | null;
   /** Only captured when the client chooses to pay by medical aid. */
   medicalAid?: {
     scheme: string;
@@ -220,7 +229,7 @@ export interface Payment {
   currency: string;
   method: PaymentMethod;
   status: PaymentStatus;
-  provider: 'peach' | 'payfast' | 'mock' | 'manual';
+  provider: 'peach' | 'payfast' | 'yoco' | 'mock' | 'manual';
   /** Provider-side checkout id. Never a card number — we never see those. */
   providerCheckoutId?: string | null;
   providerPaymentId?: string | null;

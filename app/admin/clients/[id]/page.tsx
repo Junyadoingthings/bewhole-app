@@ -107,6 +107,49 @@ export default async function AdminClientPage({ params }: { params: { id: string
                 </Badge>
                 {user.isDemo && <Badge tone="outline" size="sm">Demo record</Badge>}
               </div>
+
+              {/*
+                Emergency contact and address, shown on the client record.
+                The booking form insists on an emergency contact; if the
+                practice cannot see it here, collecting it achieves nothing.
+                Both are rendered only when present, so records created before
+                these fields existed do not show empty rows.
+              */}
+              {(profile.emergencyContactName || profile.address) && (
+                <dl className="mt-4 grid gap-3 rounded-2xl border border-line bg-canvas-sunk p-4 sm:grid-cols-2">
+                  {profile.emergencyContactName && (
+                    <div>
+                      <dt className="text-2xs uppercase tracking-[0.14em] text-ink-faint">
+                        Emergency contact
+                      </dt>
+                      <dd className="mt-1 text-sm text-ink">
+                        {profile.emergencyContactName}
+                        {profile.emergencyContactPhone && (
+                          <>
+                            {' · '}
+                            <a
+                              href={`tel:${profile.emergencyContactPhone}`}
+                              className="text-forest-700 hover:underline"
+                            >
+                              {profile.emergencyContactPhone}
+                            </a>
+                          </>
+                        )}
+                      </dd>
+                    </div>
+                  )}
+                  {profile.address && (
+                    <div>
+                      <dt className="text-2xs uppercase tracking-[0.14em] text-ink-faint">
+                        Address
+                      </dt>
+                      <dd className="mt-1 whitespace-pre-line text-sm text-ink">
+                        {profile.address}
+                      </dd>
+                    </div>
+                  )}
+                </dl>
+              )}
             </div>
           </div>
 

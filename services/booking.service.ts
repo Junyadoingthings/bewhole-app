@@ -19,6 +19,7 @@ import {
   updateAppointment,
   updateProfile,
 } from '@/lib/db';
+import { COUNSELLING_CONSENT } from '@/config/business';
 import { hashPassword } from '@/lib/auth/password';
 import { fromLocalParts, hoursUntil, parts } from '@/lib/date';
 import { emit } from '@/services/events';
@@ -26,6 +27,7 @@ import { createCheckoutForAppointment } from '@/services/payment.service';
 import { resolveSlot } from '@/services/availability.service';
 import type { Appointment, AppointmentView, ID, SessionUser } from '@/types';
 import type { BookingInput } from '@/lib/validation';
+import { paymentsAreLive } from '@/services/payments';
 
 /**
  * Booking orchestration.
@@ -83,6 +85,29 @@ export async function priceSession(
   }
 
   const amountCents = mode === 'online' ? service.priceOnlineCents : service.priceInPersonCents;
+
+  /**
+   * No gateway, no online payment — and no pretending otherwise.
+   *
+   * When the practice has not connected a payment gateway, the fee is still
+   * quoted so nobody is surprised by it, but the session is confirmed on
+   * booking and settled directly with the practice. The alternative, which
+   * this replaced, was a simulated checkout that marked bookings paid without
+   * any money moving.
+   *
+   * The amount is still returned: the client should see what the session
+   * costs. Only `requiresPayment` changes, and with it the appointment status,
+   * which becomes 'confirmed' rather than 'pending_payment'.
+   */
+  if (amountCents > 0 && !paymentsAreLive()) {
+    return {
+      amountCents,
+      requiresPayment: false,
+      label: 'Payable to the practice',
+      note: 'Your session is confirmed. The practice will send payment details before your appointment.',
+    };
+  }
+
   return { amountCents, requiresPayment: amountCents > 0, label: 'Private card payment' };
 }
 
@@ -131,8 +156,26 @@ export async function createBooking(
     clientUserId = await resolveOrCreateClient(input, () => (accountCreated = true));
   }
 
+  /**
+   * Persist what the booking form collected about the person, not just the
+   * appointment. Address and emergency contact belong on the profile: they are
+   * facts about the client that outlive any single session, and the practice
+   * needs them findable from the client record rather than by opening whichever
+   * booking happened to capture them.
+   *
+   * Written in one update so a booking costs at most one profile write.
+   */
+  const profilePatch: Parameters<typeof updateProfile>[1] = {};
   if (input.paymentMethod === 'medical_aid' && input.medicalAid) {
-    await updateProfile(clientUserId, { medicalAid: input.medicalAid });
+    profilePatch.medicalAid = input.medicalAid;
+  }
+  if (input.address?.trim()) profilePatch.address = input.address.trim();
+  if (input.emergencyName?.trim()) {
+    profilePatch.emergencyContactName = input.emergencyName.trim();
+    profilePatch.emergencyContactPhone = input.emergencyPhone.trim();
+  }
+  if (Object.keys(profilePatch).length > 0) {
+    await updateProfile(clientUserId, profilePatch);
   }
 
   /* ------------------------------------------------------- claim the slot */
@@ -175,11 +218,30 @@ export async function createBooking(
     grantedAt: ts,
     ipHash: meta.ipHash ?? null,
   });
+  /**
+   * Informed consent, recorded honestly.
+   *
+   * This used to hardcode `granted: true` regardless of what the client
+   * actually did — which would have made the consent record worthless as
+   * evidence, since it said "yes" even when nothing was agreed. It now
+   * reflects the clause-by-clause answers from the booking form, and carries
+   * the consent document's own version so a future change to the wording does
+   * not retroactively rewrite what past clients agreed to.
+   *
+   * A staff member booking on a client's behalf takes consent in the room, on
+   * paper; `clinicalConsent` is absent there and the record is written as not
+   * granted online, which is accurate rather than convenient.
+   */
+  const consentClauses = input.clinicalConsent ?? {};
+  const consentGranted =
+    COUNSELLING_CONSENT.items.length > 0 &&
+    COUNSELLING_CONSENT.items.every((item) => consentClauses[item.id] === true);
+
   await recordConsent({
     userId: clientUserId,
     type: 'informed_consent',
-    version: '2026-01',
-    granted: true,
+    version: COUNSELLING_CONSENT.version,
+    granted: consentGranted,
     grantedAt: ts,
     ipHash: meta.ipHash ?? null,
   });

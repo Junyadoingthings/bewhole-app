@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 
 import { BookingCalendar } from '@/components/booking/calendar';
+import { ConsentForm, isConsentComplete } from '@/components/consent/consent-form';
 import { PaymentMethods } from '@/components/booking/payment-methods';
 import { EmbeddedCheckout } from '@/components/booking/embedded-checkout';
 import { ServiceIcon } from '@/components/site/service-icon';
@@ -57,6 +58,7 @@ type StepId =
   | 'date'
   | 'time'
   | 'details'
+  | 'consent'
   | 'payment'
   | 'checkout';
 
@@ -110,12 +112,29 @@ export function BookingWizard({
     lastName: user?.lastName ?? '',
     email: user?.email ?? '',
     phone: profile?.phone ?? '',
+    address: '',
+    emergencyName: '',
+    emergencyPhone: '',
     reason: '',
     isFirstSession: true,
   });
-  const [medicalAid, setMedicalAid] = React.useState({ scheme: '', memberNumber: '', mainMember: '' });
+  const [medicalAid, setMedicalAid] = React.useState({
+    scheme: '',
+    memberNumber: '',
+    mainMember: '',
+    // Schemes identify a dependant by the main member's ID and the patient's
+    // date of birth, so a claim cannot be submitted without both.
+    mainMemberId: '',
+    dateOfBirth: '',
+  });
   const [consentTerms, setConsentTerms] = React.useState(false);
   const [consentAge, setConsentAge] = React.useState(false);
+  /**
+   * The clause-by-clause counselling consent, keyed by clause id. Separate
+   * from `consentTerms` (the cancellation/payment terms) because they are
+   * different documents agreed at different points for different reasons.
+   */
+  const [clinicalConsent, setClinicalConsent] = React.useState<Record<string, boolean>>({});
 
   const [slots, setSlots] = React.useState<TimeSlot[] | null>(null);
   const [loadingSlots, setLoadingSlots] = React.useState(false);
@@ -152,7 +171,10 @@ export function BookingWizard({
     const base: StepId[] = ['service'];
     base.push('mode');
     if (mode === 'in_person') base.push('location');
-    base.push('date', 'time', 'details', 'payment');
+    // Consent sits immediately before payment, deliberately: informed
+    // consent must be given BEFORE money changes hands, not alongside a
+    // card form where it competes for attention with a payment field.
+    base.push('date', 'time', 'details', 'consent', 'payment');
     // The in-page card step only exists when the gateway can render fields and
     // there is actually something to charge.
     if (supportsEmbedded) base.push('checkout');
@@ -231,9 +253,16 @@ export function BookingWizard({
           details.lastName.trim().length > 1 &&
           /\S+@\S+\.\S+/.test(details.email) &&
           details.phone.replace(/\D/g, '').length >= 10 &&
+          // Emergency contact is required. Address is not — an online client
+          // has no clinical reason to give one.
+          details.emergencyName.trim().length > 1 &&
+          details.emergencyPhone.replace(/\D/g, '').length >= 10 &&
           consentTerms &&
           consentAge
         );
+      case 'consent':
+        // Every clause, not a blanket accept — see components/consent.
+        return isConsentComplete(clinicalConsent);
       case 'payment':
         return paymentMethod === 'card' || Boolean(medicalAid.scheme && medicalAid.memberNumber);
       case 'checkout':
@@ -242,7 +271,7 @@ export function BookingWizard({
       default:
         return false;
     }
-  }, [step, serviceId, mode, locationId, date, time, details, consentTerms, consentAge, paymentMethod, medicalAid]);
+  }, [step, serviceId, mode, locationId, date, time, details, consentTerms, consentAge, paymentMethod, medicalAid, clinicalConsent]);
 
   function next() {
     setFormError(null);
@@ -273,12 +302,19 @@ export function BookingWizard({
       lastName: details.lastName,
       email: details.email,
       phone: details.phone,
+      address: details.address || undefined,
+      emergencyName: details.emergencyName,
+      emergencyPhone: details.emergencyPhone,
       reason: details.reason || undefined,
       isFirstSession: details.isFirstSession,
       paymentMethod,
       medicalAid: paymentMethod === 'medical_aid' ? medicalAid : null,
       consentTerms: consentTerms as true,
       consentAge: consentAge as true,
+      // The clause-by-clause counselling consent. Recorded against the client
+      // so the practice can show WHAT was agreed and WHEN, not merely that a
+      // box was ticked.
+      clinicalConsent,
     });
 
     if (!result.ok) {
@@ -647,6 +683,66 @@ export function BookingWizard({
                   </div>
 
                   <div className="mt-5">
+                    <Label htmlFor="address" optional hint="Needed for in-person sessions and invoices">
+                      Address
+                    </Label>
+                    <Textarea
+                      id="address"
+                      rows={2}
+                      value={details.address}
+                      onChange={(e) => setDetails({ ...details, address: e.target.value })}
+                      placeholder="Street, suburb, city, postal code"
+                      autoComplete="street-address"
+                    />
+                  </div>
+
+                  {/*
+                    Emergency contact.
+
+                    This is required, unlike the address. A counselling service
+                    can encounter a client at risk during or after a session,
+                    and "who do we call" is not a question to be asking for the
+                    first time in that moment. It is two fields and it is the
+                    right kind of friction.
+                  */}
+                  <fieldset className="mt-5 rounded-3xl border border-line bg-canvas-sunk p-5">
+                    <legend className="px-1 text-sm font-medium text-ink">
+                      Emergency contact
+                    </legend>
+                    <p className="mt-1 text-sm leading-relaxed text-ink-soft">
+                      Someone we can reach if there is an emergency during or after your session.
+                    </p>
+                    <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                      <div>
+                        <Label htmlFor="emergencyName">Full name</Label>
+                        <Input
+                          id="emergencyName"
+                          value={details.emergencyName}
+                          onChange={(e) =>
+                            setDetails({ ...details, emergencyName: e.target.value })
+                          }
+                          error={errors.emergencyName}
+                        />
+                        <FieldError id="emergencyName-error">{errors.emergencyName}</FieldError>
+                      </div>
+                      <div>
+                        <Label htmlFor="emergencyPhone">Contact number</Label>
+                        <Input
+                          id="emergencyPhone"
+                          type="tel"
+                          placeholder="083 000 0000"
+                          value={details.emergencyPhone}
+                          onChange={(e) =>
+                            setDetails({ ...details, emergencyPhone: e.target.value })
+                          }
+                          error={errors.emergencyPhone}
+                        />
+                        <FieldError id="emergencyPhone-error">{errors.emergencyPhone}</FieldError>
+                      </div>
+                    </div>
+                  </fieldset>
+
+                  <div className="mt-5">
                     <Label htmlFor="reason" optional hint="Helps us prepare — a sentence is plenty">
                       What brings you here?
                     </Label>
@@ -659,13 +755,41 @@ export function BookingWizard({
                     />
                   </div>
 
+                  {/*
+                    First or follow-up, as a choice rather than a checkbox.
+
+                    This was one checkbox meaning "first session", which left
+                    a returning client's answer implicit — an unticked box says
+                    nothing about whether someone forgot or is coming back. The
+                    two are mutually exclusive, so a radio pair states it
+                    outright and rules out ticking both.
+
+                    The wizard defaults to first session; the practice reads
+                    this to know whether to prepare intake paperwork.
+                  */}
+                  <div className="mt-6">
+                    <p className="text-sm font-medium text-ink">Is this your first session?</p>
+                    <div
+                      className="mt-3 grid gap-3 sm:grid-cols-2"
+                      role="radiogroup"
+                      aria-label="Is this your first session?"
+                    >
+                      <OptionCard
+                        selected={details.isFirstSession}
+                        onSelect={() => setDetails({ ...details, isFirstSession: true })}
+                        title="This is my first session"
+                        description="With Be Whole Care."
+                      />
+                      <OptionCard
+                        selected={!details.isFirstSession}
+                        onSelect={() => setDetails({ ...details, isFirstSession: false })}
+                        title="This is my follow-up session"
+                        description="I have seen Ntombi before."
+                      />
+                    </div>
+                  </div>
+
                   <div className="mt-5 space-y-3">
-                    <CheckboxRow
-                      id="firstSession"
-                      checked={details.isFirstSession}
-                      onChange={(v) => setDetails({ ...details, isFirstSession: v })}
-                      title="This is my first session with Be Whole Care"
-                    />
                     <CheckboxRow
                       id="consentAge"
                       checked={consentAge}
@@ -683,6 +807,17 @@ export function BookingWizard({
                       error={errors.consentTerms}
                     />
                   </div>
+                </StepShell>
+              )}
+
+              {step === 'consent' && (
+                <StepShell
+                  n={stepNumber}
+                  total={totalSteps}
+                  title="Informed consent"
+                  lead="Please read each point. You can print or save a copy before continuing."
+                >
+                  <ConsentForm value={clinicalConsent} onChange={setClinicalConsent} />
                 </StepShell>
               )}
 
@@ -749,10 +884,34 @@ export function BookingWizard({
                           >
                             <div className="mt-5 rounded-3xl border border-line bg-white p-6">
                               <p className="text-sm font-medium text-ink">Your medical aid</p>
-                              <p className="mt-1.5 text-sm leading-relaxed text-ink-soft">
-                                Acceptance of these details does not guarantee payment by your scheme.
-                                Any amount not covered remains your responsibility.
-                              </p>
+
+                              {/*
+                                The disclaimers appear BEFORE the fields, not
+                                after. Someone typing scheme details is already
+                                assuming they are covered; the practice's
+                                position on rates and liability has to be read
+                                while that assumption is still forming, not
+                                discovered when an account arrives.
+                              */}
+                              <ul className="mt-3 space-y-2 rounded-2xl bg-cream-50 p-4">
+                                {[
+                                  'Medical aid rates differ from the cash rates shown.',
+                                  'Medical aid rates are subject to your scheme’s rules, available benefits and authorisation requirements.',
+                                  'Acceptance of these details does not guarantee payment by your scheme. Any amount not covered remains your responsibility.',
+                                ].map((line) => (
+                                  <li
+                                    key={line}
+                                    className="flex gap-2.5 text-sm leading-relaxed text-ink-muted"
+                                  >
+                                    <span
+                                      aria-hidden
+                                      className="mt-2 h-1 w-1 shrink-0 rounded-full bg-forest-400"
+                                    />
+                                    {line}
+                                  </li>
+                                ))}
+                              </ul>
+
                               <div className="mt-5 grid gap-4 sm:grid-cols-2">
                                 <div className="sm:col-span-2">
                                   <Label htmlFor="scheme">Scheme</Label>
@@ -776,6 +935,17 @@ export function BookingWizard({
                                   />
                                 </div>
                                 <div>
+                                  <Label htmlFor="dateOfBirth">Date of birth</Label>
+                                  <Input
+                                    id="dateOfBirth"
+                                    type="date"
+                                    value={medicalAid.dateOfBirth}
+                                    onChange={(e) =>
+                                      setMedicalAid({ ...medicalAid, dateOfBirth: e.target.value })
+                                    }
+                                  />
+                                </div>
+                                <div>
                                   <Label htmlFor="mainMember">Main member</Label>
                                   <Input
                                     id="mainMember"
@@ -784,6 +954,18 @@ export function BookingWizard({
                                       setMedicalAid({ ...medicalAid, mainMember: e.target.value })
                                     }
                                     placeholder="Self, or their full name"
+                                  />
+                                </div>
+                                <div>
+                                  <Label htmlFor="mainMemberId">Main member ID number</Label>
+                                  <Input
+                                    id="mainMemberId"
+                                    inputMode="numeric"
+                                    value={medicalAid.mainMemberId}
+                                    onChange={(e) =>
+                                      setMedicalAid({ ...medicalAid, mainMemberId: e.target.value })
+                                    }
+                                    placeholder="As it appears on the scheme"
                                   />
                                 </div>
                               </div>
@@ -949,6 +1131,7 @@ const STEP_LABELS: Record<StepId, string> = {
   date: 'Date',
   time: 'Time',
   details: 'Details',
+  consent: 'Consent',
   payment: 'Payment',
   checkout: 'Pay',
 };

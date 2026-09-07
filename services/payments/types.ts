@@ -100,7 +100,7 @@ export interface WebhookVerification {
 }
 
 export interface PaymentProvider {
-  readonly name: 'peach' | 'payfast' | 'mock';
+  readonly name: 'peach' | 'payfast' | 'yoco' | 'mock';
   /** True when real credentials are configured. */
   readonly live: boolean;
   /** Instruments this provider can present, for client-facing copy. */

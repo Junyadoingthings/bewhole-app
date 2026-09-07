@@ -10,6 +10,85 @@
  * anything an admin can change; read settings instead.
  */
 
+/**
+ * The practitioner's registered professional identity.
+ *
+ * These are regulated credentials, not marketing copy: HPCSA registration and
+ * a practice number are what make the practice lawfully able to see clients
+ * and to bill medical aid. They live here, once, so that a change is made in a
+ * single place and can never drift between the site, an email and an invoice.
+ *
+ * Do not edit these without the practitioner's confirmation, and do not invent
+ * further qualifications alongside them.
+ */
+export const PRACTITIONER = {
+  name: 'Ntombi Mothoagae',
+  qualification: 'BPSYCH',
+  title: 'Registered Counsellor',
+  council: 'HPCSA',
+  /**
+   * Two different numbers, both real and both needed — they are not
+   * alternatives to each other:
+   *
+   *   registrationNumber  HPCSA council registration. Identifies the
+   *                       practitioner as licensed to practise. This is the
+   *                       one that belongs on a consent form.
+   *   practiceNumber      BHF practice number. Identifies the practice for
+   *                       medical aid billing. Belongs on invoices and claims.
+   */
+  registrationNumber: 'PRC0038660',
+  practiceNumber: '1096974',
+} as const;
+
+/**
+ * Informed consent for counselling.
+ *
+ * Transcribed verbatim from the practice's own consent form — this is a
+ * regulated disclosure, not marketing copy, so the wording is not to be
+ * paraphrased, shortened or "improved" without the practitioner's approval.
+ *
+ * Held here as data rather than inside a component so that the booking flow,
+ * the printable copy and any future PDF all render the SAME text. If it lived
+ * in JSX it would eventually be edited in one place and not the other, and a
+ * client could agree to wording the practice no longer uses.
+ */
+export const COUNSELLING_CONSENT = {
+  version: '2026-01',
+  items: [
+    {
+      id: 'purpose',
+      body:
+        'The purpose of counselling is to provide a supportive and confidential space for you to ' +
+        'explore personal challenges, improve emotional well-being, and develop coping strategies.',
+      agreeLabel: 'I agree',
+    },
+    {
+      id: 'online',
+      body:
+        'Online counselling will take place via secure video call, voice call, or chat platforms. ' +
+        'While every effort is made to maintain confidentiality, there are potential risks such as ' +
+        "technical failures or breaches of privacy beyond the counsellor's control.",
+      agreeLabel: 'I agree',
+    },
+    {
+      id: 'confidentiality',
+      body:
+        'All information shared in counselling sessions will remain confidential except in the ' +
+        'following situations: if there is reason to believe you or someone else is in danger, or ' +
+        'if required by law or a court order.',
+      agreeLabel: 'I agree',
+    },
+    {
+      id: 'services',
+      body:
+        `I consent to receive counselling services from Be Whole Care / Ntombi Mothoagae ` +
+        `(Registered Counsellor — PRC0038660 — HPCSA). I understand I may withdraw from ` +
+        `counselling at any time.`,
+      agreeLabel: 'I understand and consent',
+    },
+  ],
+} as const;
+
 export const BUSINESS = {
   name: 'Be Whole Care',
   legalName: 'Be Whole Care',
@@ -215,4 +294,65 @@ export const AI_ASSISTANT = {
   name: 'Wholeness Guide',
   disclaimer:
     'I am an AI assistant, not a counsellor. I can help you understand services and book a session, but I cannot diagnose or give clinical advice.',
+} as const;
+
+/* ------------------------------------------------------------- resources */
+
+/**
+ * The Be Whole Wellness Journal — a purchasable digital workbook.
+ *
+ * `priceCents: null` means "not on sale yet": the page shows the journal and
+ * invites an enquiry instead of rendering a Buy button that cannot charge.
+ * Set a real figure here to switch purchasing on. That is deliberate — a
+ * checkout button that fails is worse than one that is honestly absent.
+ */
+export const WELLNESS_JOURNAL = {
+  name: 'Be Whole Wellness Journal',
+  subtitle: 'Counselling workbook & daily devotional',
+  priceCents: null as number | null,
+  /**
+   * The cover artwork. `null` would render a designed typographic placeholder
+   * instead of a broken image; now that the file exists, it points at it.
+   *
+   * Note the extension: the file supplied was named .jpg but is actually a
+   * WebP. Renaming a file does not convert it, so it is stored under its true
+   * extension — serving WebP bytes as image/jpeg relies on browser sniffing
+   * and breaks anything that trusts the content type.
+   */
+  cover: '/images/wellness-journal.webp',
+  /** Plain, honest description — no therapeutic claims. */
+  intro:
+    'A 30-day guided journal for the seasons that feel heavy — low mood, hopelessness, ' +
+    'discouragement. It pairs a short daily devotional with the kind of reflective ' +
+    'exercises used in counselling, so you have somewhere to put your thoughts between ' +
+    'sessions, or on your own.',
+  includes: [
+    'A 30-day guided plan you can start any day',
+    'A short devotional reading for each day',
+    'Counselling-style reflection prompts and exercises',
+    'Space to track mood, gratitude and what you are learning',
+    'Yours to keep — download and print as many copies as you need',
+  ],
+} as const;
+
+/**
+ * Naked Vows — the practice's marriage segment for couples.
+ *
+ * Two ways in, deliberately different in commitment:
+ *   channel   ongoing marriage resources and empowerment sessions, open to all
+ *   interest  registering for the annual gathering, which is invitation-based
+ *
+ * `whatsappChannelUrl: null` hides the channel button rather than linking
+ * nowhere. Set it once the channel exists.
+ */
+export const NAKED_VOWS = {
+  name: 'Naked Vows',
+  tagline: 'For married couples',
+  /** See the note on WELLNESS_JOURNAL.cover. Supplied as .jpg, actually a PNG. */
+  cover: '/images/naked-vows.png',
+  whatsappChannelUrl: 'https://whatsapp.com/channel/0029VbDnUSoJf05jNIIrls3E',
+  intro:
+    'Naked Vows is a space for married couples to do the honest work of staying close — ' +
+    'the conversations most couples avoid until they have to have them. It runs as an ' +
+    'annual gathering, alongside ongoing marriage resources and empowerment sessions.',
 } as const;

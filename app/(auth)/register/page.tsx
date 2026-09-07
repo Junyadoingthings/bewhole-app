@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
 import { RegisterForm } from '@/components/auth/forms';
+import { GoogleButton } from '@/components/auth/google-button';
 import { getCurrentUser } from '@/lib/auth';
 
 export const metadata: Metadata = { title: 'Create an account', robots: { index: false } };
@@ -17,6 +18,10 @@ export default async function RegisterPage({ searchParams }: { searchParams: { n
       <p className="mt-3 leading-relaxed text-ink-soft">
         So you can manage appointments, see session links and book again in a tap.
       </p>
+
+      {/* Same button as sign-in: with Google there is no separate "sign up"
+          — the callback creates the account if the email is new. */}
+      <GoogleButton next={searchParams.next} label="Sign up with Google" />
 
       <RegisterForm next={searchParams.next} />
 

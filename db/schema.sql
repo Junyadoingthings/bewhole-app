@@ -83,6 +83,12 @@ create table if not exists profiles (
   last_name         text not null,
   phone             text,
   date_of_birth     date,
+  -- Collected at booking. Address is optional (online clients need none);
+  -- emergency contact is required by the booking form, but nullable here so
+  -- that accounts created before this column existed remain valid.
+  address           text,
+  emergency_contact_name  text,
+  emergency_contact_phone text,
   -- Only populated when the client chooses to claim from a medical aid.
   medical_aid       jsonb,
   preferred_contact text not null default 'email'
@@ -464,6 +470,37 @@ begin
     execute format('alter table %I force row level security', t);
   end loop;
 end $$;
+
+-- ============================================================= migrations ====
+-- `create table if not exists` above does nothing to a database that already
+-- has the table, so columns added after the first deploy must be applied
+-- explicitly here. `add column if not exists` keeps the whole file idempotent:
+-- it is still safe to run this script start to finish against any database,
+-- new or existing.
+--
+-- Add new columns to BOTH the create-table block above (so a fresh database is
+-- correct in one pass) and to this section (so existing databases catch up).
+
+-- 2026-08: booking now collects an address and an emergency contact.
+alter table profiles add column if not exists address text;
+alter table profiles add column if not exists emergency_contact_name text;
+alter table profiles add column if not exists emergency_contact_phone text;
+
+-- 2026-08: Trauma, Grief & Healing withdrawn from the public site.
+--
+-- Deactivated rather than deleted. Appointments already booked against this
+-- category and service still reference them; deleting the rows would leave
+-- those records pointing at nothing. Setting `active = false` hides them from
+-- the Services page and from booking while keeping history intact — and the
+-- practice can reverse it from the admin dashboard at any time.
+--
+-- Seed changes do not touch an existing database, so this statement is what
+-- actually applies the change in production.
+update service_categories set active = false where slug = 'trauma-grief-and-healing';
+update services set active = false where slug = 'trauma-grief-and-healing-session';
+
+-- 2026-08: couples AND family sessions run 90 minutes; individual stays 60.
+update services set duration_minutes = 90 where slug in ('couples-counselling', 'family-counselling');
 
 -- ============================================================ maintenance ====
 -- Reminder dispatch is driven by a scheduled call to /api/cron/reminders,

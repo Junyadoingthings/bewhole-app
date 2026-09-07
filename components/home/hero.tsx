@@ -2,89 +2,104 @@ import Image from 'next/image';
 import { ArrowRight } from 'lucide-react';
 
 import { ButtonLink } from '@/components/ui/button';
-import { BUSINESS } from '@/config/business';
+import { BUSINESS, PRACTITIONER } from '@/config/business';
 import { PHOTOS } from '@/config/photos';
 
 /**
  * The welcome.
  *
- * ── Layout ────────────────────────────────────────────────────────────────
- * Three blocks — words, photographs, actions — placed explicitly on a grid
- * rather than reordered with `order-*`:
+ * ── Two layouts, one DOM order ────────────────────────────────────────────
+ * Three blocks — words, portrait, action — in that order in the markup:
  *
- *   phone    words → photographs → actions   (DOM order, single column)
- *   desktop  words and actions stacked left, photographs spanning both rows
- *            on the right
+ *   phone/tablet  a centred column, read top to bottom: headline, face,
+ *                 button. The face arrives before the ask.
+ *   desktop (lg)  a two-column grid. Words and button stack in the left
+ *                 column; the portrait spans both rows on the right.
  *
- * Putting the photographs before the buttons on a phone is the point: someone
- * sees who they would be talking to *before* they are asked to book, and both
- * arrive without scrolling. Explicit `col-start`/`row-start` at `lg` means the
- * DOM order never has to lie about the visual order.
+ * Desktop placement is done with explicit `col-start`/`row-start` rather than
+ * `order-*`, so the reading order never diverges from the DOM order — a screen
+ * reader and a sighted visitor get the same sequence.
  *
- * ── The portrait ──────────────────────────────────────────────────────────
- * One photograph, capped at 15rem on a phone. That cap is what lets the
- * headline, her face and the booking button share a single screen; at full
- * width the portrait alone filled the viewport and pushed the call to action
- * out of sight.
+ * The centred phone layout used to be reused unchanged on a laptop, leaving a
+ * narrow ribbon of centred text stranded in a wide screen with the headline
+ * looking undersized. Desktop now has room to put the words beside the face.
+ *
+ * ── Type scale ────────────────────────────────────────────────────────────
+ * The headline clamp runs to 4.75rem instead of 3.75rem, and the supporting
+ * lines step up at `lg`. The clamp's lower bound is untouched, so the phone
+ * layout — which fits headline, face and button on one screen — is unchanged.
  */
 export function Hero() {
-  // The pink portrait only. The second, darker portrait was removed at the
-  // practice's request — one photograph, used consistently everywhere.
   const portrait = PHOTOS.practitionerAlt;
 
   return (
     <section className="bg-canvas-sunk">
-      <div className="shell grid gap-6 py-6 sm:gap-10 sm:py-14 lg:grid-cols-[1.02fr_0.98fr] lg:items-center lg:gap-16 lg:py-20">
+      <div className="shell flex flex-col items-center py-8 text-center sm:py-14 lg:grid lg:grid-cols-[1.05fr_0.95fr] lg:items-center lg:gap-16 lg:py-24 lg:text-left xl:gap-20">
+        {/* 1 — Words. Left column on desktop. */}
         <div className="lg:col-start-1 lg:row-start-1">
-          <h1 className="font-display text-[clamp(2.125rem,6vw,3.75rem)] font-bold leading-[1.05] tracking-[-0.02em] text-ink">
+          <h1 className="font-display text-[clamp(2.125rem,6vw,4.75rem)] font-bold leading-[1.04] tracking-[-0.02em] text-ink">
             Welcome to
             <br />
             <span className="text-forest-800">Be Whole Care.</span>
           </h1>
 
-          <p className="mt-4 max-w-md font-display text-sm font-semibold uppercase leading-snug tracking-[0.02em] text-forest-700 sm:text-base lg:text-lg">
+          <p className="mx-auto mt-4 max-w-xl font-display text-sm font-semibold uppercase leading-snug tracking-[0.02em] text-forest-700 sm:text-base lg:mx-0 lg:mt-6 lg:text-xl">
             Professional counselling services &amp; psychological support
           </p>
 
           {/*
-            Hidden on phones. It is the single most expensive block up here —
-            four lines — and without it the headline, both faces and the
-            booking button fit a small phone's screen together, which is the
-            whole point of this layout. The same sentence opens the About page
-            and the footer, so nothing is lost.
+            Hidden on phones. It is the most expensive block up here — four
+            lines — and without it the headline, her face and the booking
+            button fit a small phone's screen together. The same sentence
+            opens the About page and the footer, so nothing is lost.
           */}
-          <p className="mt-4 hidden max-w-md leading-relaxed text-ink-muted text-pretty sm:block sm:text-base">
+          <p className="mx-auto mt-4 hidden max-w-xl leading-relaxed text-ink-muted text-pretty sm:block sm:text-base lg:mx-0 lg:mt-6 lg:text-lg">
             {BUSINESS.promise}
           </p>
         </div>
 
-        <div className="lg:col-start-2 lg:row-span-2 lg:row-start-1">
-          {/*
-            One portrait, capped so it stays clear of the fold on a phone —
-            the headline, the photograph and the booking button share a screen.
-          */}
-          <div className="relative mx-auto aspect-[4/5] w-full max-w-[15rem] overflow-hidden rounded-[1.75rem] bg-canvas shadow-lifted sm:max-w-xs lg:max-w-sm">
+        {/* 2 — Portrait and credential. Right column on desktop, spanning both rows. */}
+        <div className="mt-7 flex flex-col items-center sm:mt-9 lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:mt-0">
+          <div className="relative aspect-[4/5] w-full max-w-[13.5rem] overflow-hidden rounded-[1.75rem] bg-canvas shadow-lifted sm:max-w-[15rem] lg:max-w-[22rem] xl:max-w-[24rem]">
             <Image
               src={portrait.src}
-              alt={portrait.alt}
+              alt={`${PRACTITIONER.name}, ${PRACTITIONER.title}`}
               fill
               priority
-              quality={88}
-              sizes="(min-width: 1024px) 24rem, (min-width: 640px) 20rem, 15rem"
+              quality={90}
+              sizes="(min-width: 1280px) 24rem, (min-width: 1024px) 22rem, (min-width: 640px) 15rem, 13.5rem"
               style={{ objectPosition: portrait.position }}
               className="object-cover"
             />
           </div>
+
+          {/* The name tag. Small on purpose — it identifies, it does not sell. */}
+          <div className="mt-4 text-center">
+            <p className="font-display text-base font-semibold text-ink sm:text-lg lg:text-xl">
+              {PRACTITIONER.name} ({PRACTITIONER.qualification})
+            </p>
+            <p className="mt-0.5 text-xs text-ink-muted sm:text-sm lg:text-base">
+              {PRACTITIONER.title} ({PRACTITIONER.council})
+            </p>
+            <p className="mt-0.5 text-2xs text-ink-soft sm:text-xs lg:text-sm">
+              Pr.No. {PRACTITIONER.practiceNumber}
+            </p>
+          </div>
         </div>
 
         {/*
-          One action. The terms button that sat beside it was removed — the
-          terms are still one tap away from their own section further down and
-          from the footer, and are acknowledged inside the booking flow where
-          they actually bind.
+          3 — The action. Under the words in the left column on desktop.
+          `lg:self-start` matters: the portrait spans both grid rows and is
+          taller than the copy, so row 2 is tall. Without self-start the
+          button centres in that row and floats in a pocket of dead space
+          well below the paragraph it belongs to.
         */}
-        <div className="lg:col-start-1 lg:row-start-2">
-          <ButtonLink href="/book" size="lg" className="group w-full sm:w-auto">
+        <div className="w-full lg:col-start-1 lg:row-start-2 lg:w-auto lg:self-start">
+          <ButtonLink
+            href="/book"
+            size="lg"
+            className="group mt-7 w-full sm:w-auto lg:mt-8 lg:text-base"
+          >
             Schedule your session here
             <ArrowRight className="h-4 w-4 transition-transform duration-300 ease-calm group-hover:translate-x-1" />
           </ButtonLink>

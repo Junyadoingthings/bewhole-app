@@ -26,7 +26,7 @@ import {
   updateUser,
 } from '@/lib/db';
 import { LIMITS, clientKey, rateLimit } from '@/lib/rate-limit';
-import { fieldErrors, loginSchema, profileSchema, registerSchema } from '@/lib/validation';
+import { fieldErrors, loginSchema, profileSchema, registerSchema, safeRedirect } from '@/lib/validation';
 import { notify } from '@/services/notifications';
 
 export interface AuthState {
@@ -331,8 +331,3 @@ export async function changeOwnPassword(_prev: AuthState, formData: FormData): P
   return { status: 'success', message: 'Password changed. Other devices have been signed out.' };
 }
 
-/** Only same-origin relative paths may be redirect targets. */
-function safeRedirect(next: string): string | null {
-  if (!next.startsWith('/') || next.startsWith('//')) return null;
-  return next;
-}

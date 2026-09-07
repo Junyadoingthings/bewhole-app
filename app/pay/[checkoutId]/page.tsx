@@ -4,7 +4,7 @@ import { Lock, ShieldCheck } from 'lucide-react';
 
 import { LogoCompact } from '@/components/brand/logo';
 import { Button } from '@/components/ui/button';
-import { getMockCheckout, settleMockCheckout } from '@/services/payments';
+import { getMockCheckout, settleMockCheckout, simulatedPaymentsAreExposed } from '@/services/payments';
 import { money } from '@/lib/utils';
 
 export const metadata: Metadata = { title: 'Secure payment', robots: { index: false } };
@@ -21,6 +21,15 @@ export const dynamic = 'force-dynamic';
  * With Peach or Payfast credentials set, nothing ever routes here.
  */
 export default function MockCheckoutPage({ params }: { params: { checkoutId: string } }) {
+  /**
+   * Never reachable on the live site.
+   *
+   * This page can mark a payment as settled. That is exactly what is wanted in
+   * development and unacceptable in production, so it refuses to render there
+   * even if some other code path were to link to it.
+   */
+  if (simulatedPaymentsAreExposed()) notFound();
+
   const checkout = getMockCheckout(params.checkoutId);
   if (!checkout) notFound();
 

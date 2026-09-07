@@ -189,6 +189,16 @@ function normalizeMsisdn(phone: string) {
 }
 
 /** Minimal branded HTML shell. Inline styles only — email clients demand it. */
+/**
+ * The public site URL, for assets that must resolve outside our own server —
+ * an email client fetches images over the open internet, never from a
+ * relative same-origin path. Falls back to localhost so a dev-mode send does
+ * not throw; the image simply will not load there, which is expected.
+ */
+function siteUrl(): string {
+  return (process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:5600').replace(/\/+$/, '');
+}
+
 function emailShell(subject: string, body: string) {
   const paragraphs = body
     .split('\n\n')
@@ -201,8 +211,24 @@ function emailShell(subject: string, body: string) {
   return `<!doctype html><html><body style="margin:0;background:#F5F2EA;padding:32px 16px;font-family:-apple-system,Segoe UI,Helvetica,Arial,sans-serif;">
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center">
     <table role="presentation" width="100%" style="max-width:560px;background:#FFFFFF;border-radius:24px;overflow:hidden;border:1px solid #E7E4DB;">
-      <tr><td style="padding:28px 32px 0;">
-        <div style="font-size:13px;letter-spacing:0.16em;text-transform:uppercase;color:#24601C;font-weight:600;">Be Whole Care</div>
+      <tr><td align="center" style="padding:28px 32px 0;">
+        <!--
+          The real logo file, not a text wordmark. Explicit width/height (not
+          just CSS) because several major email clients strip <style> blocks
+          entirely and need the attributes to reserve layout space before the
+          image loads — without them the logo can flash in at native size or
+          collapse the row. Sits on the card's white background, which is
+          deliberate: the PNG is transparent, and rendering it directly on a
+          dark-mode email client's own background can make the ink-coloured
+          wordmark unreadable.
+        -->
+        <img
+          src="${siteUrl()}/logo.png"
+          width="140"
+          height="84"
+          alt="Be Whole Care"
+          style="display:block;width:140px;height:auto;"
+        />
       </td></tr>
       <tr><td style="padding:16px 32px 8px;">
         <h1 style="margin:0 0 18px;font-size:24px;line-height:1.2;color:#141A12;font-weight:600;">${escapeHtml(subject)}</h1>

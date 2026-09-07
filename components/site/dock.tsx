@@ -84,6 +84,13 @@ export function SiteDock({ user }: { user: SessionUser | null }) {
           label={user ? 'You' : 'Sign in'}
           icon={UserRound}
           active={accountActive}
+          /*
+            Glows only while signed out. Once someone has an account and is
+            just switching between pages, "Sign in" no longer needs to
+            compete for attention the way it does for a first-time visitor
+            deciding whether to make one.
+          */
+          glow={!user}
         />
       </div>
     </nav>
@@ -96,12 +103,23 @@ function DockLink({
   icon: Icon,
   active,
   primary = false,
+  glow = false,
 }: {
   href: string;
   label: string;
   icon: LucideIcon;
   active: boolean;
   primary?: boolean;
+  /**
+   * A white beam calling attention to this tab — built for "Sign in", which
+   * otherwise reads as just another icon in a row of five and is easy to
+   * scroll straight past. Two parts, matching the WhatsApp button elsewhere
+   * in the app: an expanding ring behind the tab, and the tab's own glow
+   * pulsing in sympathy. Both `motion-safe:` only — this animates forever,
+   * and permanent motion is exactly what reduced-motion settings exist to
+   * suppress. Without it the tab is simply a normal, static tab.
+   */
+  glow?: boolean;
 }) {
   return (
     <Link
@@ -115,6 +133,7 @@ function DockLink({
           : active
             ? 'text-forest-800 dark:text-forest-200'
             : 'text-ink-soft hover:text-ink',
+        glow && !active && 'motion-safe:animate-beacon-core-white',
       )}
     >
       {/* The Book action is filled at all times — it is the thing the whole
@@ -130,6 +149,15 @@ function DockLink({
           aria-hidden
           className="absolute inset-0 -z-10 rounded-full bg-forest-50 dark:bg-forest-900/60"
           transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
+        />
+      )}
+
+      {/* The expanding ring. `-z-10` keeps it behind the icon/label;
+          pointer-events-none so it never steals the tap it exists to invite. */}
+      {glow && !active && (
+        <span
+          aria-hidden
+          className="pointer-events-none absolute inset-0 -z-10 rounded-full bg-white/80 motion-safe:animate-beacon"
         />
       )}
 

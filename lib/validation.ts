@@ -68,6 +68,27 @@ export const medicalAidSchema = z.object({
   scheme: z.string().trim().min(2, 'Which scheme are you with?').max(80),
   memberNumber: z.string().trim().min(3, 'Enter your membership number').max(40),
   mainMember: z.string().trim().min(2, 'Who is the main member?').max(80),
+  /**
+   * Both optional at the schema level, deliberately.
+   *
+   * A scheme needs the main member's ID and the patient's date of birth to
+   * process a claim, so the form asks for them — but a booking must not be
+   * blocked because someone does not have a family member's ID number to hand
+   * at 11pm. The practice can complete them before submitting the claim.
+   */
+  mainMemberId: z
+    .string()
+    .trim()
+    .max(20)
+    .optional()
+    .or(z.literal(''))
+    .transform((v) => v || undefined),
+  dateOfBirth: z
+    .string()
+    .optional()
+    .or(z.literal(''))
+    .transform((v) => v || undefined)
+    .refine((v) => !v || /^\d{4}-\d{2}-\d{2}$/.test(v), 'Use the date picker'),
 });
 
 export const bookingSchema = z
@@ -81,6 +102,16 @@ export const bookingSchema = z
     lastName: nameField,
     email: emailSchema,
     phone: phoneSchema,
+    address: z.string().trim().max(300).optional(),
+    /**
+     * Required, unlike the address.
+     *
+     * A counselling practice can encounter a client at risk during or after a
+     * session. "Who do we call" is not a question to be asking for the first
+     * time in that moment, so the booking form insists on it.
+     */
+    emergencyName: nameField,
+    emergencyPhone: phoneSchema,
     reason: z.string().trim().max(1000, 'Please keep this under 1000 characters').optional(),
     isFirstSession: z.boolean().default(true),
     paymentMethod: z.enum(['card', 'medical_aid']),
@@ -91,6 +122,13 @@ export const bookingSchema = z
     consentAge: z.literal(true, {
       errorMap: () => ({ message: 'Please confirm the age requirement' }),
     }),
+    /**
+     * Clause-by-clause informed consent, keyed by clause id. Optional at the
+     * schema level so that a staff member booking on a client's behalf — who
+     * takes consent in the room, on paper — is not blocked by a web form.
+     * The public booking flow requires it before payment.
+     */
+    clinicalConsent: z.record(z.boolean()).optional(),
   })
   .refine((v) => v.mode !== 'in_person' || Boolean(v.locationId), {
     message: 'Choose which practice you would like to visit',
@@ -156,4 +194,21 @@ export function fieldErrors(error: z.ZodError): Record<string, string> {
     if (!out[key]) out[key] = issue.message;
   }
   return out;
+}
+
+/**
+ * Only same-origin relative paths may be a redirect target.
+ *
+ * Guards every "return here afterwards" parameter — sign-in, registration and
+ * the OAuth callback. Without it, `?next=https://evil.example` would turn our
+ * own login into an open redirect, which is a credible phishing primitive:
+ * the link genuinely starts on the practice's domain.
+ *
+ * `//host` is rejected as well as `http…` — a protocol-relative URL is still
+ * off-site.
+ */
+export function safeRedirect(next: string | null | undefined): string | null {
+  if (!next) return null;
+  if (!next.startsWith('/') || next.startsWith('//')) return null;
+  return next;
 }

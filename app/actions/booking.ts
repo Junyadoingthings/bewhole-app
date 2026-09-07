@@ -211,7 +211,19 @@ export async function settleMockPayment(
   checkoutId: string,
   outcome: 'paid' | 'failed',
 ): Promise<{ ok: boolean; error?: string }> {
-  const { getPaymentProvider, settleMockCheckout } = await import('@/services/payments');
+  const { getPaymentProvider, settleMockCheckout, isProductionRuntime } = await import(
+    '@/services/payments'
+  );
+  /**
+   * Two independent refusals, because the earlier single check had a gap.
+   *
+   * Asking only "is a real gateway configured?" passes in precisely the
+   * dangerous case — a production deployment with no gateway at all, where the
+   * provider is the mock and this action would happily mark bookings paid.
+   */
+  if (isProductionRuntime()) {
+    return { ok: false, error: 'Simulated payments are not available on the live site.' };
+  }
   if (getPaymentProvider().name !== 'mock') {
     return { ok: false, error: 'Simulated payments are disabled when a real gateway is configured.' };
   }

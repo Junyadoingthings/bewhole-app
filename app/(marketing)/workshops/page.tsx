@@ -7,6 +7,20 @@ import { ButtonLink } from '@/components/ui/button';
 import { Badge, SectionHeading } from '@/components/ui/primitives';
 import { listWorkshops } from '@/lib/db';
 
+/**
+ * Revalidated, not frozen.
+ *
+ * This page reads published content from the database. Without this export
+ * Next prerenders it once at build time and serves that snapshot forever, so
+ * publishing or unpublishing an item in the admin dashboard would not reach
+ * the public site until someone happened to redeploy.
+ *
+ * 300s keeps the page effectively static for speed (served from the CDN,
+ * regenerated in the background) while guaranteeing an admin change shows up
+ * within five minutes without a deploy.
+ */
+export const revalidate = 300;
+
 export const metadata: Metadata = {
   title: 'Workshops & wellness programs',
   description:

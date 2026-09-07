@@ -196,6 +196,16 @@ const config: Config = {
           '0%, 100%': { boxShadow: '0 0 0 0 rgba(37, 211, 102, 0)' },
           '50%': { boxShadow: '0 0 22px 4px rgba(37, 211, 102, 0.45)' },
         },
+        /**
+         * Same brightening, in white — for the dock's Sign in tab. `beacon`
+         * (the expanding ring, above) is already colour-neutral and is reused
+         * as-is with a white-tinted ring element; only the glow needs its own
+         * variant because its colour is baked into the box-shadow.
+         */
+        'beacon-core-white': {
+          '0%, 100%': { boxShadow: '0 0 0 0 rgba(255, 255, 255, 0)' },
+          '50%': { boxShadow: '0 0 16px 3px rgba(255, 255, 255, 0.85)' },
+        },
       },
       animation: {
         'fade-up': 'fade-up 0.6s cubic-bezier(0.22, 1, 0.36, 1) both',
@@ -204,6 +214,7 @@ const config: Config = {
         'draw-check': 'draw-check 0.6s cubic-bezier(0.22, 1, 0.36, 1) 0.15s forwards',
         beacon: 'beacon 2.8s cubic-bezier(0.22, 1, 0.36, 1) infinite',
         'beacon-core': 'beacon-core 2.8s ease-in-out infinite',
+        'beacon-core-white': 'beacon-core-white 2.8s ease-in-out infinite',
       },
     },
   },

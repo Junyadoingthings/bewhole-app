@@ -578,4 +578,26 @@
   a[href]::after {
     content: '';
   }
+
+  /*
+   * Print-only content — signature lines on the consent form, and anything
+   * else that belongs on paper but not on screen. Hidden by default (below)
+   * and revealed only here.
+   */
+  .print-only {
+    display: block !important;
+  }
+
+  /* Consent clauses must never be split across a page break: a signature
+     line stranded on page two, away from the clause it belongs to, is not a
+     valid record of what was agreed. */
+  .print-consent li {
+    break-inside: avoid;
+  }
+}
+
+/* Print-only content is hidden on screen. Paired with the @media print rule
+   above; kept outside it so the default state is unambiguous. */
+.print-only {
+  display: none;
 }

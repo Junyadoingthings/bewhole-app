@@ -90,7 +90,17 @@ export const SERVICE_CATEGORIES = [
     icon: 'Feather',
     accent: 'forest' as const,
     order: 3,
-    active: true,
+    /**
+     * Withdrawn from the site at the practice's request (2026-08).
+     *
+     * DEACTIVATED, not deleted. Appointments already booked under this
+     * category still reference it, and removing the row would leave those
+     * records pointing at nothing — the exact class of bug that produced
+     * "Unknown service" placeholders elsewhere in this codebase. `active:
+     * false` hides it from the Services page and from booking while keeping
+     * history intact and reversible.
+     */
+    active: false,
   },
   {
     id: 'cat_workplace',
@@ -195,8 +205,12 @@ export const SERVICES = [
     categoryId: 'cat_family',
     slug: 'couples-counselling',
     name: "Couple's Counselling",
-    summary: 'A 60-minute session for two partners, together.',
-    durationMinutes: 60,
+    // 90 minutes, not 60 — a couples session needs both partners heard, and
+    // the practice books the room accordingly. Duration drives the end time on
+    // every appointment and the slot grid, so this must be per-service rather
+    // than the global SESSION_DEFAULTS value.
+    summary: 'A 90-minute session for two partners, together.',
+    durationMinutes: 90,
     rateBand: 'couple' as const,
     priceInPersonCents: RATES.couple.centurion,
     priceOnlineCents: RATES.couple.online,
@@ -212,8 +226,10 @@ export const SERVICES = [
     categoryId: 'cat_family',
     slug: 'family-counselling',
     name: 'Family Counselling',
-    summary: 'A 60-minute session for a family unit.',
-    durationMinutes: 60,
+    // 90 minutes, matching couples work: a family session has more people to
+    // hear, and the practice books the room for the same length.
+    summary: 'A 90-minute session for a family unit.',
+    durationMinutes: 90,
     rateBand: 'couple' as const,
     priceInPersonCents: RATES.couple.centurion,
     priceOnlineCents: RATES.couple.online,
@@ -239,7 +255,8 @@ export const SERVICES = [
     requiresQuote: false,
     intakeNote: null,
     order: 4,
-    active: true,
+    // Withdrawn with its category — see the note on cat_trauma above.
+    active: false,
   },
   {
     id: 'svc_workplace',

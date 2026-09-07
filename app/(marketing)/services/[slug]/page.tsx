@@ -13,6 +13,22 @@ import { POLICY } from '@/config/business';
 import { PHOTOS } from '@/config/photos';
 import { getCategoryBySlug, listCategories, listServices } from '@/lib/db';
 
+/**
+ * Revalidated, not frozen.
+ *
+ * This page reads the catalogue from the database, but without this export
+ * Next prerenders it once at build time and serves that snapshot forever —
+ * so a service deactivated, renamed or repriced in the admin dashboard would
+ * never appear on the public site until someone happened to redeploy. That is
+ * exactly what happened when "Trauma, Grief & Healing" stayed visible after
+ * being switched off in the database.
+ *
+ * 300s keeps the page effectively static for speed (served from the CDN,
+ * regenerated in the background) while guaranteeing an admin change shows up
+ * within five minutes without a deploy.
+ */
+export const revalidate = 300;
+
 export async function generateStaticParams() {
   const categories = await listCategories();
   return categories.map((c) => ({ slug: c.slug }));

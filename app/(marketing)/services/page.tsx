@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import Image from 'next/image';
 import Link from 'next/link';
-import { ArrowUpRight, Clock, MapPin, Video } from 'lucide-react';
+import { ArrowUpRight, MapPin, Video } from 'lucide-react';
 
 import { PHOTOS } from '@/config/photos';
 import { ServiceIcon } from '@/components/site/service-icon';
@@ -10,6 +10,22 @@ import { ButtonLink } from '@/components/ui/button';
 import { Badge } from '@/components/ui/primitives';
 import { BUSINESS } from '@/config/business';
 import { listCategories, listServices } from '@/lib/db';
+
+/**
+ * Revalidated, not frozen.
+ *
+ * This page reads the catalogue from the database, but without this export
+ * Next prerenders it once at build time and serves that snapshot forever —
+ * so a service deactivated, renamed or repriced in the admin dashboard would
+ * never appear on the public site until someone happened to redeploy. That is
+ * exactly what happened when "Trauma, Grief & Healing" stayed visible after
+ * being switched off in the database.
+ *
+ * 300s keeps the page effectively static for speed (served from the CDN,
+ * regenerated in the background) while guaranteeing an admin change shows up
+ * within five minutes without a deploy.
+ */
+export const revalidate = 300;
 
 const APPOINTMENT_STEPS = [
   {
@@ -44,30 +60,39 @@ export default async function ServicesPage() {
   return (
     <>
       {/*
-        The consulting room, not a stock idea of one. A photograph here does
-        the work a paragraph cannot: it shows what a session actually looks
-        like before anyone has to imagine it.
+        Type-only hero, centred. The consulting-room photograph used to sit
+        here beside the intro; it now closes the page, after the services have
+        been read. Someone arriving on this page is deciding what to book, and
+        the list is what answers that — the photograph is reassurance, which is
+        worth more once the decision is made than as decoration before it.
       */}
       <section className="bg-canvas-sunk">
-        <div className="shell grid items-center gap-10 py-14 sm:py-16 lg:grid-cols-[1fr_1fr] lg:gap-14 lg:py-20">
+        <div className="shell py-14 text-center sm:py-16 lg:py-20">
           <Reveal>
             <p className="text-2xs font-medium uppercase tracking-[0.16em] text-forest-700 dark:text-forest-300">
               Our services
             </p>
-            <h1 className="mt-4 font-display text-[clamp(1.9rem,4.4vw,3rem)] font-bold uppercase leading-[1.1] text-forest-800 dark:text-forest-200">
+            <h1 className="mx-auto mt-4 max-w-3xl font-display text-[clamp(1.9rem,4.4vw,3rem)] font-bold uppercase leading-[1.1] text-forest-800 dark:text-forest-200">
               Professional counselling services
               <span className="mt-2 block text-[0.62em] font-semibold normal-case tracking-normal text-ink">
                 &amp; psychological support
               </span>
             </h1>
-            <p className="mt-6 max-w-xl text-base leading-relaxed text-ink-muted text-pretty sm:text-lg">
-              {BUSINESS.servicesPromise} Every session is 60 minutes, by appointment, online or at
-              one of our two practices.
-            </p>
-            <div className="mt-8 flex flex-wrap gap-2.5">
-              <Badge tone="cream" size="lg">
-                <Clock className="h-3.5 w-3.5" /> 60 minutes
-              </Badge>
+            {/*
+              The descriptive paragraph was removed at the practice's request.
+              The heading and the badges below already say what this page is;
+              the sentence repeated the promise carried on the home page and
+              pushed the service cards — the reason anyone opens this page —
+              further down.
+            */}
+            <div className="mt-8 flex flex-wrap justify-center gap-2.5">
+              {/*
+                No duration badge here any more. Duration differs per service
+                (60 minutes individual, 90 for couples) and is now stated on
+                each service tag below, where it is accurate. A single figure
+                at the top of the page could only ever be right for some of
+                the services on it.
+              */}
               <Badge tone="cream" size="lg">
                 <Video className="h-3.5 w-3.5" /> Online
               </Badge>
@@ -76,19 +101,6 @@ export default async function ServicesPage() {
               </Badge>
             </div>
           </Reveal>
-
-          <div className="relative aspect-[4/3] w-full overflow-hidden rounded-[2rem] shadow-lifted">
-            <Image
-              src={PHOTOS.coupleSession.src}
-              alt={PHOTOS.coupleSession.alt}
-              fill
-              priority
-              quality={86}
-              sizes="(min-width: 1024px) 32rem, 92vw"
-              style={{ objectPosition: PHOTOS.coupleSession.position }}
-              className="object-cover"
-            />
-          </div>
         </div>
       </section>
 
@@ -123,18 +135,40 @@ export default async function ServicesPage() {
 
                   {inCategory.length > 0 && (
                     <div className="mt-7 flex flex-wrap items-center gap-2 border-t border-line pt-5 text-sm">
-                      {inCategory.map((service) => (
-                        <span
-                          key={service.id}
-                          className="rounded-full bg-cream-100 dark:bg-card px-3 py-1.5 text-xs text-ink-muted"
-                        >
-                          {/* Fees are quoted at booking, not advertised here. */}
-                          {service.name}
-                          {service.rateBand === 'free' && (
-                            <span className="ml-1.5 text-forest-600 dark:text-forest-300">free</span>
-                          )}
-                        </span>
-                      ))}
+                      {inCategory.map((service) => {
+                        /**
+                         * Duration and format live on each service tag, not in
+                         * a single badge at the top of the page. They differ
+                         * per service — individual runs 60 minutes, couples 90
+                         * — so one figure for the whole page was inaccurate the
+                         * moment the two diverged.
+                         */
+                        const formats = [
+                          service.allowsOnline ? 'Online' : null,
+                          service.allowsInPerson ? 'in person' : null,
+                        ].filter(Boolean);
+
+                        return (
+                          <span
+                            key={service.id}
+                            className="rounded-2xl bg-cream-100 dark:bg-card px-3 py-2 text-xs text-ink-muted"
+                          >
+                            {/* Fees are quoted at booking, not advertised here. */}
+                            <span className="block font-medium text-ink">
+                              {service.name}
+                              {service.rateBand === 'free' && (
+                                <span className="ml-1.5 font-normal text-forest-600 dark:text-forest-300">
+                                  free
+                                </span>
+                              )}
+                            </span>
+                            <span className="mt-0.5 block text-2xs text-ink-soft">
+                              {service.durationMinutes} min
+                              {formats.length > 0 && ` · ${formats.join(' & ')}`}
+                            </span>
+                          </span>
+                        );
+                      })}
                     </div>
                   )}
                 </Link>
@@ -153,8 +187,8 @@ export default async function ServicesPage() {
           <div className="mt-10 rounded-4xl border border-line bg-canvas-sunk p-8 sm:p-10">
             <h2 className="font-display text-2xl text-ink">How an appointment works</h2>
             <p className="mt-3 max-w-2xl leading-relaxed text-ink-soft text-pretty">
-              Every session is 60 minutes and by appointment, online or at one of our two
-              practices. Booking takes about two minutes.
+              Sessions run 60 minutes — 90 minutes for couples — by appointment, online or at one
+              of our two practices. Booking takes about two minutes.
             </p>
 
             <ol className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
@@ -176,6 +210,32 @@ export default async function ServicesPage() {
               </Link>
             </div>
           </div>
+        </Reveal>
+
+        {/*
+          The consulting room, at the end. Moved here from the hero at the
+          practice's request: the page's job is to let someone choose a
+          service, and a large photograph above that list delayed it. Closing
+          on the room is reassurance at the point it helps most — just before
+          someone decides to book.
+        */}
+        <Reveal delay={0.12}>
+          <figure className="mt-10">
+            <div className="relative aspect-[16/10] w-full overflow-hidden rounded-4xl shadow-lifted sm:aspect-[2/1]">
+              <Image
+                src={PHOTOS.coupleSession.src}
+                alt={PHOTOS.coupleSession.alt}
+                fill
+                quality={86}
+                sizes="(min-width: 1024px) 64rem, 92vw"
+                style={{ objectPosition: PHOTOS.coupleSession.position }}
+                className="object-cover"
+              />
+            </div>
+            <figcaption className="mt-4 text-center text-sm text-ink-soft">
+              Our consulting rooms in Centurion and Tembisa — or online, wherever you are.
+            </figcaption>
+          </figure>
         </Reveal>
       </section>
     </>

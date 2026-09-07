@@ -19,11 +19,15 @@ export default async function AdminResourcesPage() {
   return (
     <div className="mx-auto max-w-4xl">
       <Reveal>
-        <h1 className="font-display text-3xl text-ink">Resources & workshops</h1>
-        <p className="mt-2 max-w-xl text-ink-soft">
-          What clients see under Resources. Unpublish anything you want to take down — it disappears
-          from the site immediately.
-        </p>
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <h1 className="font-display text-3xl text-ink">Resources & workshops</h1>
+            <p className="mt-2 max-w-xl text-ink-soft">
+              What clients see under Resources. Unpublish anything you want to take down — it
+              disappears from the site immediately.
+            </p>
+          </div>
+        </div>
       </Reveal>
 
       <section className="mt-8 space-y-3">
