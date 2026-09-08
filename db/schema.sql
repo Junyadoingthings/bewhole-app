@@ -206,6 +206,10 @@ create table if not exists appointments (
   amount_cents        int not null default 0 check (amount_cents >= 0),
   reason              text,
   is_first_session    boolean not null default true,
+  -- Outcome of the practice's medical aid verification. Null until decided.
+  medical_aid_decision       text,
+  medical_aid_decision_at    timestamptz,
+  medical_aid_decline_reason text,
   session_link        text,
   calendar_event_id   text,
   cancelled_at        timestamptz,

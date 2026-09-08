@@ -3,12 +3,13 @@ import Link from 'next/link';
 import { CalendarDays, MapPin, Video } from 'lucide-react';
 
 import { AppointmentRowActions } from '@/components/admin/appointment-row-actions';
+import { MedicalAidActions } from '@/components/admin/medical-aid-actions';
 import { STATUS_META } from '@/components/portal/appointment-card';
 import { Reveal } from '@/components/motion';
 import { Badge, EmptyState } from '@/components/ui/primitives';
 import { requireStaff } from '@/lib/auth';
 import { displayTime, formatDayShort, parts, today } from '@/lib/date';
-import { hydrateAppointments, listAppointments } from '@/lib/db';
+import { getProfile, hydrateAppointments, listAppointments } from '@/lib/db';
 import { withTimeout } from '@/lib/db/with-timeout';
 import { cn, money } from '@/lib/utils';
 import type { AppointmentStatus, AppointmentView } from '@/types';
@@ -20,6 +21,7 @@ const FILTERS: { key: string; label: string; statuses?: AppointmentStatus[] }[] 
   { key: 'upcoming', label: 'Upcoming' },
   { key: 'today', label: 'Today' },
   { key: 'pending', label: 'Awaiting payment', statuses: ['pending_payment'] },
+  { key: 'medical_aid', label: 'Medical aid to verify', statuses: ['pending_medical_aid'] },
   { key: 'past', label: 'Past' },
   { key: 'cancelled', label: 'Cancelled & missed', statuses: ['cancelled', 'no_show'] },
   { key: 'all', label: 'All' },
@@ -40,12 +42,42 @@ export default async function AdminAppointmentsPage({
   const now = new Date().toISOString();
   const filter = searchParams.filter ?? (searchParams.ref ? 'all' : 'upcoming');
 
+  /**
+   * Medical aid details, fetched only for the sessions actually awaiting a
+   * decision.
+   *
+   * Two reasons not to hydrate these onto every row: a scheme and member
+   * number are sensitive and should not be shipped to the browser for
+   * appointments nobody is verifying, and this page can list hundreds of rows
+   * — a profile lookup each would be the slowest thing on it.
+   */
+  const awaitingAid = views.filter((a) => a.status === 'pending_medical_aid');
+  const aidProfiles = new Map(
+    (
+      await withTimeout(
+        Promise.all(
+          awaitingAid.map(async (a) => [a.clientUserId, await getProfile(a.clientUserId)] as const),
+        ),
+        [],
+        6000,
+      )
+    ).map(([id, profile]) => [id, profile?.medicalAid ?? null]),
+  );
+
+  /** The private fee this session would cost if the scheme declines it. */
+  const privateFee = (a: AppointmentView) =>
+    a.mode === 'online' ? a.service.priceOnlineCents : a.service.priceInPersonCents;
+
   let rows = views;
   if (searchParams.ref) {
     rows = views.filter((a) => a.reference === searchParams.ref);
   } else if (filter === 'upcoming') {
     rows = views
-      .filter((a) => a.startAt >= now && ['confirmed', 'pending_payment'].includes(a.status))
+      .filter(
+        (a) =>
+          a.startAt >= now &&
+          ['confirmed', 'pending_payment', 'pending_medical_aid'].includes(a.status),
+      )
       .sort((a, b) => a.startAt.localeCompare(b.startAt));
   } else if (filter === 'today') {
     rows = views
@@ -134,6 +166,17 @@ export default async function AdminAppointmentsPage({
                             {a.client?.name ?? '—'}
                           </Link>
                           <span className="block text-xs text-ink-faint">{a.reference}</span>
+                          {a.status === 'pending_medical_aid' && (
+                            <MedicalAidActions
+                              appointmentId={a.id}
+                              clientName={a.client?.name ?? 'This client'}
+                              scheme={aidProfiles.get(a.clientUserId)?.scheme}
+                              memberNumber={aidProfiles.get(a.clientUserId)?.memberNumber}
+                              mainMember={aidProfiles.get(a.clientUserId)?.mainMember}
+                              coPaymentCents={a.amountCents}
+                              privateFeeCents={privateFee(a)}
+                            />
+                          )}
                         </td>
                         <td className="px-5 py-4 text-ink-muted">{a.service?.name ?? 'Session'}</td>
                         <td className="px-5 py-4">
@@ -183,6 +226,17 @@ export default async function AdminAppointmentsPage({
                       <div className="min-w-0">
                         <p className="font-medium text-ink">{a.client?.name ?? '—'}</p>
                         <p className="mt-1 text-sm text-ink-soft">{a.service?.name ?? 'Session'}</p>
+                        {a.status === 'pending_medical_aid' && (
+                          <MedicalAidActions
+                            appointmentId={a.id}
+                            clientName={a.client?.name ?? 'This client'}
+                            scheme={aidProfiles.get(a.clientUserId)?.scheme}
+                            memberNumber={aidProfiles.get(a.clientUserId)?.memberNumber}
+                            mainMember={aidProfiles.get(a.clientUserId)?.mainMember}
+                            coPaymentCents={a.amountCents}
+                            privateFeeCents={privateFee(a)}
+                          />
+                        )}
                       </div>
                       <AppointmentRowActions
                         appointmentId={a.id}

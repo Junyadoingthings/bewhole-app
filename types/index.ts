@@ -166,6 +166,17 @@ export interface DayAvailability {
 
 export const APPOINTMENT_STATUSES = [
   'pending_payment',
+  /**
+   * Booked, the time is held, but the funding route is unverified.
+   *
+   * A medical aid booking is not the same thing as a paid one: the scheme may
+   * not cover counselling, the membership may be lapsed, or the benefit may be
+   * exhausted. Confirming such a session on the spot would promise the client
+   * something the practice cannot yet stand behind, so it waits here until a
+   * staff member has actually checked, and only then becomes confirmed or
+   * moves to card payment.
+   */
+  'pending_medical_aid',
   'confirmed',
   'completed',
   'cancelled',
@@ -193,6 +204,15 @@ export interface Appointment {
   /** Free-text from the client. Deliberately optional and never required. */
   reason?: string | null;
   isFirstSession: boolean;
+  /**
+   * The outcome of the practice's medical aid check, kept on the appointment
+   * so the client record and the emails can both explain what happened. Who
+   * decided and when is in the audit log; this is the part the client sees.
+   */
+  medicalAidDecision?: 'accepted' | 'declined' | null;
+  medicalAidDecisionAt?: ISODateTime | null;
+  /** Shown to the client verbatim, so it is written for them, not for staff. */
+  medicalAidDeclineReason?: string | null;
   sessionLink?: string | null;
   calendarEventId?: ID | null;
   cancelledAt?: ISODateTime | null;

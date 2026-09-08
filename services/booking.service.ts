@@ -73,9 +73,19 @@ export async function priceSession(
 
   if (paymentMethod === 'medical_aid') {
     const co = mode === 'in_person' ? settings.payments.medicalAidCoPaymentCents : 0;
+    /**
+     * Nothing is charged at booking on a medical aid session, co-payment
+     * included.
+     *
+     * The practice has to check the scheme first — cover for counselling,
+     * membership status, remaining benefit — and taking money before that
+     * check means refunding it when the answer is no. The co-payment is still
+     * quoted so the figure is not a surprise; it is collected once the aid is
+     * accepted.
+     */
     return {
       amountCents: co,
-      requiresPayment: co > 0,
+      requiresPayment: false,
       label: co > 0 ? 'Medical aid co-payment' : 'Claimed from your medical aid',
       note:
         mode === 'in_person'
@@ -194,7 +204,17 @@ export async function createBooking(
     startAt: start.toISOString(),
     endAt: end.toISOString(),
     durationMinutes: service.durationMinutes,
-    status: pricing.requiresPayment ? 'pending_payment' : 'confirmed',
+    /**
+     * Three ways in: awaiting card payment, awaiting a medical aid check, or
+     * confirmed outright (free or quoted sessions). A medical aid booking is
+     * never confirmed here — see priceSession above.
+     */
+    status:
+      input.paymentMethod === 'medical_aid'
+        ? 'pending_medical_aid'
+        : pricing.requiresPayment
+          ? 'pending_payment'
+          : 'confirmed',
     paymentMethod: input.paymentMethod,
     amountCents: pricing.amountCents,
     reason: input.reason?.trim() || null,
@@ -258,6 +278,19 @@ export async function createBooking(
   await emit({ type: 'appointment.created', appointmentId: appointment.id });
 
   /* ------------------------------------------------------------- payment */
+  /**
+   * A medical aid booking tells the client it is being checked, and tells the
+   * practice there is something to check. It must not emit
+   * appointment.confirmed: that handler syncs the calendar, schedules
+   * reminders and emails "You're booked" — all of which would be premature
+   * for a session the practice has not agreed to fund yet.
+   */
+  if (appointment.status === 'pending_medical_aid') {
+    await emit({ type: 'appointment.medical_aid_pending', appointmentId: appointment.id });
+    const refreshed = (await getAppointment(appointment.id)) ?? appointment;
+    return { ok: true, data: { appointment: refreshed, requiresPayment: false, accountCreated } };
+  }
+
   if (!pricing.requiresPayment) {
     await emit({ type: 'appointment.confirmed', appointmentId: appointment.id });
     const refreshed = (await getAppointment(appointment.id)) ?? appointment;
@@ -440,4 +473,119 @@ export function appointmentDisplay(a: AppointmentView) {
           ? `${a.location.name} practice`
           : 'In person',
   };
+}
+
+/* ------------------------------------------------------- medical aid check */
+
+export interface MedicalAidDecisionResult {
+  ok: boolean;
+  error?: string;
+}
+
+/**
+ * Record the practice's verdict on a client's medical aid.
+ *
+ * Accepting confirms the session for real — calendar, reminders, confirmation
+ * email — by handing off to the same path a card payment takes, so a
+ * medical-aid client is never left on a second-class version of "confirmed".
+ *
+ * Declining is where the money has to be got right. The amount on the
+ * appointment was priced as a medical aid co-payment (R100 in person, nothing
+ * online). If the scheme will not pay, that figure is meaningless: the client
+ * now owes the private fee. Re-pricing here is the difference between invoicing
+ * R850 and invoicing R100 for the same session — silently, every time.
+ */
+export async function decideMedicalAid(
+  appointmentId: ID,
+  decision: 'accepted' | 'declined',
+  actor: SessionUser,
+  declineReason?: string,
+): Promise<MedicalAidDecisionResult> {
+  const appointment = await getAppointment(appointmentId);
+  if (!appointment) return { ok: false, error: 'Appointment not found' };
+
+  if (appointment.paymentMethod !== 'medical_aid') {
+    return { ok: false, error: 'This booking was not made with medical aid.' };
+  }
+
+  /**
+   * Only an undecided appointment may be decided. Without this a double-click,
+   * a stale tab or a second staff member could re-run the decision — sending
+   * the client a contradictory second email, and on decline re-pricing an
+   * already-repriced session.
+   */
+  if (appointment.status !== 'pending_medical_aid') {
+    return {
+      ok: false,
+      error:
+        appointment.medicalAidDecision
+          ? `This medical aid was already ${appointment.medicalAidDecision}.`
+          : 'This appointment is no longer awaiting a medical aid decision.',
+    };
+  }
+
+  const ts = nowISO();
+
+  /**
+   * Copy the values the audit entry needs BEFORE anything is written.
+   *
+   * getAppointment can hand back the live stored object rather than a copy,
+   * and updateAppointment assigns the patch onto it — so reading
+   * `appointment.amountCents` after the write yields the NEW amount. The audit
+   * entry then records "changed from R800 to R800", which is precisely the
+   * claim a billing dispute would turn on. Primitives captured here cannot
+   * move underneath us.
+   */
+  const previousAmountCents = appointment.amountCents;
+  const { reference } = appointment;
+
+  if (decision === 'accepted') {
+    await updateAppointment(appointmentId, {
+      status: 'confirmed',
+      medicalAidDecision: 'accepted',
+      medicalAidDecisionAt: ts,
+      medicalAidDeclineReason: null,
+    });
+
+    await audit({
+      actorUserId: actor.id,
+      actorRole: actor.role,
+      action: 'appointment.medical_aid_accepted',
+      entity: 'appointment',
+      entityId: appointmentId,
+      meta: { reference, amountCents: previousAmountCents },
+    });
+
+    await emit({ type: 'appointment.confirmed', appointmentId });
+    return { ok: true };
+  }
+
+  // Declined — re-price as a private card booking before telling anyone.
+  const priced = await priceSession(appointment.serviceId, appointment.mode, 'card');
+
+  await updateAppointment(appointmentId, {
+    status: 'pending_payment',
+    paymentMethod: 'card',
+    amountCents: priced.amountCents,
+    medicalAidDecision: 'declined',
+    medicalAidDecisionAt: ts,
+    medicalAidDeclineReason: declineReason?.trim() || null,
+  });
+
+  await audit({
+    actorUserId: actor.id,
+    actorRole: actor.role,
+    action: 'appointment.medical_aid_declined',
+    entity: 'appointment',
+    entityId: appointmentId,
+    meta: {
+      reference,
+      previousAmountCents,
+      amountCents: priced.amountCents,
+      reason: declineReason?.trim() || null,
+    },
+  });
+
+  await emit({ type: 'appointment.medical_aid_declined', appointmentId });
+  return { ok: true };
 }

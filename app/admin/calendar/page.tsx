@@ -34,6 +34,7 @@ export const dynamic = 'force-dynamic';
 const STATUS_FILL: Record<AppointmentStatus, string> = {
   confirmed: 'bg-forest-50/70 dark:bg-forest-900/35',
   pending_payment: 'bg-state-warningSoft/60',
+  pending_medical_aid: 'bg-state-infoSoft/60',
   completed: 'bg-cream-100/70 dark:bg-card/70',
   cancelled: 'bg-state-dangerSoft/50',
   no_show: 'bg-state-dangerSoft/50',
@@ -42,6 +43,7 @@ const STATUS_FILL: Record<AppointmentStatus, string> = {
 const STATUS_BAR: Record<AppointmentStatus, string> = {
   confirmed: 'bg-forest-600',
   pending_payment: 'bg-state-warning',
+  pending_medical_aid: 'bg-state-info',
   completed: 'bg-ink-faint',
   cancelled: 'bg-state-danger',
   no_show: 'bg-state-danger',
@@ -50,6 +52,7 @@ const STATUS_BAR: Record<AppointmentStatus, string> = {
 const STATUS_LABEL: Record<AppointmentStatus, string> = {
   confirmed: 'Confirmed',
   pending_payment: 'Awaiting payment',
+  pending_medical_aid: 'Medical aid — verifying',
   completed: 'Completed',
   cancelled: 'Cancelled',
   no_show: 'Missed',

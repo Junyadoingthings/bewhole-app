@@ -21,6 +21,18 @@ export interface SendInput {
   body: string;
   /** Deep link included in the in-app notification. */
   href?: string | null;
+  /**
+   * Structured facts — appointment date, venue, reference. Rendered as a
+   * table in email rather than sentences, because someone opening this on a
+   * phone is scanning for "when and where", not reading prose.
+   */
+  details?: { label: string; value: string }[];
+  /**
+   * A single action. One per message on purpose: an email offering two things
+   * to click gets neither done. The URL is repeated in the plain-text part so
+   * it survives clients that strip HTML.
+   */
+  cta?: { label: string; url: string } | null;
   type: string;
   audience?: 'client' | 'staff';
   /** When set, the message is queued for a cron worker rather than sent now. */
@@ -55,8 +67,8 @@ const emailAdapter: Adapter = {
           from: process.env.EMAIL_FROM ?? 'Be Whole Care <bookings@bewholecare.co.za>',
           to: [input.to.email],
           subject: input.subject,
-          html: emailShell(input.subject, input.body),
-          text: input.body,
+          html: emailShell(input.subject, input.body, input.details, input.cta),
+          text: plainText(input),
         }),
       });
       if (!res.ok) return { ok: false, error: `Email provider returned ${res.status}` };
@@ -199,7 +211,29 @@ function siteUrl(): string {
   return (process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:5600').replace(/\/+$/, '');
 }
 
-function emailShell(subject: string, body: string) {
+/**
+ * The plain-text alternative.
+ *
+ * Not an afterthought: some clients render it instead of the HTML, and spam
+ * filters weigh a missing or mismatched text part against the sender. The
+ * details and the action URL both have to appear here, or a client reading
+ * text-only would get a confirmation with no date and no way to pay.
+ */
+function plainText(input: SendInput): string {
+  const parts = [input.body];
+  if (input.details?.length) {
+    parts.push(input.details.map((d) => `${d.label}: ${d.value}`).join('\n'));
+  }
+  if (input.cta) parts.push(`${input.cta.label}:\n${input.cta.url}`);
+  return parts.join('\n\n');
+}
+
+function emailShell(
+  subject: string,
+  body: string,
+  details?: { label: string; value: string }[],
+  cta?: { label: string; url: string } | null,
+) {
   const paragraphs = body
     .split('\n\n')
     .map(
@@ -207,6 +241,45 @@ function emailShell(subject: string, body: string) {
         `<p style="margin:0 0 16px;font-size:15px;line-height:1.65;color:#4A5347;">${escapeHtml(p).replace(/\n/g, '<br/>')}</p>`,
     )
     .join('');
+
+  /**
+   * Details table. Left column muted, right column ink and semibold, so the
+   * answer to "when is it?" wins the glance. Inline styles throughout — Gmail
+   * strips <style> blocks, so anything in a stylesheet simply would not exist.
+   */
+  const detailRows = (details ?? [])
+    .map(
+      (d, i) =>
+        `<tr>
+           <td style="padding:${i === 0 ? '0' : '10px'} 16px 10px 0;font-size:14px;line-height:1.5;color:#6E766B;white-space:nowrap;vertical-align:top;">${escapeHtml(d.label)}</td>
+           <td style="padding:${i === 0 ? '0' : '10px'} 0 10px;font-size:14px;line-height:1.5;color:#141A12;font-weight:600;vertical-align:top;">${escapeHtml(d.value)}</td>
+         </tr>`,
+    )
+    .join('');
+
+  const detailBlock = detailRows
+    ? `<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin:4px 0 20px;padding:18px 20px;background:#F7F5EF;border-radius:16px;border:1px solid #E7E4DB;">${detailRows}</table>`
+    : '';
+
+  /**
+   * A table-wrapped anchor rather than a styled <a> or a <button>. Outlook on
+   * Windows renders through Word, which ignores padding on an inline element —
+   * the button would collapse to bare underlined text. This shape is the one
+   * that survives everywhere.
+   */
+  const ctaBlock = cta
+    ? `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:4px 0 20px;">
+         <tr><td align="center" bgcolor="#1E4620" style="border-radius:999px;">
+           <a href="${escapeHtml(cta.url)}"
+              style="display:inline-block;padding:13px 28px;font-size:15px;font-weight:600;color:#FFFFFF;text-decoration:none;border-radius:999px;">
+             ${escapeHtml(cta.label)}
+           </a>
+         </td></tr>
+       </table>
+       <p style="margin:0 0 16px;font-size:12px;line-height:1.6;color:#6E766B;word-break:break-all;">
+         If the button does not work, copy this into your browser:<br/>${escapeHtml(cta.url)}
+       </p>`
+    : '';
 
   return `<!doctype html><html><body style="margin:0;background:#F5F2EA;padding:32px 16px;font-family:-apple-system,Segoe UI,Helvetica,Arial,sans-serif;">
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center">
@@ -233,6 +306,8 @@ function emailShell(subject: string, body: string) {
       <tr><td style="padding:16px 32px 8px;">
         <h1 style="margin:0 0 18px;font-size:24px;line-height:1.2;color:#141A12;font-weight:600;">${escapeHtml(subject)}</h1>
         ${paragraphs}
+        ${detailBlock}
+        ${ctaBlock}
       </td></tr>
       <tr><td style="padding:8px 32px 28px;">
         <div style="border-top:1px solid #E7E4DB;padding-top:16px;font-size:12px;line-height:1.6;color:#6E766B;">

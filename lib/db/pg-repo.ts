@@ -168,6 +168,9 @@ function mapAppointment(r: any): Appointment {
     amountCents: r.amount_cents,
     reason: r.reason,
     isFirstSession: r.is_first_session,
+    medicalAidDecision: r.medical_aid_decision,
+    medicalAidDecisionAt: iso(r.medical_aid_decision_at),
+    medicalAidDeclineReason: r.medical_aid_decline_reason,
     sessionLink: r.session_link,
     calendarEventId: r.calendar_event_id,
     cancelledAt: iso(r.cancelled_at),
@@ -754,7 +757,18 @@ export async function updateAppointment(id: ID, patch: Partial<Appointment>) {
       late_cancellation   = coalesce(${patch.lateCancellation ?? null}, late_cancellation),
       completed_at        = ${patch.completedAt !== undefined ? patch.completedAt : sql`completed_at`},
       follow_up_id        = ${patch.followUpId !== undefined ? patch.followUpId : sql`follow_up_id`},
-      amount_cents        = coalesce(${patch.amountCents ?? null}, amount_cents)
+      amount_cents        = coalesce(${patch.amountCents ?? null}, amount_cents),
+      /*
+       * payment_method was absent from this statement, so a patch setting it
+       * was accepted by the type system and then silently dropped. That is
+       * exactly what a declined medical aid does — it moves the booking to
+       * card — and without this the row would keep saying 'medical_aid' while
+       * the client was being asked to pay by card.
+       */
+      payment_method      = coalesce(${patch.paymentMethod ?? null}, payment_method),
+      medical_aid_decision      = ${patch.medicalAidDecision !== undefined ? patch.medicalAidDecision : sql`medical_aid_decision`},
+      medical_aid_decision_at   = ${patch.medicalAidDecisionAt !== undefined ? patch.medicalAidDecisionAt : sql`medical_aid_decision_at`},
+      medical_aid_decline_reason = ${patch.medicalAidDeclineReason !== undefined ? patch.medicalAidDeclineReason : sql`medical_aid_decline_reason`}
     where id = ${id}
     returning *`;
   return rows[0] ? mapAppointment(rows[0]) : null;

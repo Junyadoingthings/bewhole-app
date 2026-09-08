@@ -17,7 +17,7 @@ import {
   updateSettings,
 } from '@/lib/db';
 import { noteSchema, fieldErrors } from '@/lib/validation';
-import { cancelAppointment, markAppointmentStatus } from '@/services/booking.service';
+import { cancelAppointment, decideMedicalAid, markAppointmentStatus } from '@/services/booking.service';
 import { markPaymentReceivedManually, refundPayment, verifyAndApplyPayment } from '@/services/payment.service';
 import { emit } from '@/services/events';
 import { getCalendarProvider } from '@/services/calendar';
@@ -41,6 +41,44 @@ export async function setAppointmentStatus(
   revalidatePath('/admin');
   revalidatePath('/admin/appointments');
   revalidatePath('/admin/calendar');
+  return { ok: true };
+}
+
+/**
+ * Accept or decline a client's medical aid.
+ *
+ * requireStaff() both authorises and identifies — the returned actor is what
+ * the audit entry records, so the decision is always attributable to a real
+ * signed-in person rather than to an id passed in from the browser.
+ *
+ * A decline reason is optional but goes to the client verbatim, so it is
+ * length-checked here rather than trusted: this is the one field in the flow
+ * whose text a client reads at a disappointing moment.
+ */
+export async function setMedicalAidDecision(
+  appointmentId: string,
+  decision: 'accepted' | 'declined',
+  reason?: string,
+): Promise<AdminResult> {
+  const actor = await requireStaff();
+
+  const trimmed = reason?.trim() ?? '';
+  if (trimmed.length > 600) {
+    return { ok: false, error: 'Please keep the note under 600 characters.' };
+  }
+
+  const result = await decideMedicalAid(
+    appointmentId,
+    decision,
+    actor,
+    trimmed || undefined,
+  );
+  if (!result.ok) return { ok: false, error: result.error };
+
+  revalidatePath('/admin');
+  revalidatePath('/admin/appointments');
+  revalidatePath('/admin/calendar');
+  revalidatePath('/portal');
   return { ok: true };
 }
 

@@ -12,6 +12,7 @@ export const STATUS_META: Record<
 > = {
   confirmed: { label: 'Confirmed', tone: 'success' },
   pending_payment: { label: 'Payment pending', tone: 'warning' },
+  pending_medical_aid: { label: 'Medical aid — verifying', tone: 'info' },
   completed: { label: 'Completed', tone: 'neutral' },
   cancelled: { label: 'Cancelled', tone: 'danger' },
   no_show: { label: 'Missed', tone: 'danger' },

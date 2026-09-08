@@ -17,6 +17,7 @@ import {
 } from '@/lib/db';
 import { BUSINESS } from '@/config/business';
 import { displayTime, formatFullDate, parts, relativeDay } from '@/lib/date';
+import { appointmentPaymentUrl } from '@/lib/links';
 import { money } from '@/lib/utils';
 import { getCalendarProvider } from '@/services/calendar';
 import { notify } from '@/services/notifications';
@@ -45,6 +46,8 @@ const PRACTICE_INBOX = { email: BUSINESS.email } as const;
 export type DomainEvent =
   | { type: 'appointment.created'; appointmentId: ID }
   | { type: 'appointment.confirmed'; appointmentId: ID }
+  | { type: 'appointment.medical_aid_pending'; appointmentId: ID }
+  | { type: 'appointment.medical_aid_declined'; appointmentId: ID }
   | { type: 'appointment.rescheduled'; appointmentId: ID; previousStart: string }
   | { type: 'appointment.cancelled'; appointmentId: ID; byStaff: boolean; late: boolean }
   | { type: 'appointment.completed'; appointmentId: ID }
@@ -61,6 +64,12 @@ export async function emit(event: DomainEvent): Promise<void> {
     switch (event.type) {
       case 'appointment.created':
         await onAppointmentCreated(event.appointmentId);
+        break;
+      case 'appointment.medical_aid_pending':
+        await onMedicalAidPending(event.appointmentId);
+        break;
+      case 'appointment.medical_aid_declined':
+        await onMedicalAidDeclined(event.appointmentId);
         break;
       case 'appointment.confirmed':
         await onAppointmentConfirmed(event.appointmentId);
@@ -122,6 +131,108 @@ function sessionSummary(a: AppointmentView) {
     `Where: ${appointmentWhere(a)}`,
     `Reference: ${a.reference}`,
   ].join('\n');
+}
+
+/* ------------------------------------------------------ medical aid checks */
+
+/**
+ * Reusable, because "when and where" must read identically in the booking
+ * acknowledgement, the confirmation and any reminder. Retyping these in each
+ * email is how a venue ends up right in one message and wrong in another.
+ */
+function appointmentDetails(a: AppointmentView) {
+  return [
+    { label: 'Service', value: a.service.name },
+    { label: 'When', value: appointmentWhen(a) },
+    { label: 'Where', value: appointmentWhere(a) },
+    { label: 'Reference', value: a.reference },
+  ];
+}
+
+/**
+ * A medical aid booking has been taken and is waiting on the practice.
+ *
+ * The client is told plainly that the slot is held but not yet confirmed. It
+ * would be easier to write "You're booked" here and sort it out later; that
+ * sentence is the one thing this message must not say, because the session may
+ * still need to be paid for privately.
+ */
+async function onMedicalAidPending(appointmentId: ID) {
+  const a = await view(appointmentId);
+  if (!a) return;
+  const settings = await getSettings();
+  const firstName = a.client?.name?.split(' ')[0] ?? 'there';
+  const profile = await getProfile(a.clientUserId);
+  const scheme = profile?.medicalAid?.scheme;
+
+  await notify({
+    type: 'appointment.medical_aid_pending',
+    audience: 'client',
+    channels: [...settings.reminders.channels, 'in_app'],
+    to: { email: a.client?.email, phone: a.client?.phone, userId: a.clientUserId },
+    subject: 'We have your booking — checking your medical aid',
+    body:
+      `Hi ${firstName},\n\nThank you for booking with Be Whole Care. We have held this time for you ` +
+      `while we confirm your medical aid cover${scheme ? ` with ${scheme}` : ''}.\n\n` +
+      `You do not need to do anything right now. We will email you as soon as the check is done — ` +
+      `usually within one working day — and your session is confirmed at that point, not before.`,
+    details: appointmentDetails(a),
+    href: `/portal/appointments/${a.id}`,
+  });
+
+  await notify({
+    type: 'appointment.medical_aid_pending.staff',
+    audience: 'staff',
+    channels: ['in_app', 'email'],
+    to: PRACTICE_INBOX,
+    subject: `Medical aid to verify — ${a.client?.name ?? 'Client'}, ${appointmentWhen(a)}`,
+    body:
+      `${a.client?.name ?? 'Client'} booked using medical aid and is waiting on verification.\n\n` +
+      (profile?.medicalAid
+        ? `Scheme: ${profile.medicalAid.scheme}\nMember number: ${profile.medicalAid.memberNumber}\n` +
+          `Main member: ${profile.medicalAid.mainMember}\n\n`
+        : 'No medical aid details were captured on the profile.\n\n') +
+      `Accept or decline it on the appointments page — the client is emailed either way.`,
+    details: appointmentDetails(a),
+    href: `/admin/appointments?filter=medical_aid`,
+  });
+}
+
+/**
+ * The scheme will not cover this session, so it becomes a private booking.
+ *
+ * The client gets a link that goes straight to payment without signing in —
+ * they have never set a password, and a login wall between a declined claim
+ * and a held appointment is how the appointment gets lost.
+ */
+async function onMedicalAidDeclined(appointmentId: ID) {
+  const a = await view(appointmentId);
+  if (!a) return;
+  const settings = await getSettings();
+  const firstName = a.client?.name?.split(' ')[0] ?? 'there';
+  const reason = a.medicalAidDeclineReason?.trim();
+
+  await notify({
+    type: 'appointment.medical_aid_declined',
+    audience: 'client',
+    channels: [...settings.reminders.channels, 'in_app'],
+    to: { email: a.client?.email, phone: a.client?.phone, userId: a.clientUserId },
+    subject: 'About your medical aid — your session is still held',
+    body:
+      `Hi ${firstName},\n\nWe have heard back about your medical aid, and unfortunately this session ` +
+      `cannot be claimed from your scheme.\n\n` +
+      (reason ? `${reason}\n\n` : '') +
+      `Your time is still held. To keep it, the session can be paid for by card using the button ` +
+      `below — it takes about a minute, and your booking is confirmed the moment it goes through.\n\n` +
+      `If you would rather move or cancel the session instead, reply to this email and we will sort ` +
+      `it out. Nothing has been charged to you.`,
+    details: [
+      ...appointmentDetails(a),
+      { label: 'Amount due', value: money(a.amountCents) },
+    ],
+    cta: { label: 'Pay by card', url: appointmentPaymentUrl(a.id) },
+    href: `/portal/appointments/${a.id}`,
+  });
 }
 
 /* --------------------------------------------------------------- handlers */
@@ -210,7 +321,19 @@ async function onAppointmentConfirmed(appointmentId: ID) {
   }
 
   const firstName = a.client?.name?.split(' ')[0] ?? 'there';
-  const joinLine = a.mode === 'online' && sessionLink ? `\nYour session link: ${sessionLink}` : '';
+  const joinLine = a.mode === 'online' && sessionLink ? `\n\nYour session link: ${sessionLink}` : '';
+  /**
+   * Say so explicitly when the confirmation follows a medical aid check. The
+   * client has been waiting on exactly this answer, and "confirmed" alone
+   * leaves them wondering whether the scheme was accepted or quietly ignored.
+   */
+  const medicalAidLine =
+    a.medicalAidDecision === 'accepted'
+      ? `\n\nYour medical aid has been verified and this session will be claimed from your scheme.` +
+        (a.amountCents > 0
+          ? ` A co-payment of ${money(a.amountCents)} is payable at your appointment.`
+          : '')
+      : '';
   const calendarLine = result.ok
     ? ''
     : '\n\n(We could not sync this to our calendar automatically — our team has been notified and will confirm.)';
@@ -221,7 +344,18 @@ async function onAppointmentConfirmed(appointmentId: ID) {
     channels: [...settings.reminders.channels, 'in_app'],
     to: { email: a.client?.email, phone: a.client?.phone, userId: a.clientUserId },
     subject: "You're booked",
-    body: `Hi ${firstName},\n\nYour session with Be Whole Care is confirmed.\n\n${sessionSummary(a)}${joinLine}\n\nIf you need to change or cancel, please give us at least 24 hours' notice.${calendarLine}`,
+    /**
+     * The facts move into the details block rather than sitting inside the
+     * sentence, so date, time and venue survive a phone glance. The thank-you
+     * closes it: this is the message a client keeps, and it should read like
+     * it came from a person.
+     */
+    body:
+      `Hi ${firstName},\n\nYour session with Be Whole Care is confirmed.` +
+      `${medicalAidLine}${joinLine}\n\n` +
+      `Thank you for trusting us with this. We are looking forward to seeing you.\n\n` +
+      `If you need to change or cancel, please give us at least 24 hours' notice.${calendarLine}`,
+    details: appointmentDetails(a),
     href: `/portal/appointments/${a.id}`,
   });
 
