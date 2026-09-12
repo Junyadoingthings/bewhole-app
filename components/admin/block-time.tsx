@@ -65,13 +65,26 @@ export function BlockTimeControl({ blocks }: { blocks: Block[] }) {
     toast({ tone: 'success', title: 'Block removed' });
     router.refresh();
   }
+const handleSyncOutlook = () => {
+       window.location.href = '/api/calendar/feed';
+     };
+
 
   return (
     <>
-      <Button variant="secondary" size="sm" onClick={() => setOpen(true)}>
-        <CalendarOff className="h-4 w-4" />
-        Block time
-      </Button>
+      <div className="inline-flex items-center gap-2">
+        <Button variant="secondary" size="sm" onClick={() => setOpen(true)}>
+          <CalendarOff className="h-4 w-4" />
+          Block time
+        </Button>
+        <button
+          type="button"
+          onClick={handleSyncOutlook}
+          className="inline-flex items-center gap-1.5 rounded-full border border-line px-3 py-1.5 text-xs font-medium text-ink transition-colors hover:bg-surface-muted cursor-pointer"
+        >
+          Sync Outlook
+        </button>
+      </div>
 
       <Modal
         open={open}

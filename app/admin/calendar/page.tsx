@@ -1,9 +1,10 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { ChevronLeft, ChevronRight, MapPin, Video } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ExternalLink, MapPin, Video } from 'lucide-react';
 
 import { BlockTimeControl } from '@/components/admin/block-time';
 import { Reveal } from '@/components/motion';
+import { ButtonLink } from '@/components/ui/button';
 import { Badge } from '@/components/ui/primitives';
 import { requireStaff } from '@/lib/auth';
 import {
@@ -145,6 +146,16 @@ export default async function AdminCalendarPage({
                 reason: b.reason,
               }))}
             />
+            <ButtonLink
+              href="https://outlook.live.com/calendar/0/view/month"
+              target="_blank"
+              rel="noopener noreferrer"
+              variant="secondary"
+              size="sm"
+            >
+              <ExternalLink className="h-4 w-4" />
+              Open Outlook
+            </ButtonLink>
           </div>
         </div>
       </Reveal>

@@ -334,9 +334,12 @@ async function onAppointmentConfirmed(appointmentId: ID) {
           ? ` A co-payment of ${money(a.amountCents)} is payable at your appointment.`
           : '')
       : '';
-  const calendarLine = result.ok
-    ? ''
-    : '\n\n(We could not sync this to our calendar automatically — our team has been notified and will confirm.)';
+     const { calendarLine: clientCalendarLinks } = generateCalendarLinks(a);
+    const calendarLine = (result.ok
+      ? ''
+      : '\n\n(We could not sync this to our calendar automatically — our team has been notified and will confirm.)')
+      + clientCalendarLinks;
+
 
   await notify({
     type: 'appointment.confirmed',
@@ -633,4 +636,53 @@ export async function buildClientContact(userId: ID) {
 export async function describeService(serviceId: ID, locationId?: ID | null) {
   const [service, location] = await Promise.all([getService(serviceId), getLocation(locationId)]);
   return { service, location };
+}
+/**
+ * Generates an iCalendar (.ics) string and direct web links for an appointment.
+ */
+function generateCalendarLinks(a: AppointmentView) {
+  const start = new Date(a.startAt).toISOString().replace(/-|:|\.\d+/g, "");
+  const endDate = a.endAt ? new Date(a.endAt) : new Date(new Date(a.startAt).getTime() + 60 * 60 * 1000);
+  const end = endDate.toISOString().replace(/-|:|\.\d+/g, "");
+
+  const title = `Appointment: ${a.service?.name ?? 'BeWholeCare Consultation'}`;
+  const description = `Your appointment with BeWholeCare.\nReference: ${a.reference || a.id}`;
+  const location = a.sessionLink ?? 'Online / Office';
+
+  const icsContent = [
+    "BEGIN:VCALENDAR",
+    "VERSION:2.0",
+    "PRODID:-//BeWholeCare//Calendar//EN",
+    "CALSCALE:GREGORIAN",
+    "METHOD:REQUEST",
+    "BEGIN:VEVENT",
+    `UID:${a.id || Date.now()}@bewholecare.com`,
+    `DTSTAMP:${start}`,
+    `DTSTART:${start}`,
+    `DTEND:${end}`,
+    `SUMMARY:${title}`,
+    `DESCRIPTION:${description.replace(/\n/g, "\\n")}`,
+    `LOCATION:${location}`,
+    "STATUS:CONFIRMED",
+    "END:VEVENT",
+    "END:VCALENDAR"
+  ].join("\r\n");
+  const outlookUrl = `https://outlook.live.com/calendar/0/deeplink/compose?path=/calendar/action/compose&rru=addevent&subject=${encodeURIComponent(
+    title
+  )}&body=${encodeURIComponent(description)}&location=${encodeURIComponent(
+    location
+  )}&startdt=${new Date(a.startAt).toISOString()}&enddt=${endDate.toISOString()}`;
+
+  const googleUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(
+    title
+  )}&details=${encodeURIComponent(description)}&location=${encodeURIComponent(
+    location
+  )}&dates=${start}/${end}`;
+
+  return {
+    icsContent,
+    outlookUrl,
+    googleUrl,
+    calendarLine: `\n\nAdd to calendar: Outlook (${outlookUrl}) | Google (${googleUrl})`
+  };
 }
