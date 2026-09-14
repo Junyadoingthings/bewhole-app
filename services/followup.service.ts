@@ -18,18 +18,6 @@ import { emit, sendFollowUpConfirmed, sendFollowUpPaymentRequest, sendFollowUpRe
 import { createCheckoutForFollowUp } from '@/services/payment.service';
 import type { Appointment, FollowUp, FollowUpView, ID, SessionUser } from '@/types';
 
-/**
- * Follow-up management — the workflow the practice specifically asked for:
- *
- *   staff records a follow-up  →  reminder is scheduled
- *   →  payment request goes out on the reminder date
- *   →  client pays  →  payment verified server-side
- *   →  follow-up confirmed  →  appointment created  →  calendar updated
- *   →  confirmation sent
- *
- * Each step below is one function, and each is safe to run twice.
- */
-
 export interface CreateFollowUpInput {
   clientUserId: ID;
   serviceId: ID;
@@ -88,7 +76,6 @@ export async function createFollowUpRecord(
   });
   await emit({ type: 'followup.created', followUpId: followUp.id });
 
-  // A reminder dated today (or earlier) goes out immediately.
   if (followUp.reminderDate <= today()) {
     await dispatchFollowUp(followUp.id);
   }
@@ -96,11 +83,6 @@ export async function createFollowUpRecord(
   return { ok: true, followUp };
 }
 
-/**
- * Send the reminder — and, when payment is required, the payment request with
- * a fresh checkout link. Called by the cron worker and by the admin's
- * "Send now" action.
- */
 export async function dispatchFollowUp(
   followUpId: ID,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
@@ -110,26 +92,20 @@ export async function dispatchFollowUp(
     return { ok: false, error: 'This follow-up is closed.' };
   }
 
-  const [view] = await hydrateFollowUps([followUp]);
-
   if (followUp.paymentRequired && followUp.amountCents > 0) {
     const checkout = await createCheckoutForFollowUp(followUpId);
     const href = checkout.ok ? checkout.redirectUrl : '/portal/follow-ups';
-    await sendFollowUpPaymentRequest(view, absolute(href));
+    await sendFollowUpPaymentRequest(followUpId, absolute(href));
     await updateFollowUp(followUpId, { status: 'awaiting_payment', reminderSentAt: nowISO() });
     await emit({ type: 'followup.payment_required', followUpId });
   } else {
-    await sendFollowUpReminder(view);
+    await sendFollowUpReminder(followUpId);
     await updateFollowUp(followUpId, { reminderSentAt: nowISO() });
   }
 
   return { ok: true };
 }
 
-/**
- * Called from applyPaymentSuccess once a follow-up payment clears.
- * Creates the actual appointment and confirms it (which syncs the calendar).
- */
 export async function confirmFollowUpPayment(followUpId: ID): Promise<void> {
   const followUp = await getFollowUp(followUpId);
   if (!followUp) return;
@@ -145,8 +121,7 @@ export async function confirmFollowUpPayment(followUpId: ID): Promise<void> {
     appointmentId: appointmentId ?? null,
   });
 
-  const [view] = await hydrateFollowUps([(await getFollowUp(followUpId))!]);
-  await sendFollowUpConfirmed(view);
+  await sendFollowUpConfirmed(followUpId);
   await emit({ type: 'followup.confirmed', followUpId });
 
   if (appointmentId) {
@@ -154,13 +129,6 @@ export async function confirmFollowUpPayment(followUpId: ID): Promise<void> {
   }
 }
 
-/**
- * Turn a confirmed follow-up into a real appointment.
- *
- * If the preferred time has since been taken, the follow-up stays confirmed
- * but without an appointment — staff are shown a "needs a time" prompt rather
- * than the client silently losing their slot.
- */
 async function materialiseAppointment(followUpId: ID): Promise<ID | null> {
   const followUp = await getFollowUp(followUpId);
   if (!followUp || followUp.appointmentId) return followUp?.appointmentId ?? null;
@@ -261,7 +229,6 @@ export async function getFollowUpBoard(): Promise<Record<FollowUpBucket, FollowU
   return board;
 }
 
-/** Follow-ups whose reminder date has arrived and which have not been sent. */
 export async function pendingReminders(): Promise<FollowUp[]> {
   const t = today();
   const all = await listFollowUps();

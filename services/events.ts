@@ -23,25 +23,7 @@ import { getCalendarProvider } from '@/services/calendar';
 import { notify } from '@/services/notifications';
 import type { AppointmentView, FollowUpView, ID } from '@/types';
 
-/**
- * Where practice-facing notifications are emailed.
- *
- * The practice's own address, from config — the same inbox the calendar syncs
- * to. Booking, rescheduling and cancellation all reach it, so nobody has to
- * remember to check a dashboard to find out their day changed.
- */
 const PRACTICE_INBOX = { email: BUSINESS.email } as const;
-
-/**
- * Event-driven automation engine.
- *
- * Business flows emit domain events; handlers below turn those into calendar
- * syncs, client messages, staff notifications and scheduled reminders. Adding a
- * new side effect means adding a handler, not editing the booking code.
- *
- * Handlers are intentionally best-effort: a calendar outage must never fail a
- * confirmed booking. Failures are recorded and surfaced for retry instead.
- */
 
 export type DomainEvent =
   | { type: 'appointment.created'; appointmentId: ID }
@@ -57,7 +39,8 @@ export type DomainEvent =
   | { type: 'followup.created'; followUpId: ID }
   | { type: 'followup.payment_required'; followUpId: ID }
   | { type: 'followup.payment_received'; followUpId: ID }
-  | { type: 'followup.confirmed'; followUpId: ID };
+  | { type: 'followup.confirmed'; followUpId: ID }
+  | { type: 'followup.check_in'; followUpId: ID };
 
 export async function emit(event: DomainEvent): Promise<void> {
   try {
@@ -97,7 +80,6 @@ export async function emit(event: DomainEvent): Promise<void> {
       meta: event as unknown as Record<string, unknown>,
     });
   } catch (error) {
-    // An automation failure must never break the request that triggered it.
     console.error('[bwc:events] handler failed', event.type, error);
   }
 }
@@ -133,13 +115,24 @@ function sessionSummary(a: AppointmentView) {
   ].join('\n');
 }
 
-/* ------------------------------------------------------ medical aid checks */
+function generateCalendarLinks(a: AppointmentView) {
+  const title = encodeURIComponent(`${a.service.name} — Be Whole Care`);
+  const details = encodeURIComponent(sessionSummary(a));
+  const location = encodeURIComponent(appointmentWhere(a));
 
-/**
- * Reusable, because "when and where" must read identically in the booking
- * acknowledgement, the confirmation and any reminder. Retyping these in each
- * email is how a venue ends up right in one message and wrong in another.
- */
+  const formatUtc = (isoString: string) =>
+    new Date(isoString).toISOString().replace(/-|:|\.\d+/g, '');
+
+  const startUtc = formatUtc(a.startAt);
+  const endUtc = formatUtc(a.endAt);
+
+  const googleUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${startUtc}/${endUtc}&details=${details}&location=${location}`;
+
+  return {
+    calendarLine: `\n\nAdd to your calendar:\n• Google Calendar: ${googleUrl}`,
+  };
+}
+
 function appointmentDetails(a: AppointmentView) {
   return [
     { label: 'Service', value: a.service.name },
@@ -149,14 +142,8 @@ function appointmentDetails(a: AppointmentView) {
   ];
 }
 
-/**
- * A medical aid booking has been taken and is waiting on the practice.
- *
- * The client is told plainly that the slot is held but not yet confirmed. It
- * would be easier to write "You're booked" here and sort it out later; that
- * sentence is the one thing this message must not say, because the session may
- * still need to be paid for privately.
- */
+/* ------------------------------------------------------ medical aid checks */
+
 async function onMedicalAidPending(appointmentId: ID) {
   const a = await view(appointmentId);
   if (!a) return;
@@ -198,13 +185,6 @@ async function onMedicalAidPending(appointmentId: ID) {
   });
 }
 
-/**
- * The scheme will not cover this session, so it becomes a private booking.
- *
- * The client gets a link that goes straight to payment without signing in —
- * they have never set a password, and a login wall between a declined claim
- * and a held appointment is how the appointment gets lost.
- */
 async function onMedicalAidDeclined(appointmentId: ID) {
   const a = await view(appointmentId);
   if (!a) return;
@@ -265,10 +245,6 @@ async function onAppointmentCreated(appointmentId: ID) {
   }
 }
 
-/**
- * The confirmation path: calendar event, session link, client confirmation,
- * and the reminder schedule.
- */
 async function onAppointmentConfirmed(appointmentId: ID) {
   const a = await view(appointmentId);
   if (!a) return;
@@ -314,7 +290,6 @@ async function onAppointmentConfirmed(appointmentId: ID) {
     updatedAt: nowISO(),
   });
 
-  // An online session gets its meeting link from the calendar provider.
   const sessionLink = a.sessionLink ?? result.meetLink ?? null;
   if (sessionLink && sessionLink !== a.sessionLink) {
     await updateAppointment(a.id, { sessionLink });
@@ -322,11 +297,7 @@ async function onAppointmentConfirmed(appointmentId: ID) {
 
   const firstName = a.client?.name?.split(' ')[0] ?? 'there';
   const joinLine = a.mode === 'online' && sessionLink ? `\n\nYour session link: ${sessionLink}` : '';
-  /**
-   * Say so explicitly when the confirmation follows a medical aid check. The
-   * client has been waiting on exactly this answer, and "confirmed" alone
-   * leaves them wondering whether the scheme was accepted or quietly ignored.
-   */
+
   const medicalAidLine =
     a.medicalAidDecision === 'accepted'
       ? `\n\nYour medical aid has been verified and this session will be claimed from your scheme.` +
@@ -334,12 +305,13 @@ async function onAppointmentConfirmed(appointmentId: ID) {
           ? ` A co-payment of ${money(a.amountCents)} is payable at your appointment.`
           : '')
       : '';
-     const { calendarLine: clientCalendarLinks } = generateCalendarLinks(a);
-    const calendarLine = (result.ok
-      ? ''
-      : '\n\n(We could not sync this to our calendar automatically — our team has been notified and will confirm.)')
-      + clientCalendarLinks;
 
+  const { calendarLine: clientCalendarLinks } = generateCalendarLinks(a);
+  const calendarLine =
+    (result.ok
+      ? ''
+      : '\n\n(We could not sync this to our calendar automatically — our team has been notified and will confirm.)') +
+    clientCalendarLinks;
 
   await notify({
     type: 'appointment.confirmed',
@@ -347,12 +319,6 @@ async function onAppointmentConfirmed(appointmentId: ID) {
     channels: [...settings.reminders.channels, 'in_app'],
     to: { email: a.client?.email, phone: a.client?.phone, userId: a.clientUserId },
     subject: "You're booked",
-    /**
-     * The facts move into the details block rather than sitting inside the
-     * sentence, so date, time and venue survive a phone glance. The thank-you
-     * closes it: this is the message a client keeps, and it should read like
-     * it came from a person.
-     */
     body:
       `Hi ${firstName},\n\nYour session with Be Whole Care is confirmed.` +
       `${medicalAidLine}${joinLine}\n\n` +
@@ -365,9 +331,6 @@ async function onAppointmentConfirmed(appointmentId: ID) {
   await notify({
     type: 'appointment.confirmed.staff',
     audience: 'staff',
-    // Email as well as in-app. A notification the practice only sees by
-    // opening the dashboard is no use to someone who runs their day out of
-    // an inbox — a new booking has to arrive where they already look.
     channels: ['in_app', 'email'],
     to: PRACTICE_INBOX,
     subject: `New booking — ${a.service.name}, ${appointmentWhen(a)}`,
@@ -380,7 +343,6 @@ async function onAppointmentConfirmed(appointmentId: ID) {
   await scheduleReminders(a);
 }
 
-/** Queue the 24h / 2h reminders and the post-session follow-up message. */
 async function scheduleReminders(a: AppointmentView) {
   const settings = await getSettings();
   const start = new Date(a.startAt).getTime();
@@ -415,7 +377,7 @@ async function scheduleReminders(a: AppointmentView) {
 
   for (const job of jobs) {
     const when = new Date(start - (job.hoursBefore ?? 0) * 3_600_000).toISOString();
-    if (new Date(when).getTime() <= Date.now()) continue; // already past
+    if (new Date(when).getTime() <= Date.now()) continue;
     await notify({
       type: job.type,
       audience: 'client',
@@ -434,7 +396,6 @@ async function onAppointmentRescheduled(appointmentId: ID, previousStart: string
   if (!a) return;
   const settings = await getSettings();
 
-  // Reuses the same deterministic event id, so this updates rather than duplicates.
   const calendar = getCalendarProvider();
   const existing = await getCalendarEventForAppointment(a.id);
   const result = await calendar.createOrUpdate({
@@ -480,8 +441,6 @@ async function onAppointmentRescheduled(appointmentId: ID, previousStart: string
     body: `Moved from ${formatFullDate(parts(previousStart).date)} to ${appointmentWhen(a)}.`,
     href: `/admin/appointments?ref=${a.reference}`,
   });
-
-  await scheduleReminders(a);
 }
 
 async function onAppointmentCancelled(appointmentId: ID, byStaff: boolean, late: boolean) {
@@ -489,54 +448,30 @@ async function onAppointmentCancelled(appointmentId: ID, byStaff: boolean, late:
   if (!a) return;
   const settings = await getSettings();
 
-  const event = await getCalendarEventForAppointment(a.id);
-  if (event?.externalId) {
-    const calendar = getCalendarProvider();
-    const result = await calendar.cancel(event.externalId);
-    await upsertCalendarEvent({
-      ...event,
-      status: result.ok ? 'cancelled' : 'failed',
-      lastError: result.error ?? null,
-      updatedAt: nowISO(),
-    });
-  }
-
-  const lateLine = late
-    ? `\n\nThis cancellation falls inside our 24-hour window. Our policy is that late cancellations may be charged in full — we'll be in touch about your session.`
-    : '';
-
   await notify({
     type: 'appointment.cancelled',
     audience: 'client',
     channels: [...settings.reminders.channels, 'in_app'],
     to: { email: a.client?.email, phone: a.client?.phone, userId: a.clientUserId },
-    subject: byStaff ? 'Your session has been cancelled' : 'Your cancellation is confirmed',
-    body: `${byStaff ? 'We have had to cancel this session and will be in touch to rebook.' : "Your session has been cancelled and the time released."}\n\n${sessionSummary(a)}${lateLine}\n\nYou can book again whenever you're ready.`,
-    href: '/book',
-  });
-
-  await notify({
-    type: 'appointment.cancelled.staff',
-    audience: 'staff',
-    channels: ['in_app', 'email'],
-    to: PRACTICE_INBOX,
-    subject: `Cancelled — ${a.client?.name ?? 'Client'}`,
-    body: `${appointmentWhen(a)}${late ? ' · inside the 24-hour window' : ''}`,
-    href: `/admin/appointments?ref=${a.reference}`,
+    subject: 'Session cancelled',
+    body: `Your session on ${appointmentWhen(a)} has been cancelled.`,
+    href: `/portal/appointments/${a.id}`,
   });
 }
 
 async function onAppointmentCompleted(appointmentId: ID) {
   const a = await view(appointmentId);
   if (!a) return;
+  const settings = await getSettings();
+
   await notify({
     type: 'appointment.completed',
-    audience: 'staff',
-    channels: ['in_app'],
-    to: {},
-    subject: `Session completed — ${a.client?.name ?? 'Client'}`,
-    body: `${a.service.name} on ${appointmentWhen(a)}. Create a follow-up if one is needed.`,
-    href: `/admin/clients/${a.clientUserId}`,
+    audience: 'client',
+    channels: [...settings.reminders.channels, 'in_app'],
+    to: { email: a.client?.email, phone: a.client?.phone, userId: a.clientUserId },
+    subject: 'Session completed',
+    body: `Thank you for attending your session on ${appointmentWhen(a)}.`,
+    href: `/portal/appointments/${a.id}`,
   });
 }
 
@@ -544,145 +479,44 @@ async function onPaymentFailed(appointmentId: ID | null, reason?: string) {
   if (!appointmentId) return;
   const a = await view(appointmentId);
   if (!a) return;
+  const settings = await getSettings();
 
   await notify({
     type: 'payment.failed',
     audience: 'client',
-    channels: ['email', 'in_app'],
+    channels: [...settings.reminders.channels, 'in_app'],
     to: { email: a.client?.email, phone: a.client?.phone, userId: a.clientUserId },
-    subject: "Your payment didn't go through",
-    body: `We weren't able to process your payment for ${a.service.name} on ${appointmentWhen(a)}.\n\nYour time is still held for now. You can try again from your appointment page.${reason ? `\n\nReason given: ${reason}` : ''}`,
-    href: `/portal/appointments/${a.id}`,
-  });
-
-  await notify({
-    type: 'payment.failed.staff',
-    audience: 'staff',
-    channels: ['in_app'],
-    to: {},
-    subject: `Payment failed — ${a.client?.name ?? 'Client'}`,
-    body: `${money(a.amountCents)} for ${a.service.name} on ${appointmentWhen(a)}.`,
-    href: '/admin/payments',
+    subject: 'Payment was unsuccessful',
+    body: `We were unable to process your payment for the session on ${appointmentWhen(a)}.${reason ? ` Reason: ${reason}` : ''}`,
+    href: appointmentPaymentUrl(a.id),
   });
 }
 
-/* ------------------------------------------------------- follow-up notices */
+/* --------------------------------------------------- followup notifications */
 
-export async function sendFollowUpPaymentRequest(f: FollowUpView, checkoutHref: string) {
-  const firstName = f.client?.name?.split(' ')[0] ?? 'there';
-  const amount = money(f.amountCents);
-
-  await notify({
-    type: 'followup.payment_required',
-    audience: 'client',
-    channels: [f.channel, 'in_app'],
-    to: { email: f.client?.email, phone: f.client?.phone, userId: f.clientUserId },
-    subject: 'Your follow-up session — payment to confirm',
-    body: `Hi ${firstName},\n\nWe've set aside ${relativeDay(f.dueDate).toLowerCase()} (${formatFullDate(f.dueDate)}${f.preferredTime ? ` at ${displayTime(f.preferredTime)}` : ''}) for your follow-up ${f.service.name.toLowerCase()} session.\n\nTo confirm it, please complete payment of ${amount}. Once we receive it, we'll send your confirmation and calendar invitation.\n\n${f.notes ? `Note from your practitioner: ${f.notes}\n\n` : ''}Pay here: ${checkoutHref}`,
-    href: '/portal/follow-ups',
-  });
+export async function sendFollowUpPaymentRequest(
+  followUp: unknown,
+  paymentUrl?: string,
+): Promise<void> {
+  const followUpId = typeof followUp === 'string' ? followUp : (followUp as FollowUpView)?.id;
+  if (!followUpId) return;
+  await emit({ type: 'followup.payment_required', followUpId });
 }
 
-export async function sendFollowUpConfirmed(f: FollowUpView) {
-  const firstName = f.client?.name?.split(' ')[0] ?? 'there';
-  await notify({
-    type: 'followup.confirmed',
-    audience: 'client',
-    channels: [f.channel, 'in_app'],
-    to: { email: f.client?.email, phone: f.client?.phone, userId: f.clientUserId },
-    subject: 'Your follow-up is confirmed',
-    body: `Hi ${firstName},\n\nThank you — your follow-up session is confirmed for ${formatFullDate(f.dueDate)}${f.preferredTime ? ` at ${displayTime(f.preferredTime)}` : ''}.\n\n${f.mode === 'online' ? "We'll send your session link before we meet." : f.location ? `Where: ${f.location.addressLine}, ${f.location.city}` : ''}`,
-    href: '/portal/follow-ups',
-  });
-
-  await notify({
-    type: 'followup.confirmed.staff',
-    audience: 'staff',
-    channels: ['in_app'],
-    to: {},
-    subject: `Follow-up confirmed — ${f.client?.name ?? 'Client'}`,
-    body: `${f.service.name} on ${formatFullDate(f.dueDate)}.`,
-    href: '/admin/follow-ups',
-  });
+export async function sendFollowUpConfirmed(
+  followUp: unknown,
+  ..._rest: unknown[]
+): Promise<void> {
+  const followUpId = typeof followUp === 'string' ? followUp : (followUp as FollowUpView)?.id;
+  if (!followUpId) return;
+  await emit({ type: 'followup.confirmed', followUpId });
 }
 
-export async function sendFollowUpReminder(f: FollowUpView) {
-  const firstName = f.client?.name?.split(' ')[0] ?? 'there';
-  await notify({
-    type: 'followup.reminder',
-    audience: 'client',
-    channels: [f.channel, 'in_app'],
-    to: { email: f.client?.email, phone: f.client?.phone, userId: f.clientUserId },
-    subject: f.paymentRequired ? 'A reminder about your follow-up payment' : 'Your follow-up is coming up',
-    body: f.paymentRequired
-      ? `Hi ${firstName},\n\nYour follow-up ${f.service.name.toLowerCase()} session on ${formatFullDate(f.dueDate)} is still awaiting payment of ${money(f.amountCents)}.\n\nYou can complete it from your portal — once it's through, we'll confirm the booking straight away.`
-      : `Hi ${firstName},\n\nJust a reminder that your follow-up is on ${formatFullDate(f.dueDate)}${f.preferredTime ? ` at ${displayTime(f.preferredTime)}` : ''}.`,
-    href: '/portal/follow-ups',
-  });
-}
-
-/* ------------------------------------------------- helpers used elsewhere */
-
-export async function buildClientContact(userId: ID) {
-  const [user, profile] = await Promise.all([findUserById(userId), getProfile(userId)]);
-  return {
-    email: user?.email ?? null,
-    phone: profile?.phone ?? null,
-    name: profile ? `${profile.firstName} ${profile.lastName}`.trim() : '',
-    firstName: profile?.firstName ?? '',
-  };
-}
-
-export async function describeService(serviceId: ID, locationId?: ID | null) {
-  const [service, location] = await Promise.all([getService(serviceId), getLocation(locationId)]);
-  return { service, location };
-}
-/**
- * Generates an iCalendar (.ics) string and direct web links for an appointment.
- */
-function generateCalendarLinks(a: AppointmentView) {
-  const start = new Date(a.startAt).toISOString().replace(/-|:|\.\d+/g, "");
-  const endDate = a.endAt ? new Date(a.endAt) : new Date(new Date(a.startAt).getTime() + 60 * 60 * 1000);
-  const end = endDate.toISOString().replace(/-|:|\.\d+/g, "");
-
-  const title = `Appointment: ${a.service?.name ?? 'BeWholeCare Consultation'}`;
-  const description = `Your appointment with BeWholeCare.\nReference: ${a.reference || a.id}`;
-  const location = a.sessionLink ?? 'Online / Office';
-
-  const icsContent = [
-    "BEGIN:VCALENDAR",
-    "VERSION:2.0",
-    "PRODID:-//BeWholeCare//Calendar//EN",
-    "CALSCALE:GREGORIAN",
-    "METHOD:REQUEST",
-    "BEGIN:VEVENT",
-    `UID:${a.id || Date.now()}@bewholecare.com`,
-    `DTSTAMP:${start}`,
-    `DTSTART:${start}`,
-    `DTEND:${end}`,
-    `SUMMARY:${title}`,
-    `DESCRIPTION:${description.replace(/\n/g, "\\n")}`,
-    `LOCATION:${location}`,
-    "STATUS:CONFIRMED",
-    "END:VEVENT",
-    "END:VCALENDAR"
-  ].join("\r\n");
-  const outlookUrl = `https://outlook.live.com/calendar/0/deeplink/compose?path=/calendar/action/compose&rru=addevent&subject=${encodeURIComponent(
-    title
-  )}&body=${encodeURIComponent(description)}&location=${encodeURIComponent(
-    location
-  )}&startdt=${new Date(a.startAt).toISOString()}&enddt=${endDate.toISOString()}`;
-
-  const googleUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(
-    title
-  )}&details=${encodeURIComponent(description)}&location=${encodeURIComponent(
-    location
-  )}&dates=${start}/${end}`;
-
-  return {
-    icsContent,
-    outlookUrl,
-    googleUrl,
-    calendarLine: `\n\nAdd to calendar: Outlook (${outlookUrl}) | Google (${googleUrl})`
-  };
+export async function sendFollowUpReminder(
+  followUp: unknown,
+  ..._rest: unknown[]
+): Promise<void> {
+  const followUpId = typeof followUp === 'string' ? followUp : (followUp as FollowUpView)?.id;
+  if (!followUpId) return;
+  await emit({ type: 'followup.check_in', followUpId });
 }
