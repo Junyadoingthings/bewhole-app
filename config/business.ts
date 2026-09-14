@@ -30,11 +30,11 @@ export const PRACTITIONER = {
    * Two different numbers, both real and both needed — they are not
    * alternatives to each other:
    *
-   *   registrationNumber  HPCSA council registration. Identifies the
-   *                       practitioner as licensed to practise. This is the
-   *                       one that belongs on a consent form.
-   *   practiceNumber      BHF practice number. Identifies the practice for
-   *                       medical aid billing. Belongs on invoices and claims.
+   *    registrationNumber  HPCSA council registration. Identifies the
+   *                        practitioner as licensed to practise. This is the
+   *                        one that belongs on a consent form.
+   *    practiceNumber      BHF practice number. Identifies the practice for
+   *                        medical aid billing. Belongs on invoices and claims.
    */
   registrationNumber: 'PRC0038660',
   practiceNumber: '1096974',
@@ -167,11 +167,12 @@ export const SESSION_DEFAULTS = {
  * practices are not priced the same, so a single "in person" rate is wrong.
  * Confirmed with the practice on 2026-08-14:
  *
- *                     online   Centurion   Tembisa
- *   Individual         R700      R800       R700
- *   Couples            R800      R850       R800
- *   Follow-ups         same as the matching counselling session
- *   Psychometric       quoted after booking — see below
+ *                    online    Centurion    Tembisa
+ *    Individual       R700       R800        R700
+ *    Couples          R800       R850        R800
+ *    Pre-Marital      R800       R800        R800  (Default cash rate baseline)
+ *    Follow-ups       same as the matching counselling session
+ *    Psychometric     quoted after booking — see below
  *
  * These are the cash/private rates. Medical aid is billed at scheme rates,
  * which differ and are not published here.
@@ -179,19 +180,15 @@ export const SESSION_DEFAULTS = {
 export const RATES = {
   individual: { online: 70000, centurion: 80000, tembisa: 70000 },
   couple: { online: 80000, centurion: 85000, tembisa: 80000 },
-  medicalAidCoPaymentInPerson: 10000,
+  preMarital: { online: 80000, centurion: 80000, tembisa: 80000 },
+  medicalAidCoPaymentInPerson: 0,
 } as const;
 
 /** Where a session can happen. Keys match the location slugs. */
 export type SessionPlace = 'online' | 'centurion' | 'tembisa';
 
 /**
- * The five things a client can book.
- *
- * `pricing: 'quoted'` is not a missing price — psychometric assessment is
- * genuinely priced per case, because the instruments used differ. It is booked
- * first and quoted afterwards, and the flow must never invent a number for it
- * or take a card payment up front.
+ * The things a client can book.
  */
 export const BOOKABLE_SERVICES = [
   {
@@ -204,6 +201,12 @@ export const BOOKABLE_SERVICES = [
     id: 'couples-counselling',
     name: 'Couples counselling',
     rate: 'couple',
+    pricing: 'fixed',
+  },
+  {
+    id: 'pre-marital-counselling',
+    name: 'Pre-Marital Counselling',
+    rate: 'preMarital',
     pricing: 'fixed',
   },
   {
@@ -244,7 +247,7 @@ export function priceFor(serviceId: BookableServiceId, place: SessionPlace): num
  * discovered when an account arrives.
  */
 export const MEDICAL_AID_DISCLAIMER =
-  'Please note: medical aid rates differ from the cash rates shown, and are billed according to your scheme. Providing your medical aid details does not guarantee payment by your scheme. You are responsible for confirming that you have sufficient mental health benefits available, and any amount not covered or reimbursed by your scheme remains payable by you. A R100 co-payment applies to all in-person consultations for clients using medical aid.';
+  'Please note: medical aid rates differ from the cash rates shown, and are billed according to your scheme. Providing your medical aid details does not guarantee payment by your scheme. You are responsible for confirming that you have sufficient mental health benefits available, and any amount not covered or reimbursed by your scheme remains payable by you.';
 
 export const POLICY = {
   cancellation:
@@ -261,11 +264,10 @@ export const POLICY = {
     'A legal requirement to disclose information',
   ],
   cardPayments:
-    'Clients paying privately will receive a secure payment link after booking. Payment must be made before the appointment to confirm the booking. No co-payments apply to card payments.',
+    'Clients paying privately will receive a secure payment link after booking. Payment must be made before the appointment to confirm the booking.',
   medicalAid:
     "Clients intending to use their medical aid are responsible for ensuring that they have sufficient mental health benefits available before booking. Claims are submitted subject to your scheme's rules, available benefits, authorisation requirements and reimbursement policies. Fees charged to medical aid schemes may differ from the private consultation rates. Acceptance of your medical aid details does not guarantee payment by your medical aid. Any amount not covered or reimbursed remains the client's responsibility.",
-  medicalAidCoPayment:
-    'A R100 co-payment per session applies to all in-person consultations for clients using medical aid benefits. Co-payments are payable at the time of your in-person consultation or prior, and are separate from any medical aid reimbursement.',
+  medicalAidCoPayment: '',
 } as const;
 
 /**

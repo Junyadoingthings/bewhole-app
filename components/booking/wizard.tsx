@@ -477,7 +477,6 @@ export function BookingWizard({
                   n={stepNumber}
                   total={totalSteps}
                   title="How would you like to meet?"
-                  lead="Both run the same length. Pick whichever makes it more likely you’ll keep the appointment."
                 >
                   <div className="grid gap-3 sm:grid-cols-2" role="radiogroup" aria-label="Session type">
                     <OptionCard
@@ -491,9 +490,6 @@ export function BookingWizard({
                       }}
                       icon={<Video className="h-5 w-5" />}
                       title="Online"
-                      description="A private session link is sent before we meet."
-                      // Price deliberately omitted — see the note on the
-                      // service step. The fee appears once, at payment.
                     />
                     <OptionCard
                       selected={mode === 'in_person'}
@@ -505,7 +501,6 @@ export function BookingWizard({
                       }}
                       icon={<Building2 className="h-5 w-5" />}
                       title="In person"
-                      description="At our Centurion or Tembisa practice."
                     />
                   </div>
                 </StepShell>
@@ -516,7 +511,6 @@ export function BookingWizard({
                   n={stepNumber}
                   total={totalSteps}
                   title="Which practice suits you?"
-                  lead="Both offer the same services and the same hours."
                 >
                   <div className="grid gap-3" role="radiogroup" aria-label="Location">
                     {locations.map((l) => (
@@ -542,7 +536,6 @@ export function BookingWizard({
                   n={stepNumber}
                   total={totalSteps}
                   title="Choose a date"
-                  lead="Only days we can actually see you are selectable."
                 >
                   <BookingCalendar
                     serviceId={service.id}
@@ -608,22 +601,22 @@ export function BookingWizard({
                               time === slot.label
                                 ? 'border-forest-800 bg-forest-800 font-medium text-cream-100'
                                 : slot.available
-                                  ? 'border-line bg-white text-ink hover:-translate-y-0.5 hover:border-forest-300 hover:shadow-subtle'
-                                  : 'cursor-not-allowed border-line-soft bg-cream-100/60 dark:bg-card/60 text-ink-faint line-through',
+                                ? 'border-line bg-white text-ink hover:-translate-y-0.5 hover:border-forest-300 hover:shadow-subtle'
+                                : 'cursor-not-allowed border-line-soft bg-cream-100/60 dark:bg-card/60 text-ink-faint line-through',
                             )}
                           >
                             {displayTime(slot.label)}
                           </button>
                         ))}
-                      </div>
-                      <p className="mt-5 flex items-center gap-2 text-sm text-ink-soft">
-                        <Clock className="h-4 w-4 text-forest-600 dark:text-forest-300" />
-                        Times shown in South African time (SAST).
-                      </p>
-                    </>
-                  )}
-                </StepShell>
-              )}
+                    </div>
+                    <p className="mt-5 flex items-center gap-2 text-sm text-ink-soft">
+                      <Clock className="h-4 w-4 text-forest-600 dark:text-forest-300" />
+                      Times shown in South African time (SAST).
+                    </p>
+                  </>
+                )}
+              </StepShell>
+            )}
 
               {step === 'details' && (
                 <StepShell
@@ -696,15 +689,6 @@ export function BookingWizard({
                     />
                   </div>
 
-                  {/*
-                    Emergency contact.
-
-                    This is required, unlike the address. A counselling service
-                    can encounter a client at risk during or after a session,
-                    and "who do we call" is not a question to be asking for the
-                    first time in that moment. It is two fields and it is the
-                    right kind of friction.
-                  */}
                   <fieldset className="mt-5 rounded-3xl border border-line bg-canvas-sunk p-5">
                     <legend className="px-1 text-sm font-medium text-ink">
                       Emergency contact
@@ -716,26 +700,26 @@ export function BookingWizard({
                       <div>
                         <Label htmlFor="emergencyName">Full name</Label>
                         <Input
-                          id="emergencyName"
-                          value={details.emergencyName}
-                          onChange={(e) =>
-                            setDetails({ ...details, emergencyName: e.target.value })
-                          }
-                          error={errors.emergencyName}
+                            id="emergencyName"
+                            value={details.emergencyName}
+                            onChange={(e) =>
+                              setDetails({ ...details, emergencyName: e.target.value })
+                            }
+                            error={errors.emergencyName}
                         />
                         <FieldError id="emergencyName-error">{errors.emergencyName}</FieldError>
                       </div>
                       <div>
                         <Label htmlFor="emergencyPhone">Contact number</Label>
                         <Input
-                          id="emergencyPhone"
-                          type="tel"
-                          placeholder="083 000 0000"
-                          value={details.emergencyPhone}
-                          onChange={(e) =>
-                            setDetails({ ...details, emergencyPhone: e.target.value })
-                          }
-                          error={errors.emergencyPhone}
+                            id="emergencyPhone"
+                            type="tel"
+                            placeholder="083 000 0000"
+                            value={details.emergencyPhone}
+                            onChange={(e) =>
+                              setDetails({ ...details, emergencyPhone: e.target.value })
+                            }
+                            error={errors.emergencyPhone}
                         />
                         <FieldError id="emergencyPhone-error">{errors.emergencyPhone}</FieldError>
                       </div>
@@ -752,44 +736,30 @@ export function BookingWizard({
                       value={details.reason}
                       onChange={(e) => setDetails({ ...details, reason: e.target.value })}
                       placeholder="You can leave this blank and talk it through in the session."
-                    />
+                  />
                   </div>
 
-                  {/*
-                    First or follow-up, as a choice rather than a checkbox.
-
-                    This was one checkbox meaning "first session", which left
-                    a returning client's answer implicit — an unticked box says
-                    nothing about whether someone forgot or is coming back. The
-                    two are mutually exclusive, so a radio pair states it
-                    outright and rules out ticking both.
-
-                    The wizard defaults to first session; the practice reads
-                    this to know whether to prepare intake paperwork.
-                  */}
                   <div className="mt-6">
                     <p className="text-sm font-medium text-ink">Is this your first session?</p>
-                    <div
-                      className="mt-3 grid gap-3 sm:grid-cols-2"
-                      role="radiogroup"
-                      aria-label="Is this your first session?"
-                    >
-                      <OptionCard
+                  <div
+                    className="mt-3 grid gap-3 sm:grid-cols-2"
+                    role="radiogroup"
+                    aria-label="Is this your first session?"
+                  >
+                    <OptionCard
                         selected={details.isFirstSession}
                         onSelect={() => setDetails({ ...details, isFirstSession: true })}
                         title="This is my first session"
-                        description="With Be Whole Care."
                       />
-                      <OptionCard
+                    <OptionCard
                         selected={!details.isFirstSession}
                         onSelect={() => setDetails({ ...details, isFirstSession: false })}
                         title="This is my follow-up session"
-                        description="I have seen Ntombi before."
-                      />
-                    </div>
+                    />
                   </div>
+                </div>
 
-                  <div className="mt-5 space-y-3">
+                <div className="mt-5 space-y-3">
                     <CheckboxRow
                       id="consentAge"
                       checked={consentAge}
@@ -812,196 +782,184 @@ export function BookingWizard({
 
               {step === 'consent' && (
                 <StepShell
-                  n={stepNumber}
-                  total={totalSteps}
-                  title="Informed consent"
-                  lead="Please read each point. You can print or save a copy before continuing."
+                    n={stepNumber}
+                    total={totalSteps}
+                    title="Informed consent"
+                    lead="Please complete this form to confirm your informed consent and agreement"
                 >
-                  <ConsentForm value={clinicalConsent} onChange={setClinicalConsent} />
+                    <ConsentForm value={clinicalConsent} onChange={setClinicalConsent} showPrint={false} />
                 </StepShell>
               )}
 
               {step === 'payment' && (
                 <StepShell
-                  n={stepNumber}
-                  total={totalSteps}
-                  title="How would you like to pay?"
-                  lead={
-                    amountCents > 0
-                      ? 'Your booking is confirmed the moment payment clears.'
-                      : 'Nothing is charged for this booking.'
-                  }
+                    n={stepNumber}
+                    total={totalSteps}
+                    title="How would you like to pay?"
+                    lead={
+                      amountCents > 0
+                        ? 'Your booking is confirmed the moment payment clears.'
+                        : 'Nothing is charged for this booking.'
+                    }
                 >
-                  {service?.requiresQuote || service?.rateBand === 'free' ? (
-                    <div className="rounded-3xl border border-line bg-white p-7">
-                      <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-forest-50 dark:bg-forest-900/30 text-forest-700 dark:text-forest-300">
-                        <Check className="h-5 w-5" />
-                      </span>
-                      <h3 className="mt-5 font-display text-xl text-ink">
-                        {service.rateBand === 'free' ? 'This session is free' : 'No payment now'}
-                      </h3>
-                      <p className="mt-3 text-sm leading-relaxed text-ink-soft">
-                        {service.intakeNote}
-                      </p>
-                    </div>
-                  ) : (
-                    <>
-                      <div className="grid gap-3 sm:grid-cols-2" role="radiogroup" aria-label="Payment method">
-                        <OptionCard
-                          selected={paymentMethod === 'card'}
-                          onSelect={() => setPaymentMethod('card')}
-                          icon={<CreditCard className="h-5 w-5" />}
-                          title="Pay by card or wallet"
-                          description="Apple Pay, Google Pay or any major card. We never see or store your card details."
-                          meta={money(
-                            mode === 'online'
-                              ? (service?.priceOnlineCents ?? 0)
-                              : (service?.priceInPersonCents ?? 0),
-                          )}
-                        />
-                        <OptionCard
-                          selected={paymentMethod === 'medical_aid'}
-                          onSelect={() => setPaymentMethod('medical_aid')}
-                          icon={<ShieldCheck className="h-5 w-5" />}
-                          title="Use medical aid"
-                          description={
-                            mode === 'in_person'
-                              ? `${money(medicalAidCoPaymentCents)} co-payment applies in person.`
-                              : 'Claimed from your scheme after the session.'
-                          }
-                          meta={mode === 'in_person' ? money(medicalAidCoPaymentCents) : 'Claimed'}
-                        />
+                    {service?.requiresQuote || service?.rateBand === 'free' ? (
+                      <div className="rounded-3xl border border-line bg-white p-7">
+                        <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-forest-50 dark:bg-forest-900/30 text-forest-700 dark:text-forest-300">
+                          <Check className="h-5 w-5" />
+                        </span>
+                        <h3 className="mt-5 font-display text-xl text-ink">
+                          {service.rateBand === 'free' ? 'This session is free' : 'No payment now'}
+                        </h3>
+                        <p className="mt-3 text-sm leading-relaxed text-ink-soft">
+                          {service.intakeNote}
+                        </p>
                       </div>
+                    ) : (
+                      <>
+                        <div className="grid gap-3 sm:grid-cols-2" role="radiogroup" aria-label="Payment method">
+                          <OptionCard
+                            selected={paymentMethod === 'card'}
+                            onSelect={() => setPaymentMethod('card')}
+                            icon={<CreditCard className="h-5 w-5" />}
+                            title="Pay by card or wallet"
+                            description="Apple Pay, Google Pay or any major card. We never see or store your card details."
+                            meta={money(
+                              mode === 'online'
+                                ? (service?.priceOnlineCents ?? 0)
+                                : (service?.priceInPersonCents ?? 0),
+                            )}
+                          />
+                          <OptionCard
+                            selected={paymentMethod === 'medical_aid'}
+                            onSelect={() => setPaymentMethod('medical_aid')}
+                            icon={<ShieldCheck className="h-5 w-5" />}
+                            title="Use medical aid"
+                            description="Claimed from your scheme after the session."
+                            meta="Claimed"
+                          />
+                        </div>
 
-                      <AnimatePresence initial={false}>
-                        {paymentMethod === 'medical_aid' && (
-                          <motion.div
-                            initial={reduced ? false : { opacity: 0, height: 0 }}
-                            animate={{ opacity: 1, height: 'auto' }}
-                            exit={{ opacity: 0, height: 0 }}
-                            transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
-                            className="overflow-hidden"
-                          >
-                            <div className="mt-5 rounded-3xl border border-line bg-white p-6">
-                              <p className="text-sm font-medium text-ink">Your medical aid</p>
+                        <AnimatePresence initial={false}>
+                          {paymentMethod === 'medical_aid' && (
+                            <motion.div
+                              initial={reduced ? false : { opacity: 0, height: 0 }}
+                              animate={{ opacity: 1, height: 'auto' }}
+                              exit={{ opacity: 0, height: 0 }}
+                              transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+                              className="overflow-hidden"
+                            >
+                              <div className="mt-5 rounded-3xl border border-line bg-white p-6">
+                                <p className="text-sm font-medium text-ink">Your medical aid</p>
 
-                              {/*
-                                The disclaimers appear BEFORE the fields, not
-                                after. Someone typing scheme details is already
-                                assuming they are covered; the practice's
-                                position on rates and liability has to be read
-                                while that assumption is still forming, not
-                                discovered when an account arrives.
-                              */}
-                              <ul className="mt-3 space-y-2 rounded-2xl bg-cream-50 p-4">
-                                {[
-                                  'Medical aid rates differ from the cash rates shown.',
-                                  'Medical aid rates are subject to your scheme’s rules, available benefits and authorisation requirements.',
-                                  'Acceptance of these details does not guarantee payment by your scheme. Any amount not covered remains your responsibility.',
-                                ].map((line) => (
-                                  <li
-                                    key={line}
-                                    className="flex gap-2.5 text-sm leading-relaxed text-ink-muted"
-                                  >
-                                    <span
-                                      aria-hidden
-                                      className="mt-2 h-1 w-1 shrink-0 rounded-full bg-forest-400"
+                                <ul className="mt-3 space-y-2 rounded-2xl bg-cream-50 p-4">
+                                  {[
+                                    'Medical aid rates differ from the cash rates shown.',
+                                    'Medical aid rates are subject to your scheme’s rules, available benefits and authorisation requirements.',
+                                    'Acceptance of these details does not guarantee payment by your scheme. Any amount not covered remains your responsibility.',
+                                  ].map((line) => (
+                                    <li
+                                      key={line}
+                                      className="flex gap-2.5 text-sm leading-relaxed text-ink-muted"
+                                    >
+                                      <span
+                                        aria-hidden
+                                        className="mt-2 h-1 w-1 shrink-0 rounded-full bg-forest-400"
+                                      />
+                                      {line}
+                                    </li>
+                                  ))}
+                                </ul>
+
+                                <div className="mt-5 grid gap-4 sm:grid-cols-2">
+                                  <div className="sm:col-span-2">
+                                    <Label htmlFor="scheme">Scheme</Label>
+                                    <Input
+                                      id="scheme"
+                                      value={medicalAid.scheme}
+                                      onChange={(e) =>
+                                        setMedicalAid({ ...medicalAid, scheme: e.target.value })
+                                      }
+                                      placeholder="e.g. Discovery Health"
                                     />
-                                    {line}
-                                  </li>
-                                ))}
-                              </ul>
-
-                              <div className="mt-5 grid gap-4 sm:grid-cols-2">
-                                <div className="sm:col-span-2">
-                                  <Label htmlFor="scheme">Scheme</Label>
-                                  <Input
-                                    id="scheme"
-                                    value={medicalAid.scheme}
-                                    onChange={(e) =>
-                                      setMedicalAid({ ...medicalAid, scheme: e.target.value })
-                                    }
-                                    placeholder="e.g. Discovery Health"
-                                  />
-                                </div>
-                                <div>
-                                  <Label htmlFor="memberNumber">Membership number</Label>
-                                  <Input
-                                    id="memberNumber"
-                                    value={medicalAid.memberNumber}
-                                    onChange={(e) =>
-                                      setMedicalAid({ ...medicalAid, memberNumber: e.target.value })
-                                    }
-                                  />
-                                </div>
-                                <div>
-                                  <Label htmlFor="dateOfBirth">Date of birth</Label>
-                                  <Input
-                                    id="dateOfBirth"
-                                    type="date"
-                                    value={medicalAid.dateOfBirth}
-                                    onChange={(e) =>
-                                      setMedicalAid({ ...medicalAid, dateOfBirth: e.target.value })
-                                    }
-                                  />
-                                </div>
-                                <div>
-                                  <Label htmlFor="mainMember">Main member</Label>
-                                  <Input
-                                    id="mainMember"
-                                    value={medicalAid.mainMember}
-                                    onChange={(e) =>
-                                      setMedicalAid({ ...medicalAid, mainMember: e.target.value })
-                                    }
-                                    placeholder="Self, or their full name"
-                                  />
-                                </div>
-                                <div>
-                                  <Label htmlFor="mainMemberId">Main member ID number</Label>
-                                  <Input
-                                    id="mainMemberId"
-                                    inputMode="numeric"
-                                    value={medicalAid.mainMemberId}
-                                    onChange={(e) =>
-                                      setMedicalAid({ ...medicalAid, mainMemberId: e.target.value })
-                                    }
-                                    placeholder="As it appears on the scheme"
-                                  />
+                                  </div>
+                                  <div>
+                                    <Label htmlFor="memberNumber">Membership number</Label>
+                                    <Input
+                                      id="memberNumber"
+                                      value={medicalAid.memberNumber}
+                                      onChange={(e) =>
+                                        setMedicalAid({ ...medicalAid, memberNumber: e.target.value })
+                                      }
+                                    />
+                                  </div>
+                                  <div>
+                                    <Label htmlFor="dateOfBirth">Date of birth</Label>
+                                    <Input
+                                      id="dateOfBirth"
+                                      type="date"
+                                      value={medicalAid.dateOfBirth}
+                                      onChange={(e) =>
+                                        setMedicalAid({ ...medicalAid, dateOfBirth: e.target.value })
+                                      }
+                                    />
+                                  </div>
+                                  <div>
+                                    <Label htmlFor="mainMember">Main member</Label>
+                                    <Input
+                                      id="mainMember"
+                                      value={medicalAid.mainMember}
+                                      onChange={(e) =>
+                                        setMedicalAid({ ...medicalAid, mainMember: e.target.value })
+                                      }
+                                      placeholder="Self, or their full name"
+                                    />
+                                  </div>
+                                  <div>
+                                    <Label htmlFor="mainMemberId">Main member ID number</Label>
+                                    <Input
+                                      id="mainMemberId"
+                                      inputMode="numeric"
+                                      value={medicalAid.mainMemberId}
+                                      onChange={(e) =>
+                                        setMedicalAid({ ...medicalAid, mainMemberId: e.target.value })
+                                      }
+                                      placeholder="As it appears on the scheme"
+                                    />
+                                  </div>
                                 </div>
                               </div>
-                            </div>
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
-                    </>
-                  )}
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </>
+                    )}
 
-                  {paymentMethod === 'card' && (
-                    <PaymentMethods methods={acceptedMethods} className="mt-6" />
-                  )}
+                    {paymentMethod === 'card' && (
+                      <PaymentMethods methods={acceptedMethods} className="mt-6" />
+                    )}
 
-                  <p className="mt-6 flex items-start gap-2.5 text-sm leading-relaxed text-ink-soft">
-                    <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-forest-600 dark:text-forest-300" />
-                    Cancellations must be made at least 24 hours before the session. Late
-                    cancellations or missed appointments may be charged in full.
-                  </p>
+                    <p className="mt-6 flex items-start gap-2.5 text-sm leading-relaxed text-ink-soft">
+                      <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-forest-600 dark:text-forest-300" />
+                      Cancellations must be made at least 24 hours before the session. Late
+                      cancellations or missed appointments may be charged in full.
+                    </p>
                 </StepShell>
               )}
               {step === 'checkout' && embedded && (
-                <StepShell
-                  n={stepNumber}
-                  total={totalSteps}
-                  title="Complete your payment"
-                  lead={`Your ${service?.durationMinutes ?? 60}-minute session is held while you pay.`}
+                  <StepShell
+                    n={stepNumber}
+                    total={totalSteps}
+                    title="Complete your payment"
+                    lead={`Your ${service?.durationMinutes ?? 60}-minute session is held while you pay.`}
                 >
-                  <EmbeddedCheckout
-                    checkoutId={embedded.checkoutId}
-                    scriptUrl={embedded.scriptUrl}
-                    brands={embedded.brands}
-                    resultUrl={embedded.resultUrl}
-                    amountLabel={money(amountCents)}
-                    isMock={paymentProvider === 'mock'}
-                  />
+                    <EmbeddedCheckout
+                      checkoutId={embedded.checkoutId}
+                      scriptUrl={embedded.scriptUrl}
+                      brands={embedded.brands}
+                      resultUrl={embedded.resultUrl}
+                      amountLabel={money(amountCents)}
+                      isMock={paymentProvider === 'mock'}
+                    />
                 </StepShell>
               )}
             </motion.div>
@@ -1044,56 +1002,56 @@ export function BookingWizard({
             {!submitting && <ArrowRight className="h-4 w-4" />}
           </Button>
         </div>
-      </div>
+    </div>
 
-      {/* Summary rail */}
-      <aside className="lg:sticky lg:top-28 lg:self-start">
-        <SummaryCard
-          service={service}
-          category={category}
-          mode={mode}
-          location={location}
-          date={date}
-          time={time}
-          amountCents={amountCents}
-          paymentMethod={paymentMethod}
-          requiresQuote={service?.requiresQuote ?? false}
-          isFree={service?.rateBand === 'free'}
-          acceptedMethods={acceptedMethods}
-        />
-      </aside>
+    {/* Summary rail */}
+    <aside className="lg:sticky lg:top-28 lg:self-start">
+      <SummaryCard
+        service={service}
+        category={category}
+        mode={mode}
+        location={location}
+        date={date}
+        time={time}
+        amountCents={amountCents}
+        paymentMethod={paymentMethod}
+        requiresQuote={service?.requiresQuote ?? false}
+        isFree={service?.rateBand === 'free'}
+        acceptedMethods={acceptedMethods}
+      />
+    </aside>
 
-      {/* Mobile sticky action bar */}
-      <div
-        className={cn(
-          'fixed inset-x-0 bottom-0 z-40 border-t border-line bg-white/95 px-4 py-3 pb-safe lg:hidden',
-          step === 'checkout' && 'hidden',
-        )}
-      >
-        <div className="flex items-center gap-3">
-          {stepIndex > 0 && (
-            <Button variant="secondary" size="icon" onClick={back} disabled={submitting} aria-label="Back">
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
-          )}
-          <Button
-            full
-            size="lg"
-            onClick={next}
-            disabled={!canAdvance || submitting}
-            loading={submitting}
-            loadingText="Please wait…"
-          >
-            {step === 'payment'
-              ? amountCents > 0
-                ? `Pay ${money(amountCents)}`
-                : 'Confirm booking'
-              : 'Continue'}
+    {/* Mobile sticky action bar */}
+    <div
+      className={cn(
+        'fixed inset-x-0 bottom-0 z-40 border-t border-line bg-white/95 px-4 py-3 pb-safe lg:hidden',
+        step === 'checkout' && 'hidden',
+      )}
+    >
+      <div className="flex items-center gap-3">
+        {stepIndex > 0 && (
+          <Button variant="secondary" size="icon" onClick={back} disabled={submitting} aria-label="Back">
+            <ArrowLeft className="h-4 w-4" />
           </Button>
-        </div>
+        )}
+        <Button
+          full
+          size="lg"
+          onClick={next}
+          disabled={!canAdvance || submitting}
+          loading={submitting}
+          loadingText="Please wait…"
+        >
+          {step === 'payment'
+            ? amountCents > 0
+              ? `Pay ${money(amountCents)}`
+              : 'Confirm booking'
+            : 'Continue'}
+        </Button>
       </div>
     </div>
-  );
+  </div>
+);
 }
 
 /* --------------------------------------------------------------- subviews */
@@ -1116,7 +1074,6 @@ function StepShell({
       <p className="text-2xs font-medium uppercase tracking-[0.18em] text-forest-600 dark:text-forest-300">
         Step {String(n).padStart(2, '0')} of {String(total).padStart(2, '0')}
       </p>
-      {/* The step title is the page heading — the wizard is the whole page. */}
       <h1 className="mt-4 font-display text-3xl text-ink text-balance sm:text-4xl">{title}</h1>
       {lead && <p className="mt-3 max-w-xl leading-relaxed text-ink-soft text-pretty">{lead}</p>}
       <div className="mt-8">{children}</div>
@@ -1218,7 +1175,6 @@ function SummaryCard({
       value: mode === 'online' ? 'Online' : location ? `${location.name} practice` : 'In person',
     });
   if (date) {
-    // relativeDay falls back to the full date beyond a week out — don't repeat it.
     const primary = relativeDay(date);
     const full = formatFullDate(date);
     rows.push({
@@ -1288,17 +1244,6 @@ function SummaryCard({
             <ShieldCheck className="h-3 w-3" /> Card details never stored
           </Badge>
 
-          {/*
-            What the practice can actually take, shown alongside the amount
-            rather than only on the last step. Someone deciding whether to book
-            wants to know they can pay the way they normally do before they
-            invest six steps in the form.
-
-            The marks come from the active gateway, so this cannot promise a
-            method the practice cannot accept. When no gateway is connected the
-            list is empty and the honest alternative is shown instead: the
-            session is still booked, and the fee is settled with the practice.
-          */}
           {!isFree && !requiresQuote && (
             acceptedMethods.length > 0 ? (
               <PaymentMethods methods={acceptedMethods} compact className="mt-4" />
@@ -1313,3 +1258,6 @@ function SummaryCard({
     </div>
   );
 }
+
+
+

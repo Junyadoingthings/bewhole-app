@@ -76,8 +76,7 @@ export function ConsentForm({
                       Clause {index + 1}
                     </span>
                   </div>
-                  <h3 className="font-medium text-foreground text-base">{item.title}</h3>
-                  <p className="text-sm text-muted-foreground leading-relaxed pt-1">{item.description}</p>
+                  <p className="text-sm text-foreground leading-relaxed pt-1">{item.body}</p>
                 </div>
               </div>
             </div>
