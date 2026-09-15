@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { ChevronLeft, ChevronRight, ExternalLink, MapPin, Video } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ExternalLink, Lock, MapPin, Video } from 'lucide-react';
 
 import { BlockTimeControl } from '@/components/admin/block-time';
 import { Reveal } from '@/components/motion';
@@ -161,9 +161,9 @@ export default async function AdminCalendarPage({
       </Reveal>
 
       <div className="mt-6">
-        {view === 'day' && <DayView date={anchor} appointments={views} />}
-        {view === 'week' && <WeekView anchor={anchor} appointments={views} />}
-        {view === 'month' && <MonthView anchor={anchor} appointments={views} />}
+        {view === 'day' && <DayView date={anchor} appointments={views} blocks={blocks} />}
+        {view === 'week' && <WeekView anchor={anchor} appointments={views} blocks={blocks} />}
+        {view === 'month' && <MonthView anchor={anchor} appointments={views} blocks={blocks} />}
       </div>
 
       <Legend />
@@ -173,10 +173,20 @@ export default async function AdminCalendarPage({
 
 /* ------------------------------------------------------------------- views */
 
-function DayView({ date, appointments }: { date: string; appointments: AppointmentView[] }) {
+function DayView({
+  date,
+  appointments,
+  blocks,
+}: {
+  date: string;
+  appointments: AppointmentView[];
+  blocks: AvailabilityBlock[];
+}) {
   const rows = appointments
     .filter((a) => parts(a.startAt).date === date)
     .sort((a, b) => a.startAt.localeCompare(b.startAt));
+
+  const dayBlocks = blocks.filter((b) => b.date === date);
 
   const hours = Array.from({ length: (DAY_END - DAY_START) / 60 }, (_, i) => DAY_START + i * 60);
 
@@ -188,13 +198,24 @@ function DayView({ date, appointments }: { date: string; appointments: Appointme
           const start = timeToMinutes(parts(a.startAt).time);
           return start >= minute && start < minute + 60;
         });
+
+        const hourBlocks = dayBlocks.filter((b) => {
+          if (!b.start || !b.end) return true; // Whole day block covers all hours
+          const bStart = timeToMinutes(b.start);
+          const bEnd = timeToMinutes(b.end);
+          return bStart < minute + 60 && bEnd > minute;
+        });
+
         return (
           <div key={minute} className="flex border-b border-line-soft last:border-0">
             <div className="w-20 shrink-0 border-r border-line-soft px-4 py-4 text-xs tabular text-ink-faint">
               {displayTime(label)}
             </div>
             <div className="flex-1 space-y-2 p-3">
-              {inHour.length === 0 ? (
+              {hourBlocks.map((b) => (
+                <BlockEventBlock key={b.id} block={b} />
+              ))}
+              {inHour.length === 0 && hourBlocks.length === 0 ? (
                 <div className="h-8" />
               ) : (
                 inHour.map((a) => <EventBlock key={a.id} appointment={a} detailed />)
@@ -207,7 +228,15 @@ function DayView({ date, appointments }: { date: string; appointments: Appointme
   );
 }
 
-function WeekView({ anchor, appointments }: { anchor: string; appointments: AppointmentView[] }) {
+function WeekView({
+  anchor,
+  appointments,
+  blocks,
+}: {
+  anchor: string;
+  appointments: AppointmentView[];
+  blocks: AvailabilityBlock[];
+}) {
   const start = startOfWeek(anchor);
   const days = Array.from({ length: 7 }, (_, i) => addISODays(start, i));
 
@@ -219,6 +248,7 @@ function WeekView({ anchor, appointments }: { anchor: string; appointments: Appo
           const rows = appointments
             .filter((a) => parts(a.startAt).date === date)
             .sort((a, b) => a.startAt.localeCompare(b.startAt));
+          const dayBlocks = blocks.filter((b) => b.date === date);
 
           return (
             <div key={date} className="min-h-[26rem] border-r border-line-soft last:border-0">
@@ -241,7 +271,10 @@ function WeekView({ anchor, appointments }: { anchor: string; appointments: Appo
                 </p>
               </div>
               <div className="space-y-2 p-2">
-                {rows.length === 0 ? (
+                {dayBlocks.map((b) => (
+                  <BlockEventBlock key={b.id} block={b} compact />
+                ))}
+                {rows.length === 0 && dayBlocks.length === 0 ? (
                   <p className="px-1 py-4 text-center text-2xs text-ink-faint">—</p>
                 ) : (
                   rows.map((a) => <EventBlock key={a.id} appointment={a} compact />)
@@ -255,7 +288,15 @@ function WeekView({ anchor, appointments }: { anchor: string; appointments: Appo
   );
 }
 
-function MonthView({ anchor, appointments }: { anchor: string; appointments: AppointmentView[] }) {
+function MonthView({
+  anchor,
+  appointments,
+  blocks,
+}: {
+  anchor: string;
+  appointments: AppointmentView[];
+  blocks: AvailabilityBlock[];
+}) {
   const year = Number(anchor.slice(0, 4));
   const monthIndex = Number(anchor.slice(5, 7)) - 1;
   const cells = monthGrid(year, monthIndex);
@@ -275,6 +316,7 @@ function MonthView({ anchor, appointments }: { anchor: string; appointments: App
           const rows = appointments
             .filter((a) => parts(a.startAt).date === date)
             .sort((a, b) => a.startAt.localeCompare(b.startAt));
+          const dayBlocks = blocks.filter((b) => b.date === date);
           const isToday = date === today();
 
           return (
@@ -292,8 +334,15 @@ function MonthView({ anchor, appointments }: { anchor: string; appointments: App
                 {Number(date.slice(8))}
               </Link>
               {/* On a phone a month cell is too narrow for text — show dots. */}
-              {rows.length > 0 && (
+              {(rows.length > 0 || dayBlocks.length > 0) && (
                 <div className="mt-1.5 flex flex-wrap gap-1 sm:hidden">
+                  {dayBlocks.map((b) => (
+                    <span
+                      key={b.id}
+                      className="h-1.5 w-1.5 rounded-full bg-state-danger"
+                      title={`Blocked: ${b.reason ?? 'Unavailable'}`}
+                    />
+                  ))}
                   {rows.slice(0, 4).map((a) => (
                     <span
                       key={a.id}
@@ -305,6 +354,16 @@ function MonthView({ anchor, appointments }: { anchor: string; appointments: App
               )}
 
               <div className="mt-1.5 hidden space-y-1 sm:block">
+                {dayBlocks.map((b) => (
+                  <div
+                    key={b.id}
+                    className="relative block truncate rounded-md bg-stone-100 py-1 pl-2.5 pr-1.5 text-2xs text-stone-700 dark:bg-stone-800 dark:text-stone-300"
+                    title={`Blocked: ${b.reason ?? 'Unavailable'}`}
+                  >
+                    <span className="absolute inset-y-1 left-1 w-0.5 rounded-full bg-stone-400" />
+                    🚫 {b.reason || 'Blocked'}
+                  </div>
+                ))}
                 {rows.slice(0, 3).map((a) => (
                   <Link
                     key={a.id}
@@ -323,14 +382,35 @@ function MonthView({ anchor, appointments }: { anchor: string; appointments: App
                     {displayTime(parts(a.startAt).time).replace(':00', '')} {a.client?.name}
                   </Link>
                 ))}
-                {rows.length > 3 && (
-                  <p className="px-1.5 text-2xs text-ink-faint">+{rows.length - 3} more</p>
+                {rows.length + dayBlocks.length > 3 && (
+                  <p className="px-1.5 text-2xs text-ink-faint">
+                    +{rows.length + dayBlocks.length - 3} more
+                  </p>
                 )}
               </div>
             </div>
           );
         })}
       </div>
+    </div>
+  );
+}
+
+function BlockEventBlock({ block, compact }: { block: AvailabilityBlock; compact?: boolean }) {
+  return (
+    <div
+      className={cn(
+        'relative block rounded-xl border border-dashed border-stone-300 bg-stone-50 py-2 pl-4 pr-3 text-stone-700 dark:border-stone-700 dark:bg-stone-900/40 dark:text-stone-300',
+      )}
+    >
+      <span className="absolute inset-y-2 left-1.5 w-[3px] rounded-full bg-stone-400" />
+      <p className={cn('font-medium', compact ? 'text-2xs' : 'text-sm')}>
+        {block.start && block.end ? `${block.start} – ${block.end}` : 'Full Day Block'}
+      </p>
+      <p className={cn('truncate opacity-80', compact ? 'text-2xs' : 'text-sm flex items-center gap-1.5')}>
+        <Lock className="h-3 w-3" />
+        {block.reason || 'Time Blocked'}
+      </p>
     </div>
   );
 }
@@ -400,6 +480,10 @@ function Legend() {
           {label}
         </span>
       ))}
+      <span className="flex items-center gap-2">
+        <span className="h-3 w-[3px] rounded-full bg-stone-400" />
+        Blocked / Unavailable time
+      </span>
     </div>
   );
 }
