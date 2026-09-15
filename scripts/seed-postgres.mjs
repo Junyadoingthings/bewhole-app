@@ -73,8 +73,10 @@ function extract(file, exportName) {
     .replace(/\s+as\s+const/g, '')
     .replace(/RATES\.individual\.inPerson/g, '80000')
     .replace(/RATES\.individual\.online/g, '70000')
+    .replace(/RATES\.individual\.centurion/g, '80000')
     .replace(/RATES\.couple\.inPerson/g, '85000')
-    .replace(/RATES\.couple\.online/g, '75000');
+    .replace(/RATES\.couple\.online/g, '75000')
+    .replace(/RATES\.couple\.centurion/g, '85000');
   // eslint-disable-next-line no-new-func
   return new Function(`return ${literal}`)();
 }
@@ -118,7 +120,7 @@ const SETTINGS = {
   business: {
     name: 'Be Whole Care',
     email: 'bewholecare@gmail.com',
-    phone: '0638837170',
+    phone: '', // EDITED: Removed phone number to hide the "Need help?" button
     whatsapp: '27638837170',
     website: 'www.bewholecare.co.za',
     timezone: 'Africa/Johannesburg',
@@ -271,7 +273,7 @@ async function main() {
   // Settings: insert once, then leave alone — the admin dashboard owns this row.
   await sql`
     insert into settings (id, data) values (1, ${sql.json(SETTINGS)})
-    on conflict (id) do nothing`;
+    on conflict (id) do update set data = ${sql.json(SETTINGS)}`; // EDITED: Ensure it overwrites old settings to hide the button
   console.log('  ✓ settings row');
 
   /* ------------------------------------------------------- admin account */
