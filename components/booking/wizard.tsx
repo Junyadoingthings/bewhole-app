@@ -663,7 +663,7 @@ export function BookingWizard({
                     title="How would you like to pay?"
                     lead={
                       amountCents > 0
-                        
+                        ? ''
                         : 'Nothing is charged for this booking.'
                     }
                 >
