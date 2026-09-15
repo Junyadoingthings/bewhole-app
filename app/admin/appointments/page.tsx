@@ -131,7 +131,7 @@ export default async function AdminAppointmentsPage({
         ) : (
           <>
             {/* Desktop table */}
-            <div className="hidden overflow-hidden rounded-3xl border border-line bg-white lg:block">
+            <div className="hidden rounded-3xl border border-line bg-white lg:block">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-line text-left">
