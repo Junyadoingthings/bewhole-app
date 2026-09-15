@@ -663,7 +663,7 @@ export function BookingWizard({
                     title="How would you like to pay?"
                     lead={
                       amountCents > 0
-                        ? 'Your booking is confirmed the moment payment clears.'
+                        
                         : 'Nothing is charged for this booking.'
                     }
                 >
