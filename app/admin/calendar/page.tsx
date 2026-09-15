@@ -146,15 +146,17 @@ export default async function AdminCalendarPage({
                 reason: b.reason,
               }))}
             />
+            {/*
+              Using the webcal:// protocol forces the operating system to open the
+              native calendar application (Outlook / Apple Calendar) and subscribe to the feed.
+            */}
             <ButtonLink
-              href="https://outlook.live.com/calendar/0/view/month"
-              target="_blank"
-              rel="noopener noreferrer"
+              href="webcal://bewholecare.co.za/api/calendar/feed"
               variant="secondary"
               size="sm"
             >
               <ExternalLink className="h-4 w-4" />
-              Open Outlook
+              Sync to Outlook
             </ButtonLink>
           </div>
         </div>
