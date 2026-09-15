@@ -209,7 +209,7 @@ export const SERVICES = [
     // the practice books the room accordingly. Duration drives the end time on
     // every appointment and the slot grid, so this must be per-service rather
     // than the global SESSION_DEFAULTS value.
-    summary: 'A 90-minute session for two partners, together.',
+    summary: 'A 90 minute session for couples.',
     durationMinutes: 90,
     rateBand: 'couple' as const,
     priceInPersonCents: RATES.couple.centurion,
@@ -280,7 +280,7 @@ export const SERVICES = [
     categoryId: 'cat_testing',
     slug: 'psychometric-assessment',
     name: 'Psychometric Assessment',
-    summary: 'Starts with a 60-minute intake to select the right battery.',
+    summary: 'A 60 minute session.',
     durationMinutes: 60,
     rateBand: 'assessment' as const,
     priceInPersonCents: 0,
@@ -294,22 +294,22 @@ export const SERVICES = [
     active: true,
   },
   {
-    id: 'svc_screening',
-    categoryId: 'cat_additional',
-    slug: 'mental-health-screening',
-    name: 'Mental Health Screening',
-    summary: 'A free, confidential screening conversation.',
-    durationMinutes: 30,
-    rateBand: 'free' as const,
-    priceInPersonCents: 0,
-    priceOnlineCents: 0,
+    id: 'svc_pre_marital',
+    categoryId: 'cat_family',
+    slug: 'pre-marital-counselling',
+    name: 'Pre-Marital Counselling',
+    summary: 'Prepare for marriage with greater understanding, confidence and intention.',
+    description: `Prepare for marriage with greater understanding, confidence and intention. Pre-marital counselling provides a safe and supportive space for couples to explore the foundations of their relationship and prepare for married life.\n\nSessions may include:\n• Communication and conflict resolution\n• Expectations, roles and shared responsibilities\n• Finances and practical decision-making\n• Intimacy, boundaries and emotional connection\n• Family relationships and life transitions\n• Values, faith and shared purpose\n• Strengthening relationship skills for a healthy, lasting marriage\n\nWhether you are newly engaged or simply preparing for the next step in your relationship, pre-marital counselling can help you build a stronger foundation for your future together.`,
+    durationMinutes: 60,
+    priceInPersonCents: 80000,
+    priceOnlineCents: 80000,
+    rateBand: 'couple' as const,
     allowsOnline: true,
     allowsInPerson: true,
     requiresQuote: false,
-    intakeNote:
-      'This screening is free. It is a starting point for insight, not a diagnosis, and no payment is taken.',
-    order: 7,
+    intakeNote: null,
     active: true,
+    order: 7,
   },
   {
     id: 'svc_coaching',
@@ -792,7 +792,9 @@ function seedActivity(db: Database) {
   ];
 
   plan.forEach((p, i) => {
-    const service = db.services.find((s) => s.id === p.service)!;
+    const service = db.services.find((s) => s.id === p.service);
+    if (!service) return; // Prevent crashes if seed data references missing services
+    
     const date = addISODays(t, p.day);
     const start = fromLocalParts(date, p.time);
     const end = new Date(start.getTime() + service.durationMinutes * 60_000);

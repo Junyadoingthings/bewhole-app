@@ -1,6 +1,7 @@
+
 import Image from 'next/image';
 import { ArrowRight } from 'lucide-react';
-import { Editable } from '@/components/admin/Editable';
+
 import { ButtonLink } from '@/components/ui/button';
 import { BUSINESS, PRACTITIONER } from '@/config/business';
 import { PHOTOS } from '@/config/photos';
@@ -11,10 +12,10 @@ import { PHOTOS } from '@/config/photos';
  * ── Two layouts, one DOM order ────────────────────────────────────────────
  * Three blocks — words, portrait, action — in that order in the markup:
  *
- *   phone/tablet  a centred column, read top to bottom: headline, face,
- *                 button. The face arrives before the ask.
- *   desktop (lg)  a two-column grid. Words and button stack in the left
- *                 column; the portrait spans both rows on the right.
+ *    phone/tablet  a centred column, read top to bottom: headline, face,
+ *                  button. The face arrives before the ask.
+ *    desktop (lg)  a two-column grid. Words and button stack in the left
+ *                  column; the portrait spans both rows on the right.
  *
  * Desktop placement is done with explicit `col-start`/`row-start` rather than
  * `order-*`, so the reading order never diverges from the DOM order — a screen
@@ -38,26 +39,14 @@ export function Hero() {
         {/* 1 — Words. Left column on desktop. */}
         <div className="lg:col-start-1 lg:row-start-1">
           <h1 className="font-display text-[clamp(2.125rem,6vw,4.75rem)] font-bold leading-[1.04] tracking-[-0.02em] text-ink">
-            <Editable 
-              as="span" 
-              configKey="hero_welcome_line1" 
-              fallback="Welcome to" 
-            />
+            <span>Welcome to</span>
             <br />
-            <Editable 
-              as="span" 
-              configKey="hero_welcome_line2" 
-              fallback="Be Whole Care." 
-              className="text-forest-800" 
-            />
+            <span className="text-forest-800">Be Whole Care.</span>
           </h1>
 
-          <Editable 
-            as="p" 
-            configKey="hero_subheading" 
-            fallback="Professional counselling services & psychological support" 
-            className="mx-auto mt-4 max-w-xl font-display text-sm font-semibold uppercase leading-snug tracking-[0.02em] text-forest-700 sm:text-base lg:mx-0 lg:mt-6 lg:text-xl"
-          />
+          <p className="mx-auto mt-4 max-w-xl font-display text-sm font-semibold uppercase leading-snug tracking-[0.02em] text-forest-700 sm:text-base lg:mx-0 lg:mt-6 lg:text-xl">
+            Professional counselling services & psychological support
+          </p>
 
           {/*
             Hidden on phones. It is the most expensive block up here — four
@@ -65,12 +54,9 @@ export function Hero() {
             button fit a small phone's screen together. The same sentence
             opens the About page and the footer, so nothing is lost.
           */}
-          <Editable 
-            as="p" 
-            configKey="hero_paragraph" 
-            fallback={BUSINESS.promise} 
-            className="mx-auto mt-4 hidden max-w-xl leading-relaxed text-ink-muted text-pretty sm:block sm:text-base lg:mx-0 lg:mt-6 lg:text-lg"
-          />
+          <p className="mx-auto mt-4 hidden max-w-xl leading-relaxed text-ink-muted text-pretty sm:block sm:text-base lg:mx-0 lg:mt-6 lg:text-lg">
+            {BUSINESS.promise}
+          </p>
         </div>
 
         {/* 2 — Portrait and credential. Right column on desktop, spanning both rows. */}
@@ -115,11 +101,7 @@ export function Hero() {
             size="lg"
             className="group mt-7 w-full sm:w-auto lg:mt-8 lg:text-base"
           >
-            <Editable 
-              as="span" 
-              configKey="hero_booking_button" 
-              fallback="Schedule your session here" 
-            />
+            <span>Schedule your session here</span>
             <ArrowRight className="h-4 w-4 transition-transform duration-300 ease-calm group-hover:translate-x-1" />
           </ButtonLink>
         </div>

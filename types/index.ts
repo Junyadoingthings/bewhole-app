@@ -158,7 +158,7 @@ export interface TimeSlot {
 
 export interface DayAvailability {
   date: ISODate;
-  status: 'open' | 'limited' | 'full' | 'closed' | 'past';
+  status: 'open' | 'limited' | 'full' | 'closed' | 'past' | 'blocked';
   openSlots: number;
 }
 

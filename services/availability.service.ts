@@ -1,3 +1,5 @@
+'use server';
+
 import 'server-only';
 
 import {
@@ -169,6 +171,18 @@ export async function getRangeAvailability(
   query: AvailabilityQuery,
 ): Promise<DayAvailability[]> {
   const t = today();
+  const [blocks, practitioners] = await Promise.all([
+    listAvailabilityBlocks(),
+    listPractitioners(),
+  ]);
+
+  const eligible = practitioners.filter((p) => {
+    if (query.practitionerId && p.id !== query.practitionerId) return false;
+    if (query.mode === 'online') return p.offersOnline;
+    return query.locationId ? p.locationIds.includes(query.locationId) : true;
+  });
+  const eligibleIds = new Set(eligible.map((p) => p.id));
+
   const out: DayAvailability[] = [];
 
   for (let date = fromDate; date <= toDate; date = addISODays(date, 1)) {
@@ -176,6 +190,18 @@ export async function getRangeAvailability(
       out.push({ date, status: 'past', openSlots: 0 });
       continue;
     }
+
+    // Check if there is a whole-day block covering this date for eligible practitioners
+    const dayBlocks = blocks.filter((b) => b.date === date && (!b.start || !b.end));
+    const isWholeDayBlocked = dayBlocks.some(
+      (b) => !b.practitionerId || eligibleIds.has(b.practitionerId),
+    );
+
+    if (isWholeDayBlocked) {
+      out.push({ date, status: 'blocked', openSlots: 0 });
+      continue;
+    }
+
     const slots = await getDaySlots(date, query);
     if (!slots.length) {
       out.push({ date, status: 'closed', openSlots: 0 });

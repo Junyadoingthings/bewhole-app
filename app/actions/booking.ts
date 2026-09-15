@@ -3,6 +3,7 @@
 import crypto from 'node:crypto';
 import { cookies, headers } from 'next/headers';
 import { revalidatePath } from 'next/cache';
+import { Resend } from 'resend';
 
 import { getCurrentUser } from '@/lib/auth';
 import { LIMITS, clientKey, rateLimit } from '@/lib/rate-limit';
@@ -14,6 +15,8 @@ import {
   verifyAndApplyPayment,
 } from '@/services/payment.service';
 import { getAppointment } from '@/lib/db';
+
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 export interface BookingActionResult {
   ok: boolean;
@@ -59,6 +62,31 @@ export async function submitBooking(payload: unknown): Promise<BookingActionResu
   }
 
   const { appointment, requiresPayment, checkoutUrl, accountCreated } = result.data;
+
+  // Send confirmation email right after successful database booking creation
+  try {
+    await resend.emails.send({
+      from: 'Be Whole Care <noreply@bewholecare.co.za>',
+      to: [parsed.data.email],
+      subject: `Booking Confirmation - Ref: ${appointment.reference}`,
+      html: `
+        <div style="font-family: sans-serif; color: #111; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <h2 style="color: #1b4332;">Be Whole Care Confirmation</h2>
+          <p>Hello ${parsed.data.firstName},</p>
+          <p>Your appointment has been successfully requested. Here are your booking details:</p>
+          <ul style="list-style: none; padding: 0; line-height: 1.6;">
+            <li><strong>Reference:</strong> ${appointment.reference}</li>
+            <li><strong>Date:</strong> ${parsed.data.date}</li>
+            <li><strong>Time:</strong> ${parsed.data.time}</li>
+          </ul>
+          <p>If you need to reschedule or cancel, please ensure you do so at least 24 hours in advance.</p>
+          <p style="margin-top: 30px; font-size: 14px; color: #555;">Warm regards,<br/><strong>Be Whole Care</strong></p>
+        </div>
+      `,
+    });
+  } catch (emailError) {
+    console.error('[booking] Failed to send confirmation email:', emailError);
+  }
 
   // Lets the confirmation page be viewed by the browser that made the booking
   // without exposing appointment details behind a guessable URL.
@@ -214,13 +242,6 @@ export async function settleMockPayment(
   const { getPaymentProvider, settleMockCheckout, isProductionRuntime } = await import(
     '@/services/payments'
   );
-  /**
-   * Two independent refusals, because the earlier single check had a gap.
-   *
-   * Asking only "is a real gateway configured?" passes in precisely the
-   * dangerous case — a production deployment with no gateway at all, where the
-   * provider is the mock and this action would happily mark bookings paid.
-   */
   if (isProductionRuntime()) {
     return { ok: false, error: 'Simulated payments are not available on the live site.' };
   }
@@ -234,7 +255,6 @@ export async function settleMockPayment(
   const payment = await getPaymentByCheckoutId(checkoutId);
   if (!payment) return { ok: false, error: 'Payment not found' };
 
-  // Goes through the same verification path as a real gateway callback.
   await verifyAndApplyPayment(payment.id);
   revalidatePath('/portal');
   revalidatePath('/admin');

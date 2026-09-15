@@ -110,21 +110,20 @@ export const BUSINESS = {
 } as const;
 
 export const BUSINESS_HOURS = [
-  { day: 1, label: 'Monday', open: '08:00', close: '17:00' },
-  { day: 2, label: 'Tuesday', open: '08:00', close: '17:00' },
-  { day: 3, label: 'Wednesday', open: '08:00', close: '17:00' },
-  { day: 4, label: 'Thursday', open: '08:00', close: '17:00' },
-  { day: 5, label: 'Friday', open: '08:00', close: '17:00' },
-  { day: 6, label: 'Saturday', open: '08:00', close: '12:00' },
+  { day: 1, label: 'Monday', open: '09:00', close: '17:00' },
+  { day: 2, label: 'Tuesday', open: '09:00', close: '17:00' },
+  { day: 3, label: 'Wednesday', open: '09:00', close: '17:00' },
+  { day: 4, label: 'Thursday', open: '09:00', close: '17:00' },
+  { day: 5, label: 'Friday', open: '09:00', close: '17:00' },
+  { day: 6, label: 'Saturday', open: '09:00', close: '13:00' },
   { day: 0, label: 'Sunday', open: null, close: null },
 ] as const;
 
 export const HOURS_SUMMARY = [
-  { label: 'Monday – Friday', value: '08:00 – 17:00' },
-  { label: 'Saturday', value: '08:00 – 12:00' },
+  { label: 'Monday – Friday', value: '09:00 – 17:00' },
+  { label: 'Saturday', value: '09:00 – 13:00' },
   { label: 'Sunday & public holidays', value: 'Closed' },
 ];
-
 export const LOCATIONS = [
   {
     slug: 'centurion',

@@ -1,4 +1,4 @@
-'use client';
+ 'use client';
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
@@ -11,7 +11,6 @@ import {
   Check,
   Clock,
   CreditCard,
-  Loader2,
   MapPin,
   ShieldCheck,
   Video,
@@ -33,8 +32,6 @@ import { cn, money } from '@/lib/utils';
 import type { Location, Service, ServiceCategory, SessionUser, TimeSlot } from '@/types';
 import type { PaymentMethodMark } from '@/services/payments/types';
 
-/* ------------------------------------------------------------------- types */
-
 interface WizardProps {
   categories: ServiceCategory[];
   services: Service[];
@@ -42,9 +39,7 @@ interface WizardProps {
   user: SessionUser | null;
   profile: { phone?: string | null } | null;
   medicalAidCoPaymentCents: number;
-  /** What the active gateway can present. Never hardcoded in the UI. */
   acceptedMethods: PaymentMethodMark[];
-  /** Whether card fields can be shown in-page rather than by redirect. */
   supportsEmbedded: boolean;
   paymentProvider: string;
   prefill: { serviceId?: string; categorySlug?: string };
@@ -73,8 +68,6 @@ const CONCERNS = [
   { id: 'personal-growth', label: 'Personal growth' },
   { id: 'assessment', label: 'Testing & assessment' },
 ];
-
-/* ------------------------------------------------------------------ wizard */
 
 export function BookingWizard({
   categories,
@@ -122,18 +115,11 @@ export function BookingWizard({
     scheme: '',
     memberNumber: '',
     mainMember: '',
-    // Schemes identify a dependant by the main member's ID and the patient's
-    // date of birth, so a claim cannot be submitted without both.
     mainMemberId: '',
     dateOfBirth: '',
   });
   const [consentTerms, setConsentTerms] = React.useState(false);
   const [consentAge, setConsentAge] = React.useState(false);
-  /**
-   * The clause-by-clause counselling consent, keyed by clause id. Separate
-   * from `consentTerms` (the cancellation/payment terms) because they are
-   * different documents agreed at different points for different reasons.
-   */
   const [clinicalConsent, setClinicalConsent] = React.useState<Record<string, boolean>>({});
 
   const [slots, setSlots] = React.useState<TimeSlot[] | null>(null);
@@ -152,40 +138,18 @@ export function BookingWizard({
   const location = locations.find((l) => l.id === locationId) ?? null;
   const category = service ? categories.find((c) => c.id === service.categoryId) ?? null : null;
 
-  /* ------------------------------------------------------------ step model */
-
-  /**
-   * Step one is "what type of appointment", full stop.
-   *
-   * There used to be a 'concern' step first — a grid of "what do you need
-   * support with" (stress, trauma, relationships…). It has been removed at the
-   * practice's request: what someone is coming for is discussed in the room,
-   * not typed into a form before they have spoken to anybody. Asking a person
-   * to categorise their own distress in order to get an appointment is a
-   * barrier, and it produced data the practice did not use.
-   *
-   * The step id is kept in the union so a stale saved index cannot crash the
-   * rail, but it is never pushed.
-   */
   const steps = React.useMemo<StepId[]>(() => {
     const base: StepId[] = ['service'];
     base.push('mode');
     if (mode === 'in_person') base.push('location');
-    // Consent sits immediately before payment, deliberately: informed
-    // consent must be given BEFORE money changes hands, not alongside a
-    // card form where it competes for attention with a payment field.
     base.push('date', 'time', 'details', 'consent', 'payment');
-    // The in-page card step only exists when the gateway can render fields and
-    // there is actually something to charge.
     if (supportsEmbedded) base.push('checkout');
     return base;
-  }, [mode, prefilledService, supportsEmbedded]);
+  }, [mode, supportsEmbedded]);
 
-  // Service is always step 0 now, whether or not one was prefilled.
   const [stepIndex, setStepIndex] = React.useState(0);
   const step = steps[Math.min(stepIndex, steps.length - 1)];
 
-  // Jumping straight to a category prefills the concern filter.
   React.useEffect(() => {
     if (prefilledCategory && prefilledCategory.concerns[0]) setConcern(prefilledCategory.concerns[0]);
   }, [prefilledCategory]);
@@ -198,8 +162,6 @@ export function BookingWizard({
     return filtered.length ? filtered : services;
   }, [categories, services, concern, prefilledCategory]);
 
-  /* ------------------------------------------------------------- pricing */
-
   const amountCents = React.useMemo(() => {
     if (!service || !mode) return 0;
     if (service.rateBand === 'free' || service.requiresQuote) return 0;
@@ -208,8 +170,6 @@ export function BookingWizard({
     }
     return mode === 'online' ? service.priceOnlineCents : service.priceInPersonCents;
   }, [service, mode, paymentMethod, medicalAidCoPaymentCents]);
-
-  /* --------------------------------------------------------------- slots */
 
   React.useEffect(() => {
     if (!date || !service || !mode) return;
@@ -231,8 +191,6 @@ export function BookingWizard({
     };
   }, [date, service, mode, locationId]);
 
-  /* ---------------------------------------------------------- navigation */
-
   const canAdvance = React.useMemo(() => {
     switch (step) {
       case 'concern':
@@ -253,20 +211,16 @@ export function BookingWizard({
           details.lastName.trim().length > 1 &&
           /\S+@\S+\.\S+/.test(details.email) &&
           details.phone.replace(/\D/g, '').length >= 10 &&
-          // Emergency contact is required. Address is not — an online client
-          // has no clinical reason to give one.
           details.emergencyName.trim().length > 1 &&
           details.emergencyPhone.replace(/\D/g, '').length >= 10 &&
           consentTerms &&
           consentAge
         );
       case 'consent':
-        // Every clause, not a blanket accept — see components/consent.
         return isConsentComplete(clinicalConsent);
       case 'payment':
         return paymentMethod === 'card' || Boolean(medicalAid.scheme && medicalAid.memberNumber);
       case 'checkout':
-        // The gateway's own button submits this step, not ours.
         return false;
       default:
         return false;
@@ -283,8 +237,6 @@ export function BookingWizard({
     setFormError(null);
     setStepIndex((i) => Math.max(i - 1, 0));
   }
-
-  /* ------------------------------------------------------------- submit */
 
   async function submit() {
     if (!service || !mode || !date || !time) return;
@@ -311,9 +263,6 @@ export function BookingWizard({
       medicalAid: paymentMethod === 'medical_aid' ? medicalAid : null,
       consentTerms: consentTerms as true,
       consentAge: consentAge as true,
-      // The clause-by-clause counselling consent. Recorded against the client
-      // so the practice can show WHAT was agreed and WHEN, not merely that a
-      // box was ticked.
       clinicalConsent,
     });
 
@@ -322,7 +271,6 @@ export function BookingWizard({
       setErrors(result.errors ?? {});
       setFormError(result.error ?? 'Something went wrong. Please try again.');
 
-      // A taken slot sends the client back to pick another time.
       if (result.errors?.time) {
         setTime(null);
         setSlots(null);
@@ -332,15 +280,11 @@ export function BookingWizard({
       return;
     }
 
-    // Nothing to pay (free screening, quoted assessment, medical aid online):
-    // straight to confirmation.
     if (!result.requiresPayment || !result.appointmentId) {
       router.push(`/book/confirmation?ref=${result.reference}`);
       return;
     }
 
-    // Preferred path: keep the client here and mount the gateway's card
-    // fields inside our own page.
     if (supportsEmbedded) {
       const payment = await startEmbeddedPayment(result.appointmentId);
       if (payment.ok) {
@@ -349,8 +293,6 @@ export function BookingWizard({
         setSubmitting(false);
         return;
       }
-      // Fall through to the redirect rather than stranding the client.
-      console.warn('[booking] embedded checkout unavailable:', payment.error);
     }
 
     if (result.checkoutUrl) {
@@ -360,8 +302,6 @@ export function BookingWizard({
 
     router.push(`/book/confirmation?ref=${result.reference}`);
   }
-
-  /* ---------------------------------------------------------------- view */
 
   const stepNumber = stepIndex + 1;
   const totalSteps = steps.length;
@@ -380,46 +320,6 @@ export function BookingWizard({
               exit={reduced ? undefined : { opacity: 0, x: -18 }}
               transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
             >
-              {step === 'concern' && (
-                <StepShell
-                  n={stepNumber}
-                  total={totalSteps}
-                  title="What do you need support with?"
-                  lead="Choose whatever is closest — this only filters what we show you next. Nothing here is recorded or interpreted."
-                >
-                  <div className="flex flex-wrap gap-2.5" role="radiogroup" aria-label="Concern">
-                    {CONCERNS.map((c) => {
-                      const active = concern === c.id;
-                      return (
-                        <button
-                          key={c.id}
-                          type="button"
-                          role="radio"
-                          aria-checked={active}
-                          onClick={() => setConcern(active ? null : c.id)}
-                          className={cn(
-                            'rounded-full border px-4 py-2.5 text-sm transition-all duration-250 ease-calm',
-                            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest-600 focus-visible:ring-offset-2',
-                            active
-                              ? 'border-forest-800 bg-forest-800 text-cream-100'
-                              : 'border-line-strong bg-white text-ink-muted hover:-translate-y-0.5 hover:border-forest-300 hover:text-ink',
-                          )}
-                        >
-                          {c.label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                  <button
-                    type="button"
-                    onClick={next}
-                    className="mt-6 text-sm text-ink-soft underline-offset-4 hover:text-ink hover:underline"
-                  >
-                    I already know what I need — skip this
-                  </button>
-                </StepShell>
-              )}
-
               {step === 'service' && (
                 <StepShell
                   n={stepNumber}
@@ -441,34 +341,11 @@ export function BookingWizard({
                           icon={<ServiceIcon name={cat?.icon ?? 'Sprout'} className="h-5 w-5" />}
                           title={s.name}
                           description={s.summary}
-                          /**
-                           * No price here.
-                           *
-                           * Choosing care and comparing prices are different
-                           * decisions, and putting a rand figure on each card
-                           * turned the first one into the second. The fee is
-                           * shown in full at the payment step, before anything
-                           * is charged — which is where it is needed and where
-                           * it is finally accurate, since the amount depends on
-                           * which practice is chosen.
-                           *
-                           * "Quoted after intake" stays: that is not a price,
-                           * it is a warning that no card will settle this today.
-                           */
-                          meta={s.requiresQuote ? 'Quoted after booking' : undefined}
+                          meta={s.requiresQuote ? 'Billed separately after first session' : undefined}
                         />
                       );
                     })}
                   </div>
-                  {concern && visibleServices.length < services.length && (
-                    <button
-                      type="button"
-                      onClick={() => setConcern(null)}
-                      className="mt-5 text-sm text-ink-soft underline-offset-4 hover:text-ink hover:underline"
-                    >
-                      Show all services instead
-                    </button>
-                  )}
                 </StepShell>
               )}
 
@@ -567,10 +444,6 @@ export function BookingWizard({
                   ) : slots.filter((s) => s.available).length === 0 ? (
                     <div className="rounded-3xl border border-dashed border-line-strong bg-cream-50/70 dark:bg-card/70 p-10 text-center">
                       <p className="font-display text-lg text-ink">Nothing open on this day</p>
-                      <p className="mx-auto mt-2 max-w-sm text-sm leading-relaxed text-ink-soft">
-                        Every time on {date ? formatFullDate(date) : 'this date'} is taken. Try another
-                        day — most weeks have space within a few days.
-                      </p>
                       <Button
                         variant="secondary"
                         size="sm"
@@ -597,7 +470,6 @@ export function BookingWizard({
                             onClick={() => setTime(slot.label)}
                             className={cn(
                               'flex h-13 items-center justify-center rounded-2xl border text-sm tabular transition-all duration-200 ease-calm',
-                              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest-600 focus-visible:ring-offset-2',
                               time === slot.label
                                 ? 'border-forest-800 bg-forest-800 font-medium text-cream-100'
                                 : slot.available
@@ -608,22 +480,21 @@ export function BookingWizard({
                             {displayTime(slot.label)}
                           </button>
                         ))}
-                    </div>
-                    <p className="mt-5 flex items-center gap-2 text-sm text-ink-soft">
-                      <Clock className="h-4 w-4 text-forest-600 dark:text-forest-300" />
-                      Times shown in South African time (SAST).
-                    </p>
-                  </>
-                )}
-              </StepShell>
-            )}
+                      </div>
+                      <p className="mt-5 flex items-center gap-2 text-sm text-ink-soft">
+                        <Clock className="h-4 w-4 text-forest-600 dark:text-forest-300" />
+                        Times shown in South African time (SAST).
+                      </p>
+                    </>
+                  )}
+                </StepShell>
+              )}
 
               {step === 'details' && (
                 <StepShell
                   n={stepNumber}
                   total={totalSteps}
                   title="Your details"
-                  lead="Only what we need to confirm the session and reach you. Nothing more."
                 >
                   <div className="grid gap-5 sm:grid-cols-2">
                     <div>
@@ -693,9 +564,6 @@ export function BookingWizard({
                     <legend className="px-1 text-sm font-medium text-ink">
                       Emergency contact
                     </legend>
-                    <p className="mt-1 text-sm leading-relaxed text-ink-soft">
-                      Someone we can reach if there is an emergency during or after your session.
-                    </p>
                     <div className="mt-4 grid gap-4 sm:grid-cols-2">
                       <div>
                         <Label htmlFor="emergencyName">Full name</Label>
@@ -727,7 +595,7 @@ export function BookingWizard({
                   </fieldset>
 
                   <div className="mt-5">
-                    <Label htmlFor="reason" optional hint="Helps us prepare — a sentence is plenty">
+                    <Label htmlFor="reason" optional>
                       What brings you here?
                     </Label>
                     <Textarea
@@ -735,37 +603,35 @@ export function BookingWizard({
                       rows={3}
                       value={details.reason}
                       onChange={(e) => setDetails({ ...details, reason: e.target.value })}
-                      placeholder="You can leave this blank and talk it through in the session."
-                  />
+                    />
                   </div>
 
                   <div className="mt-6">
                     <p className="text-sm font-medium text-ink">Is this your first session?</p>
-                  <div
-                    className="mt-3 grid gap-3 sm:grid-cols-2"
-                    role="radiogroup"
-                    aria-label="Is this your first session?"
-                  >
-                    <OptionCard
+                    <div
+                      className="mt-3 grid gap-3 sm:grid-cols-2"
+                      role="radiogroup"
+                      aria-label="Is this your first session?"
+                    >
+                      <OptionCard
                         selected={details.isFirstSession}
                         onSelect={() => setDetails({ ...details, isFirstSession: true })}
                         title="This is my first session"
                       />
-                    <OptionCard
+                      <OptionCard
                         selected={!details.isFirstSession}
                         onSelect={() => setDetails({ ...details, isFirstSession: false })}
                         title="This is my follow-up session"
-                    />
+                      />
+                    </div>
                   </div>
-                </div>
 
-                <div className="mt-5 space-y-3">
+                  <div className="mt-5 space-y-3">
                     <CheckboxRow
                       id="consentAge"
                       checked={consentAge}
                       onChange={setConsentAge}
                       title="I am 16 or older, or I have guardian consent"
-                      description="Clients under 16 need written consent from a parent or legal guardian."
                       error={errors.consentAge}
                     />
                     <CheckboxRow
@@ -773,7 +639,6 @@ export function BookingWizard({
                       checked={consentTerms}
                       onChange={setConsentTerms}
                       title="I accept the terms & conditions and privacy notice"
-                      description="Including the 24-hour cancellation policy and the limits of confidentiality."
                       error={errors.consentTerms}
                     />
                   </div>
@@ -808,7 +673,7 @@ export function BookingWizard({
                           <Check className="h-5 w-5" />
                         </span>
                         <h3 className="mt-5 font-display text-xl text-ink">
-                          {service.rateBand === 'free' ? 'This session is free' : 'No payment now'}
+                          {service.rateBand === 'free' ? 'This session is free' : 'Booking successful'}
                         </h3>
                         <p className="mt-3 text-sm leading-relaxed text-ink-soft">
                           {service.intakeNote}
@@ -951,7 +816,7 @@ export function BookingWizard({
                     total={totalSteps}
                     title="Complete your payment"
                     lead={`Your ${service?.durationMinutes ?? 60}-minute session is held while you pay.`}
-                >
+                  >
                     <EmbeddedCheckout
                       checkoutId={embedded.checkoutId}
                       scriptUrl={embedded.scriptUrl}
@@ -960,7 +825,7 @@ export function BookingWizard({
                       amountLabel={money(amountCents)}
                       isMock={paymentProvider === 'mock'}
                     />
-                </StepShell>
+                  </StepShell>
               )}
             </motion.div>
           </AnimatePresence>
@@ -976,7 +841,6 @@ export function BookingWizard({
           </p>
         )}
 
-        {/* Desktop controls; mobile gets the sticky bar below. */}
         <div
           className={cn(
             'mt-8 hidden items-center justify-between gap-4',
@@ -1004,7 +868,6 @@ export function BookingWizard({
         </div>
     </div>
 
-    {/* Summary rail */}
     <aside className="lg:sticky lg:top-28 lg:self-start">
       <SummaryCard
         service={service}
@@ -1021,7 +884,6 @@ export function BookingWizard({
       />
     </aside>
 
-    {/* Mobile sticky action bar */}
     <div
       className={cn(
         'fixed inset-x-0 bottom-0 z-40 border-t border-line bg-white/95 px-4 py-3 pb-safe lg:hidden',
@@ -1051,10 +913,8 @@ export function BookingWizard({
       </div>
     </div>
   </div>
-);
+  );
 }
-
-/* --------------------------------------------------------------- subviews */
 
 function StepShell({
   n,
@@ -1230,7 +1090,7 @@ function SummaryCard({
               {isFree ? 'Cost' : requiresQuote ? 'Fee' : 'To pay now'}
             </span>
             <span className="font-display text-2xl tabular text-ink">
-              {isFree ? 'Free' : requiresQuote ? 'After intake' : money(amountCents)}
+              {isFree ? 'Free' : requiresQuote ? 'Billed separately after first session' : money(amountCents)}
             </span>
           </div>
           {paymentMethod === 'medical_aid' && !requiresQuote && !isFree && (
@@ -1258,6 +1118,3 @@ function SummaryCard({
     </div>
   );
 }
-
-
-

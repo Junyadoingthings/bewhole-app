@@ -55,25 +55,25 @@ export function ConsentForm({
               className={cn(
                 'cursor-pointer border rounded-2xl p-5 transition-all duration-200',
                 isChecked
-                  ? 'border-primary/40 bg-primary/[0.02] shadow-sm'
-                  : 'border-border/60 hover:border-border bg-background'
+                  ? 'border-primary bg-primary/[0.04] shadow-sm ring-1 ring-primary'
+                  : 'border-border/80 hover:border-border bg-background'
               )}
             >
               <div className="flex items-start gap-4">
                 <div
                   className={cn(
-                    'w-6 h-6 rounded-lg border flex items-center justify-center transition-colors mt-0.5 shrink-0',
+                    'w-7 h-7 rounded-xl border-2 flex items-center justify-center transition-colors mt-0.5 shrink-0 shadow-sm',
                     isChecked
                       ? 'bg-primary border-primary text-primary-foreground'
-                      : 'border-muted-foreground/30 bg-background'
+                      : 'border-muted-foreground/50 bg-background hover:border-primary'
                   )}
                 >
-                  {isChecked && <Check className="w-4 h-4 stroke-[3]" />}
+                  {isChecked && <Check className="w-4 h-4 stroke-[3.5]" />}
                 </div>
                 <div className="space-y-1 flex-1">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                      Clause {index + 1}
+                    <span className="text-xs font-bold text-foreground/80 tracking-wider">
+                      {index + 1}
                     </span>
                   </div>
                   <p className="text-sm text-foreground leading-relaxed pt-1">{item.body}</p>

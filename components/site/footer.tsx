@@ -4,7 +4,7 @@ import { Instagram, Mail, MapPin, Phone, ShieldCheck } from 'lucide-react';
 import { Logo } from '@/components/brand/logo';
 import { PaymentMethods } from '@/components/booking/payment-methods';
 import { displayMethods } from '@/services/payments';
-import { BUSINESS, CRISIS_SUPPORT, HOURS_SUMMARY, LOCATIONS } from '@/config/business';
+import { BUSINESS, HOURS_SUMMARY, LOCATIONS } from '@/config/business';
 import { cn } from '@/lib/utils';
 
 /**
@@ -110,7 +110,8 @@ export function SiteFooter({ className }: { className?: string }) {
           </div>
         </div>
 
-        <div className="mt-14 grid gap-8 border-t border-cream-100/10 pt-10 sm:grid-cols-2 lg:grid-cols-3">
+        {/* Updated grid layout to 2 columns since emergency block is removed */}
+        <div className="mt-14 grid gap-8 border-t border-cream-100/10 pt-10 sm:grid-cols-2">
           <div>
             <p className="text-2xs font-medium uppercase tracking-[0.18em] text-forest-300">
               Where to find us
@@ -127,14 +128,6 @@ export function SiteFooter({ className }: { className?: string }) {
               ))}
             </ul>
 
-            {/*
-              A small map, sunk into the footer rather than sitting on it.
-              `loading="lazy"` keeps an iframe and a third-party request off the
-              critical path — nobody lands on this page for the map, they scroll
-              to it. The overlay tints Google's white tiles toward the footer's
-              green so it reads as part of the panel; pointer-events-none so it
-              never blocks a pinch or a drag on the map itself.
-            */}
             <a
               href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
                 `${LOCATIONS[0].full}, South Africa`,
@@ -172,44 +165,8 @@ export function SiteFooter({ className }: { className?: string }) {
             </ul>
             <p className="mt-4 text-xs text-cream-100/45">Sessions are by appointment only.</p>
           </div>
-
-          {/* Crisis routing sits in the footer of every page, not buried. */}
-          <div className="rounded-2xl border border-cream-100/10 bg-forest-950/40 p-5">
-            <p className="text-2xs font-medium uppercase tracking-[0.18em] text-forest-300">
-              In an emergency
-            </p>
-            <p className="mt-3 text-sm leading-relaxed text-cream-100/70">{CRISIS_SUPPORT.note}</p>
-            <ul className="mt-4 space-y-1.5 text-sm">
-              {CRISIS_SUPPORT.contacts.slice(0, 3).map((contact) => (
-                <li key={contact.value} className="flex justify-between gap-3">
-                  <span className="text-cream-100/60">{contact.label}</span>
-                  <a href={contact.href} className="tabular text-cream-100 hover:underline">
-                    {contact.value}
-                  </a>
-                </li>
-              ))}
-            </ul>
-          </div>
         </div>
 
-        {/*
-          Accepted payment methods.
-
-          A quiet band above the sign-off, in the manner of any retail footer —
-          it answers "can I pay the way I normally do?" without anyone having
-          to start a booking to find out.
-
-          Monochrome on purpose. The brand-coloured marks used inside the
-          booking flow would sit on this dark ground as a row of bright tiles
-          and out-shout the crisis contacts directly above them, which are the
-          most important thing in this footer. Rendered in the same muted cream
-          as the surrounding text, the row reads as reassurance rather than
-          advertising.
-
-          The list comes from the configured gateway, so it cannot promise a
-          method the practice does not take; with none configured it renders
-          nothing at all rather than a hopeful guess.
-        */}
         {paymentMarks.length > 0 && (
           <div className="mt-12 border-t border-cream-100/10 pt-8">
             <p className="text-2xs font-medium uppercase tracking-[0.18em] text-forest-300">
