@@ -100,7 +100,7 @@ export const BUSINESS = {
     'We provide confidential, ethical and client-centred counselling services you can trust.',
   website: 'www.bewholecare.co.za',
   email: 'bewholecare@gmail.com',
-  phone: '0638837170',
+  phone: '',
   phoneE164: '+27638837170',
   whatsapp: '27638837170',
   instagram: 'https://www.instagram.com/_bewhole/',
