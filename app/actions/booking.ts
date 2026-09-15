@@ -66,7 +66,7 @@ export async function submitBooking(payload: unknown): Promise<BookingActionResu
   // Send confirmation email right after successful database booking creation
   try {
     await resend.emails.send({
-      from: 'Be Whole Care <noreply@bewholecare.co.za>',
+      from: 'Be Whole Care <onboarding@resend.dev>',
       to: [parsed.data.email],
       subject: `Booking Confirmation - Ref: ${appointment.reference}`,
       html: `
