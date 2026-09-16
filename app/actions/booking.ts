@@ -60,7 +60,7 @@ export async function submitBooking(payload: unknown): Promise<BookingActionResu
 
   const { appointment, requiresPayment, checkoutUrl, accountCreated } = result.data;
 
-  // Send beautifully formatted HTML confirmation email
+  // Premium, minimalist HTML confirmation email matched to the brand UI
   try {
     await resend.emails.send({
       from: 'Be Whole Care <onboarding@resend.dev>',
@@ -69,48 +69,47 @@ export async function submitBooking(payload: unknown): Promise<BookingActionResu
       html: `
         <!DOCTYPE html>
         <html>
-        <body style="margin: 0; padding: 0; background-color: #f4f7f6; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
-          <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color: #f4f7f6; padding: 40px 20px;">
+        <body style="margin: 0; padding: 0; background-color: #f7f9f8; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+          <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color: #f7f9f8; padding: 40px 20px;">
             <tr>
               <td align="center">
-                <table width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width: 600px; background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.05);">
+                <table width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width: 600px; background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.04);">
 
                   <!-- Header with Logo -->
                   <tr>
-                    <td style="padding: 40px 40px 20px; text-align: center;">
-                      <!-- IMPORTANT: Ensure this URL points to your actual logo file -->
-                      <img src="https://bewholecare.co.za/logo.png" alt="Be Whole Care" width="140" style="display: block; margin: 0 auto; border: 0;">
+                    <td style="padding: 40px 40px 10px; text-align: center;">
+                      <img src="https://bewholecare.co.za/logo.png" alt="Be Whole. CARE" width="180" style="display: block; margin: 0 auto; border: 0; max-width: 100%; height: auto;">
                     </td>
                   </tr>
 
                   <!-- Main Content -->
                   <tr>
                     <td style="padding: 0 40px 30px;">
-                      <h1 style="color: #1b4332; font-size: 24px; font-weight: 600; margin: 0 0 20px; text-align: center;">Booking Confirmed</h1>
+                      <h1 style="color: #113624; font-size: 22px; font-weight: 600; margin: 20px 0 20px; text-align: center;">Booking Confirmed</h1>
                       <p style="color: #4a5568; font-size: 16px; line-height: 1.6; margin: 0 0 20px;">Hello ${parsed.data.firstName},</p>
                       <p style="color: #4a5568; font-size: 16px; line-height: 1.6; margin: 0 0 30px;">Your appointment has been successfully scheduled. We look forward to seeing you. Here are your session details:</p>
 
                       <!-- Booking Details Card -->
-                      <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color: #f8faf9; border: 1px solid #e2e8f0; border-radius: 8px;">
+                      <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color: #fcfcfc; border: 1px solid #edf2f7; border-radius: 8px;">
                         <tr>
-                          <td style="padding: 20px;">
+                          <td style="padding: 24px;">
                             <table width="100%" cellpadding="0" cellspacing="0" border="0">
                               <tr>
-                                <td style="padding-bottom: 12px; border-bottom: 1px solid #e2e8f0;">
-                                  <span style="display: block; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: #718096; margin-bottom: 4px;">Reference</span>
-                                  <strong style="color: #1a202c; font-size: 16px;">${appointment.reference}</strong>
+                                <td style="padding-bottom: 12px; border-bottom: 1px solid #edf2f7;">
+                                  <span style="display: block; font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: #a0aec0; margin-bottom: 4px;">Reference</span>
+                                  <strong style="color: #1a202c; font-size: 15px;">${appointment.reference}</strong>
                                 </td>
                               </tr>
                               <tr>
-                                <td style="padding: 12px 0; border-bottom: 1px solid #e2e8f0;">
-                                  <span style="display: block; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: #718096; margin-bottom: 4px;">Date</span>
-                                  <strong style="color: #1a202c; font-size: 16px;">${parsed.data.date}</strong>
+                                <td style="padding: 12px 0; border-bottom: 1px solid #edf2f7;">
+                                  <span style="display: block; font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: #a0aec0; margin-bottom: 4px;">Date</span>
+                                  <strong style="color: #1a202c; font-size: 15px;">${parsed.data.date}</strong>
                                 </td>
                               </tr>
                               <tr>
                                 <td style="padding-top: 12px;">
-                                  <span style="display: block; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: #718096; margin-bottom: 4px;">Time</span>
-                                  <strong style="color: #1a202c; font-size: 16px;">${parsed.data.time}</strong>
+                                  <span style="display: block; font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: #a0aec0; margin-bottom: 4px;">Time</span>
+                                  <strong style="color: #1a202c; font-size: 15px;">${parsed.data.time}</strong>
                                 </td>
                               </tr>
                             </table>
@@ -118,18 +117,17 @@ export async function submitBooking(payload: unknown): Promise<BookingActionResu
                         </tr>
                       </table>
 
-                      <p style="color: #4a5568; font-size: 14px; line-height: 1.6; margin: 30px 0 0;">
-                        <strong style="color: #1a202c;">Need to make changes?</strong><br>
+                      <p style="color: #718096; font-size: 13px; line-height: 1.6; margin: 30px 0 0; text-align: center;">
+                        <strong style="color: #4a5568;">Need to make changes?</strong><br>
                         If you need to reschedule or cancel, please ensure you do so at least 24 hours in advance.
                       </p>
                     </td>
                   </tr>
 
-                  <!-- Footer -->
+                  <!-- Minimalist Footer -->
                   <tr>
-                    <td style="background-color: #1b4332; padding: 30px 40px; text-align: center;">
-                      <p style="color: #ffffff; font-size: 14px; margin: 0;"><strong>Be Whole Care</strong></p>
-                      <p style="color: #8fbc8f; font-size: 12px; margin: 10px 0 0;">Kwa-Thema, Springs, South Africa</p>
+                    <td style="background-color: #113624; padding: 24px 40px; text-align: center;">
+                      <p style="color: #ffffff; font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; margin: 0;"><strong>Be Whole Care</strong></p>
                     </td>
                   </tr>
 
