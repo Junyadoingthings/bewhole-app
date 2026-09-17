@@ -330,4 +330,37 @@ export async function changeOwnPassword(_prev: AuthState, formData: FormData): P
 
   return { status: 'success', message: 'Password changed. Other devices have been signed out.' };
 }
+export async function updateAdminPassword(formData: FormData) {
+  const currentPassword = formData.get('currentPassword') as string;
+  const newPassword = formData.get('newPassword') as string;
 
+  if (!currentPassword || !newPassword) {
+    return { ok: false, error: 'Please fill in all fields.' };
+  }
+
+  // 1. Get the currently logged-in admin
+  const user = await getCurrentUser();
+  if (!user) {
+    return { ok: false, error: 'You must be logged in to change your password.' };
+  }
+
+  // 2. Fetch their full record to get their current hashed password
+  const fullUser = await findUserByEmail(user.email);
+  if (!fullUser || !fullUser.passwordHash) {
+    return { ok: false, error: 'Account not found or does not use a password.' };
+  }
+
+  // 3. Verify the old password is correct
+  const isValid = await verifyPassword(currentPassword, fullUser.passwordHash);
+  if (!isValid) {
+    return { ok: false, error: 'Incorrect current password.' };
+  }
+
+  // 4. Hash the new password and update the database
+  const newPasswordHash = await hashPassword(newPassword);
+
+  // Update the user record with the new hash
+  await updateUser(user.id, { passwordHash: newPasswordHash });
+
+  return { ok: true };
+}

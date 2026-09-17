@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
-
+import { ChangePasswordForm } from '@/components/admin/change-password-form';
 import { Button } from '@/components/ui/button';
 import { CheckboxRow, Input, Label, Select, Textarea } from '@/components/ui/field';
 import { Badge } from '@/components/ui/primitives';
@@ -437,5 +437,6 @@ function IntegrationRow({
         {live ? 'Connected' : 'Not configured'}
       </Badge>
     </div>
+    <ChangePasswordForm />
   );
 }
