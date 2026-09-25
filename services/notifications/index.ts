@@ -368,8 +368,7 @@ function emailShell(
         <tr><td style="padding:28px 16px 0;">
           <div style="font-size:12px;line-height:1.7;color:${INK_FAINT};text-align:center;">
             Be Whole Care &middot; 063 883 7170 &middot; bewholecare@gmail.com<br/>
-            A renewed mind, a prospering soul.<br/><br/>
-            Be Whole Care is not an emergency service. If you are in immediate danger, contact emergency services on 112 or the SADAG 24hr helpline on 0800 456 789.
+            A renewed mind, a prospering soul.
           </div>
         </td></tr>
       </table>
