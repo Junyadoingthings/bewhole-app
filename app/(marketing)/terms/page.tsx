@@ -42,9 +42,10 @@ const SECTIONS = [
     ],
     // The published rate card was removed from the site: fees are quoted
     // during booking, where the service, the mode and any medical aid
-    // arrangement are known. The policy text below still states the
-    // co-payment, because that is a term of service rather than advertising.
-    after: [POLICY.medicalAid, POLICY.medicalAidCoPayment],
+    // arrangement are known. A co-payment would be stated here as a term of
+    // service; there is none now, so its empty policy text is filtered out
+    // rather than rendered as a blank paragraph.
+    after: [POLICY.medicalAid, POLICY.medicalAidCoPayment].filter(Boolean),
     note: 'Failure to settle any applicable fees may result in the appointment being postponed or rescheduled.',
   },
   {

@@ -144,7 +144,10 @@ const SETTINGS = {
   payments: {
     provider: process.env.PEACH_ENTITY_ID ? 'peach' : process.env.PAYFAST_MERCHANT_ID ? 'payfast' : 'mock',
     medicalAidEnabled: true,
-    medicalAidCoPaymentCents: 10000,
+    // No co-payment on medical aid sessions, at the practice's request. This
+    // row is rewritten on every deploy, so this — not the admin screen — is
+    // where the amount is actually decided.
+    medicalAidCoPaymentCents: 0,
     requirePaymentToConfirm: true,
   },
   // Entered by an administrator in the dashboard. Never committed here — an

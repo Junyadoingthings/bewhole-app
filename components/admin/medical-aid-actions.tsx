@@ -146,9 +146,19 @@ export function MedicalAidActions({
         ) : (
           <>
             <p className="mt-4 text-sm leading-relaxed text-ink-soft">
-              The amount owing changes from{' '}
-              <span className="font-medium text-ink">{money(coPaymentCents)}</span> to the private
-              fee of <span className="font-medium text-ink">{money(privateFeeCents)}</span>.
+              {coPaymentCents > 0 ? (
+                <>
+                  The amount owing changes from{' '}
+                  <span className="font-medium text-ink">{money(coPaymentCents)}</span> to the
+                  private fee of{' '}
+                  <span className="font-medium text-ink">{money(privateFeeCents)}</span>.
+                </>
+              ) : (
+                <>
+                  The client will owe the private fee of{' '}
+                  <span className="font-medium text-ink">{money(privateFeeCents)}</span>.
+                </>
+              )}
             </p>
             <div className="mt-4">
               <Label htmlFor="decline-reason" optional>
