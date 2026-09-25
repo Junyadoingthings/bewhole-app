@@ -37,7 +37,9 @@ const SECTIONS: { title: string; body: string }[] = [
   { title: 'Who we can see', body: POLICY.eligibility },
   { title: 'What these services are', body: POLICY.nature },
   { title: 'Confidentiality', body: POLICY.confidentiality },
-];
+  // A policy with no wording (there is currently no co-payment) is left out
+  // rather than shown as an empty heading.
+].filter((section) => section.body);
 
 interface TermsContextValue {
   open: () => void;
