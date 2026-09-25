@@ -29,8 +29,10 @@ import { useToast } from '@/components/ui/toast';
 import { startEmbeddedPayment, submitBooking } from '@/app/actions/booking';
 import { displayTime, formatFullDate, relativeDay } from '@/lib/date';
 import { cn, money } from '@/lib/utils';
+import { bookingDetailsSchema, fieldErrors, medicalAidSchema } from '@/lib/validation';
 import type { Location, Service, ServiceCategory, SessionUser, TimeSlot } from '@/types';
 import type { PaymentMethodMark } from '@/services/payments/types';
+import type { ZodTypeAny } from 'zod';
 
 interface WizardProps {
   categories: ServiceCategory[];
@@ -68,6 +70,109 @@ const CONCERNS = [
   { id: 'personal-growth', label: 'Personal growth' },
   { id: 'assessment', label: 'Testing & assessment' },
 ];
+
+const PRACTICE_PHONE = '063 883 7170';
+
+/**
+ * Every field that can carry an error, in on-screen order, mapped from its
+ * error key (the same dotted path the server reports) to the element to focus.
+ */
+const FIELD_ORDER: readonly (readonly [errorKey: string, elementId: string])[] = [
+  ['firstName', 'firstName'],
+  ['lastName', 'lastName'],
+  ['email', 'email'],
+  ['phone', 'phone'],
+  ['address', 'address'],
+  ['emergencyName', 'emergencyName'],
+  ['emergencyPhone', 'emergencyPhone'],
+  ['reason', 'reason'],
+  ['consentAge', 'consentAge'],
+  ['consentTerms', 'consentTerms'],
+  ['medicalAid.scheme', 'scheme'],
+  ['medicalAid.memberNumber', 'memberNumber'],
+  ['medicalAid.dateOfBirth', 'dateOfBirth'],
+  ['medicalAid.mainMember', 'mainMember'],
+  ['medicalAid.mainMemberId', 'mainMemberId'],
+];
+
+/** Which step owns a field, for routing a server-side rejection back to it. */
+function stepForErrorKey(key: string): StepId | null {
+  if (key.startsWith('medicalAid')) return 'payment';
+  switch (key) {
+    case 'serviceId':
+      return 'service';
+    case 'mode':
+      return 'mode';
+    case 'locationId':
+      return 'location';
+    case 'date':
+      return 'date';
+    case 'time':
+      return 'time';
+    case 'clinicalConsent':
+      return 'consent';
+    default:
+      return key in bookingDetailsSchema.shape ? 'details' : null;
+  }
+}
+
+/** Run a schema and return its failures keyed by field, or {} when valid. */
+function issuesOf(schema: ZodTypeAny, value: unknown, prefix = ''): Record<string, string> {
+  const result = schema.safeParse(value);
+  if (result.success) return {};
+  const out: Record<string, string> = {};
+  for (const [key, message] of Object.entries(fieldErrors(result.error))) {
+    out[`${prefix}${key}`] = message;
+  }
+  return out;
+}
+
+/**
+ * How long the booking request may take before the client is told so.
+ *
+ * A try/catch alone cannot end a request that never finishes — it only fires
+ * when one fails. The server answers in well under a second; past this,
+ * something is wrong, and the client hears about it instead of waiting forever.
+ */
+const SUBMIT_DEADLINE_MS = 45_000;
+
+class BookingDeadlineError extends Error {
+  constructor() {
+    super('Booking request exceeded its deadline');
+    this.name = 'BookingDeadlineError';
+  }
+}
+
+function withDeadline<T>(promise: Promise<T>, ms: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new BookingDeadlineError()), ms);
+  });
+  return Promise.race([promise, deadline]).finally(() => clearTimeout(timer));
+}
+
+/** Words a client can act on, for a booking request that threw. */
+function describeSubmitFailure(error: unknown): string {
+  if (error instanceof BookingDeadlineError) {
+    return (
+      'This is taking much longer than it should. Before trying again, please check your ' +
+      'email — if a message from us has arrived, your time is already held. If not, try ' +
+      `again, or call or WhatsApp us on ${PRACTICE_PHONE}.`
+    );
+  }
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+    return 'You appear to be offline. Please check your connection and try again.';
+  }
+  const message = error instanceof Error ? error.message : '';
+  // A tab opened before a site update calls server code that no longer exists.
+  if (/server action|unexpected response/i.test(message)) {
+    return 'This page was updated while you had it open. Please refresh the page and book again.';
+  }
+  return (
+    'We could not complete your booking just now. Please try again — if it keeps happening, ' +
+    `call or WhatsApp us on ${PRACTICE_PHONE}.`
+  );
+}
 
 export function BookingWizard({
   categories,
@@ -125,7 +230,18 @@ export function BookingWizard({
   const [slots, setSlots] = React.useState<TimeSlot[] | null>(null);
   const [loadingSlots, setLoadingSlots] = React.useState(false);
   const [submitting, setSubmitting] = React.useState(false);
-  const [errors, setErrors] = React.useState<Record<string, string>>({});
+  /** Errors the server reported on the last submit. */
+  const [serverErrors, setServerErrors] = React.useState<Record<string, string>>({});
+  /**
+   * Whether a step's field errors are on show: off until the client first
+   * tries to move on, then live, so each error clears as its field is fixed.
+   */
+  const [revealed, setRevealed] = React.useState({ details: false, payment: false });
+  /** Synchronous double-submit guard; two taps in one render both see `submitting` false. */
+  const submitLock = React.useRef(false);
+  /** Set once the server has created the booking on this page. */
+  const bookedReference = React.useRef<string | null>(null);
+  const formErrorRef = React.useRef<HTMLParagraphElement>(null);
   const [embedded, setEmbedded] = React.useState<{
     checkoutId: string;
     scriptUrl: string;
@@ -137,6 +253,16 @@ export function BookingWizard({
   const service = services.find((s) => s.id === serviceId) ?? null;
   const location = locations.find((l) => l.id === locationId) ?? null;
   const category = service ? categories.find((c) => c.id === service.categoryId) ?? null : null;
+
+  /**
+   * The payment method that actually applies. A free or quoted service shows no
+   * payment choice, but an earlier "medical aid" pick survives in state — and
+   * would demand scheme details from fields no longer on screen. Nothing is
+   * charged for these services, so they always go through as 'card'.
+   */
+  const noCharge = Boolean(service?.requiresQuote || service?.rateBand === 'free');
+  const effectivePaymentMethod = noCharge ? 'card' : paymentMethod;
+  const usingMedicalAid = effectivePaymentMethod === 'medical_aid';
 
   const steps = React.useMemo<StepId[]>(() => {
     const base: StepId[] = ['service'];
@@ -165,11 +291,44 @@ export function BookingWizard({
   const amountCents = React.useMemo(() => {
     if (!service || !mode) return 0;
     if (service.rateBand === 'free' || service.requiresQuote) return 0;
-    if (paymentMethod === 'medical_aid') {
+    if (effectivePaymentMethod === 'medical_aid') {
       return mode === 'in_person' ? medicalAidCoPaymentCents : 0;
     }
     return mode === 'online' ? service.priceOnlineCents : service.priceInPersonCents;
-  }, [service, mode, paymentMethod, medicalAidCoPaymentCents]);
+  }, [service, mode, effectivePaymentMethod, medicalAidCoPaymentCents]);
+
+  // What is taken at booking. A medical aid booking is never charged here — the
+  // co-payment is collected once the scheme is checked (see priceSession).
+  const chargeNowCents = usingMedicalAid ? 0 : amountCents;
+
+  /**
+   * The same schemas the server applies, run live, so passing a step here means
+   * the server cannot later reject it for these fields — a rejection that used
+   * to surface only on the payment step, naming fields no longer on screen.
+   */
+  const detailsIssues = React.useMemo(
+    () => issuesOf(bookingDetailsSchema, { ...details, consentTerms, consentAge }),
+    [details, consentTerms, consentAge],
+  );
+  const medicalAidIssues = React.useMemo(
+    () => (usingMedicalAid ? issuesOf(medicalAidSchema, medicalAid, 'medicalAid.') : {}),
+    [usingMedicalAid, medicalAid],
+  );
+
+  const errors = React.useMemo<Record<string, string>>(
+    () => ({
+      ...serverErrors,
+      ...(revealed.details ? detailsIssues : {}),
+      ...(revealed.payment ? medicalAidIssues : {}),
+    }),
+    [serverErrors, revealed, detailsIssues, medicalAidIssues],
+  );
+
+  // An edit supersedes what the server said about the previous values.
+  React.useEffect(() => {
+    setServerErrors((current) => (Object.keys(current).length ? {} : current));
+    setFormError(null);
+  }, [details, medicalAid, consentTerms, consentAge, paymentMethod]);
 
   React.useEffect(() => {
     if (!date || !service || !mode) return;
@@ -206,120 +365,218 @@ export function BookingWizard({
       case 'time':
         return Boolean(time);
       case 'details':
-        return (
-          details.firstName.trim().length > 1 &&
-          details.lastName.trim().length > 1 &&
-          /\S+@\S+\.\S+/.test(details.email) &&
-          details.phone.replace(/\D/g, '').length >= 10 &&
-          details.emergencyName.trim().length > 1 &&
-          details.emergencyPhone.replace(/\D/g, '').length >= 10 &&
-          consentTerms &&
-          consentAge
-        );
+        // Always pressable: pressing it is what reveals the fields still to fix.
+        return true;
       case 'consent':
         return isConsentComplete(clinicalConsent);
       case 'payment':
-        return paymentMethod === 'card' || Boolean(medicalAid.scheme && medicalAid.memberNumber);
+        // As with details: validated when pressed, so the reason is shown.
+        return true;
       case 'checkout':
         return false;
       default:
         return false;
     }
-  }, [step, serviceId, mode, locationId, date, time, details, consentTerms, consentAge, paymentMethod, medicalAid, clinicalConsent]);
+  }, [step, serviceId, mode, locationId, date, time, clinicalConsent]);
+
+  /** Issues that must be fixed before leaving a step. */
+  function blockingIssues(forStep: StepId): Record<string, string> {
+    if (forStep === 'details') return detailsIssues;
+    if (forStep === 'payment') return medicalAidIssues;
+    return {};
+  }
+
+  /** Focus the first field with an error, polling while its step animates in. */
+  function focusFirstError(issues: Record<string, string>) {
+    const target = FIELD_ORDER.find(([key]) => issues[key]);
+    if (!target) return;
+    const elementId = target[1];
+    const started = performance.now();
+
+    const attempt = () => {
+      const element = document.getElementById(elementId);
+      if (element) {
+        element.scrollIntoView({ block: 'center', behavior: reduced ? 'auto' : 'smooth' });
+        element.focus({ preventScroll: true });
+        return;
+      }
+      if (performance.now() - started < 1500) requestAnimationFrame(attempt);
+    };
+    requestAnimationFrame(attempt);
+  }
 
   function next() {
+    if (submitLock.current) return;
     setFormError(null);
+
+    const issues = blockingIssues(step);
+    if (Object.keys(issues).length > 0) {
+      if (step === 'details' || step === 'payment') {
+        setRevealed((current) => ({ ...current, [step]: true }));
+      }
+      focusFirstError(issues);
+      return;
+    }
+
     if (step === 'payment') return void submit();
     setStepIndex((i) => Math.min(i + 1, steps.length - 1));
   }
 
   function back() {
+    if (submitLock.current) return;
     setFormError(null);
     setStepIndex((i) => Math.max(i - 1, 0));
   }
 
+  /**
+   * Coming back with the browser's Back button from the payment gateway.
+   * Browsers restore the page exactly as it was — spinner included, and it
+   * never stops. The booking already exists (its time is held), so resubmitting
+   * would only be refused as a taken slot; show the booking's own page instead.
+   */
+  React.useEffect(() => {
+    function onPageShow(event: PageTransitionEvent) {
+      if (!event.persisted) return;
+      submitLock.current = false;
+      setSubmitting(false);
+      const reference = bookedReference.current;
+      if (reference) {
+        window.location.replace(`/book/confirmation?ref=${encodeURIComponent(reference)}`);
+      }
+    }
+    window.addEventListener('pageshow', onPageShow);
+    return () => window.removeEventListener('pageshow', onPageShow);
+  }, []);
+
+  // A failure message below the fold is one the client never sees — the
+  // mobile action bar sits over the bottom of the page.
+  React.useEffect(() => {
+    if (formError) formErrorRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }, [formError]);
+
   async function submit() {
     if (!service || !mode || !date || !time) return;
+    if (submitLock.current) return;
+    submitLock.current = true;
     setSubmitting(true);
-    setErrors({});
+    setServerErrors({});
     setFormError(null);
 
+    // Set when this page is being left; the spinner then stays up until it goes.
+    let leaving = false;
+
     try {
-      const result = await submitBooking({
-        serviceId: service.id,
-        mode,
-        locationId: mode === 'in_person' ? locationId : null,
-        date,
-        time,
-        firstName: details.firstName,
-        lastName: details.lastName,
-        email: details.email,
-        phone: details.phone,
-        address: details.address || undefined,
-        emergencyName: details.emergencyName,
-        emergencyPhone: details.emergencyPhone,
-        reason: details.reason || undefined,
-        isFirstSession: details.isFirstSession,
-        paymentMethod,
-        medicalAid: paymentMethod === 'medical_aid' ? medicalAid : null,
-        consentTerms: consentTerms as true,
-        consentAge: consentAge as true,
-        clinicalConsent,
-      });
+      const result = await withDeadline(
+        submitBooking({
+          serviceId: service.id,
+          mode,
+          locationId: mode === 'in_person' ? locationId : null,
+          date,
+          time,
+          firstName: details.firstName,
+          lastName: details.lastName,
+          email: details.email,
+          phone: details.phone,
+          address: details.address || undefined,
+          emergencyName: details.emergencyName,
+          emergencyPhone: details.emergencyPhone,
+          reason: details.reason || undefined,
+          isFirstSession: details.isFirstSession,
+          paymentMethod: effectivePaymentMethod,
+          medicalAid: usingMedicalAid ? medicalAid : null,
+          consentTerms: consentTerms as true,
+          consentAge: consentAge as true,
+          clinicalConsent,
+        }),
+        SUBMIT_DEADLINE_MS,
+      );
 
       if (!result.ok) {
-        setSubmitting(false);
-        setErrors(result.errors ?? {});
+        const reported = result.errors ?? {};
+        setServerErrors(reported);
         setFormError(result.error ?? 'Something went wrong. Please try again.');
 
-        if (result.errors?.time) {
+        if (reported.time) {
           setTime(null);
           setSlots(null);
           setStepIndex(steps.indexOf('time'));
           toast({ tone: 'warning', title: 'That time has just gone', description: result.error });
+          return;
+        }
+
+        // Show anything else the server rejected on the step it belongs to —
+        // the only place the client can actually see and fix it.
+        const owningStep = steps.find((s) =>
+          Object.keys(reported).some((key) => stepForErrorKey(key) === s),
+        );
+        if (owningStep) {
+          if (owningStep === 'details' || owningStep === 'payment') {
+            setRevealed((current) => ({ ...current, [owningStep]: true }));
+          }
+          setStepIndex(steps.indexOf(owningStep));
+          focusFirstError(reported);
         }
         return;
       }
 
+      bookedReference.current = result.reference ?? null;
+      const confirmationUrl = `/book/confirmation?ref=${encodeURIComponent(result.reference ?? '')}`;
+
       // If no payment is required (e.g. Medical Aid with no co-pay), instantly redirect to success.
       if (!result.requiresPayment || !result.appointmentId) {
-        window.location.href = `/book/confirmation?ref=${result.reference}`;
+        leaving = true;
+        window.location.assign(confirmationUrl);
         return;
       }
 
       if (supportsEmbedded) {
-        const payment = await startEmbeddedPayment(result.appointmentId);
-        if (payment.ok) {
-          setEmbedded(payment.embedded);
-          setStepIndex(steps.indexOf('checkout'));
-          setSubmitting(false);
-          return;
-        } else {
-          // Handle embedded checkout failures properly so the spinner stops
-          setSubmitting(false);
-          setFormError(payment.error ?? 'Secure checkout could not be initialized.');
-          return;
+        try {
+          const payment = await withDeadline(
+            startEmbeddedPayment(result.appointmentId),
+            SUBMIT_DEADLINE_MS,
+          );
+          if (payment.ok) {
+            setEmbedded(payment.embedded);
+            setStepIndex(steps.indexOf('checkout'));
+            return;
+          }
+          console.warn('[booking] embedded checkout unavailable:', payment.error);
+        } catch (error) {
+          // The booking exists; only the in-page card form failed. Fall through
+          // to the redirect rather than stranding the client.
+          console.warn('[booking] embedded checkout failed:', error);
         }
       }
 
+      leaving = true;
       if (result.checkoutUrl) {
-        window.location.href = result.checkoutUrl;
+        window.location.assign(result.checkoutUrl);
         return;
       }
 
-      // Final fallback
-      window.location.href = `/book/confirmation?ref=${result.reference}`;
-
+      // No checkout could be opened; the booking page shows the time as held
+      // with a "Complete payment" button, so nothing is lost.
+      window.location.assign(confirmationUrl);
     } catch (error) {
-      console.error('Booking submission error:', error);
-      // THIS SAVES THE DAY: If the network drops, turn off the spinner and show an error.
-      setSubmitting(false);
-      setFormError('A connection error occurred while securing your booking. Please try again.');
+      console.error('[booking] submit failed:', error);
+      setFormError(describeSubmitFailure(error));
+    } finally {
+      submitLock.current = false;
+      if (!leaving) setSubmitting(false);
     }
   }
 
   const stepNumber = stepIndex + 1;
   const totalSteps = steps.length;
+
+  // Derived, not stored, so it clears itself once the last field is fixed.
+  const validationMessage =
+    step === 'details' && revealed.details && Object.keys(detailsIssues).length > 0
+      ? 'Please complete the highlighted fields to continue.'
+      : step === 'payment' && revealed.payment && Object.keys(medicalAidIssues).length > 0
+        ? 'Please complete your medical aid details to continue.'
+        : null;
+  const alertMessage = formError ?? validationMessage;
 
   return (
     <div className="grid gap-8 lg:grid-cols-[1fr_22rem] lg:gap-12">
@@ -572,7 +829,9 @@ export function BookingWizard({
                       onChange={(e) => setDetails({ ...details, address: e.target.value })}
                       placeholder="Street, suburb, city, postal code"
                       autoComplete="street-address"
+                      error={errors.address}
                     />
+                    <FieldError id="address-error">{errors.address}</FieldError>
                   </div>
 
                   <fieldset className="mt-5 rounded-3xl border border-line bg-canvas-sunk p-5">
@@ -582,8 +841,10 @@ export function BookingWizard({
                     <div className="mt-4 grid gap-4 sm:grid-cols-2">
                       <div>
                         <Label htmlFor="emergencyName">Full name</Label>
+                        {/* autoComplete off: browsers otherwise fill in the client's OWN details here. */}
                         <Input
                             id="emergencyName"
+                            autoComplete="off"
                             value={details.emergencyName}
                             onChange={(e) =>
                               setDetails({ ...details, emergencyName: e.target.value })
@@ -597,6 +858,7 @@ export function BookingWizard({
                         <Input
                             id="emergencyPhone"
                             type="tel"
+                            autoComplete="off"
                             placeholder="083 000 0000"
                             value={details.emergencyPhone}
                             onChange={(e) =>
@@ -618,7 +880,9 @@ export function BookingWizard({
                       rows={3}
                       value={details.reason}
                       onChange={(e) => setDetails({ ...details, reason: e.target.value })}
+                      error={errors.reason}
                     />
+                    <FieldError id="reason-error">{errors.reason}</FieldError>
                   </div>
 
                   <div className="mt-6">
@@ -677,9 +941,11 @@ export function BookingWizard({
                     total={totalSteps}
                     title="How would you like to pay?"
                     lead={
-                      amountCents > 0
-                        ? ''
-                        : 'Nothing is charged for this booking.'
+                      usingMedicalAid
+                        ? 'Nothing is charged now. Your time is held while we confirm your medical aid.'
+                        : chargeNowCents > 0
+                          ? ''
+                          : 'Nothing is charged for this booking.'
                     }
                 >
                     {service?.requiresQuote || service?.rateBand === 'free' ? (
@@ -720,7 +986,7 @@ export function BookingWizard({
                         </div>
 
                         <AnimatePresence initial={false}>
-                          {paymentMethod === 'medical_aid' && (
+                          {usingMedicalAid && (
                             <motion.div
                               initial={reduced ? false : { opacity: 0, height: 0 }}
                               animate={{ opacity: 1, height: 'auto' }}
@@ -751,6 +1017,7 @@ export function BookingWizard({
                                 </ul>
 
                                 <div className="mt-5 grid gap-4 sm:grid-cols-2">
+                                  {/* Date of birth and ID number are optional server-side (see medicalAidSchema). */}
                                   <div className="sm:col-span-2">
                                     <Label htmlFor="scheme">Scheme</Label>
                                     <Input
@@ -760,7 +1027,9 @@ export function BookingWizard({
                                         setMedicalAid({ ...medicalAid, scheme: e.target.value })
                                       }
                                       placeholder="e.g. Discovery Health"
+                                      error={errors['medicalAid.scheme']}
                                     />
+                                    <FieldError id="scheme-error">{errors['medicalAid.scheme']}</FieldError>
                                   </div>
                                   <div>
                                     <Label htmlFor="memberNumber">Membership number</Label>
@@ -770,10 +1039,16 @@ export function BookingWizard({
                                       onChange={(e) =>
                                         setMedicalAid({ ...medicalAid, memberNumber: e.target.value })
                                       }
+                                      error={errors['medicalAid.memberNumber']}
                                     />
+                                    <FieldError id="memberNumber-error">
+                                      {errors['medicalAid.memberNumber']}
+                                    </FieldError>
                                   </div>
                                   <div>
-                                    <Label htmlFor="dateOfBirth">Date of birth</Label>
+                                    <Label htmlFor="dateOfBirth" optional>
+                                      Date of birth
+                                    </Label>
                                     <Input
                                       id="dateOfBirth"
                                       type="date"
@@ -781,7 +1056,11 @@ export function BookingWizard({
                                       onChange={(e) =>
                                         setMedicalAid({ ...medicalAid, dateOfBirth: e.target.value })
                                       }
+                                      error={errors['medicalAid.dateOfBirth']}
                                     />
+                                    <FieldError id="dateOfBirth-error">
+                                      {errors['medicalAid.dateOfBirth']}
+                                    </FieldError>
                                   </div>
                                   <div>
                                     <Label htmlFor="mainMember">Main member</Label>
@@ -792,10 +1071,16 @@ export function BookingWizard({
                                         setMedicalAid({ ...medicalAid, mainMember: e.target.value })
                                       }
                                       placeholder="Self, or their full name"
+                                      error={errors['medicalAid.mainMember']}
                                     />
+                                    <FieldError id="mainMember-error">
+                                      {errors['medicalAid.mainMember']}
+                                    </FieldError>
                                   </div>
                                   <div>
-                                    <Label htmlFor="mainMemberId">Main member ID number</Label>
+                                    <Label htmlFor="mainMemberId" optional>
+                                      Main member ID number
+                                    </Label>
                                     <Input
                                       id="mainMemberId"
                                       inputMode="numeric"
@@ -804,7 +1089,11 @@ export function BookingWizard({
                                         setMedicalAid({ ...medicalAid, mainMemberId: e.target.value })
                                       }
                                       placeholder="As it appears on the scheme"
+                                      error={errors['medicalAid.mainMemberId']}
                                     />
+                                    <FieldError id="mainMemberId-error">
+                                      {errors['medicalAid.mainMemberId']}
+                                    </FieldError>
                                   </div>
                                 </div>
                               </div>
@@ -814,7 +1103,7 @@ export function BookingWizard({
                       </>
                     )}
 
-                    {paymentMethod === 'card' && (
+                    {!noCharge && effectivePaymentMethod === 'card' && (
                       <PaymentMethods methods={acceptedMethods} className="mt-6" />
                     )}
 
@@ -846,13 +1135,14 @@ export function BookingWizard({
           </AnimatePresence>
         </div>
 
-        {formError && (
+        {alertMessage && (
           <p
+            ref={formErrorRef}
             role="alert"
             className="mt-4 flex items-start gap-2 rounded-2xl bg-state-dangerSoft px-4 py-3 text-sm text-state-danger"
           >
             <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-            {formError}
+            {alertMessage}
           </p>
         )}
 
@@ -871,11 +1161,11 @@ export function BookingWizard({
             onClick={next}
             disabled={!canAdvance || submitting}
             loading={submitting}
-            loadingText={amountCents > 0 ? 'Opening secure checkout…' : 'Confirming…'}
+            loadingText={chargeNowCents > 0 ? 'Opening secure checkout…' : 'Confirming…'}
           >
             {step === 'payment'
-              ? amountCents > 0
-                ? `Pay ${money(amountCents)} & confirm`
+              ? chargeNowCents > 0
+                ? `Pay ${money(chargeNowCents)} & confirm`
                 : 'Confirm booking'
               : 'Continue'}
             {!submitting && <ArrowRight className="h-4 w-4" />}
@@ -892,7 +1182,7 @@ export function BookingWizard({
         date={date}
         time={time}
         amountCents={amountCents}
-        paymentMethod={paymentMethod}
+        paymentMethod={effectivePaymentMethod}
         requiresQuote={service?.requiresQuote ?? false}
         isFree={service?.rateBand === 'free'}
         acceptedMethods={acceptedMethods}
@@ -917,11 +1207,11 @@ export function BookingWizard({
           onClick={next}
           disabled={!canAdvance || submitting}
           loading={submitting}
-          loadingText="Please wait…"
+          loadingText={chargeNowCents > 0 ? 'Opening checkout…' : 'Confirming…'}
         >
           {step === 'payment'
-            ? amountCents > 0
-              ? `Pay ${money(amountCents)}`
+            ? chargeNowCents > 0
+              ? `Pay ${money(chargeNowCents)}`
               : 'Confirm booking'
             : 'Continue'}
         </Button>
@@ -1102,16 +1392,30 @@ function SummaryCard({
         <div className="border-t border-line px-6 py-5">
           <div className="flex items-baseline justify-between gap-4">
             <span className="text-sm text-ink-faint">
-              {isFree ? 'Cost' : requiresQuote ? 'Fee' : 'To pay now'}
+              {isFree
+                ? 'Cost'
+                : requiresQuote
+                  ? 'Fee'
+                  : paymentMethod === 'medical_aid'
+                    ? amountCents > 0
+                      ? 'Co-payment'
+                      : 'Medical aid'
+                    : 'To pay now'}
             </span>
             <span className="font-display text-2xl tabular text-ink">
-              {isFree ? 'Free' : requiresQuote ? 'Billed separately after first session' : money(amountCents)}
+              {isFree
+                ? 'Free'
+                : requiresQuote
+                  ? 'Billed separately after first session'
+                  : paymentMethod === 'medical_aid' && amountCents === 0
+                    ? 'Claimed'
+                    : money(amountCents)}
             </span>
           </div>
           {paymentMethod === 'medical_aid' && !requiresQuote && !isFree && (
             <p className="mt-2 text-xs leading-relaxed text-ink-soft">
               {mode === 'in_person'
-                ? 'Co-payment for an in-person consultation using medical aid benefits.'
+                ? 'Co-payment for an in-person consultation using medical aid benefits. Nothing is charged now — it is payable once your medical aid is confirmed.'
                 : 'Submitted to your scheme. Any amount not covered remains your responsibility.'}
             </p>
           )}

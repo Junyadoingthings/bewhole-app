@@ -2,6 +2,8 @@ import 'server-only';
 
 import crypto from 'node:crypto';
 
+import { outboundTimeout } from '@/lib/outbound';
+
 import type {
   CheckoutResult,
   CheckoutStatus,
@@ -192,6 +194,7 @@ export const payfastProvider: PaymentProvider = {
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: rawBody,
         cache: 'no-store',
+        signal: outboundTimeout(),
       });
       const verdict = (await res.text()).trim();
       if (!verdict.startsWith('VALID')) {

@@ -1,5 +1,7 @@
 import 'server-only';
 
+import { waitUntil } from '@vercel/functions';
+
 import {
   audit,
   getAppointment,
@@ -82,6 +84,30 @@ export async function emit(event: DomainEvent): Promise<void> {
   } catch (error) {
     console.error('[bwc:events] handler failed', event.type, error);
   }
+}
+
+/**
+ * Run events after the response has been sent, in order.
+ *
+ * For requests where a person is waiting on a spinner. Handlers call Google
+ * Calendar, Resend and WhatsApp; awaiting them inline meant the client's
+ * "Please wait…" lasted as long as the slowest of those services — and one that
+ * stalled held the booking open until the platform killed the function, which
+ * the browser saw as a request that never finished.
+ *
+ * The booking is already committed when this is called, so nothing here can
+ * change its outcome; it only decides whether the client waits for the emails.
+ * `waitUntil` keeps the serverless function alive until the chain settles, so
+ * the work is not frozen mid-send once the response is out. Outside Vercel it
+ * is a no-op and the chain simply runs on.
+ *
+ * `emit` already catches handler failures, so the chain cannot reject.
+ */
+export function emitAfterResponse(...events: DomainEvent[]): void {
+  const chain = (async () => {
+    for (const event of events) await emit(event);
+  })();
+  waitUntil(chain);
 }
 
 /* ------------------------------------------------------------- formatting */

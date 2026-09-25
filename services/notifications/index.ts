@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { createNotification, createNotificationLog } from '@/lib/db';
+import { outboundTimeout } from '@/lib/outbound';
 import type { NotificationChannel } from '@/types';
 
 /**
@@ -59,12 +60,17 @@ const emailAdapter: Adapter = {
     try {
       const res = await fetch('https://api.resend.com/emails', {
         method: 'POST',
+        signal: outboundTimeout(),
         headers: {
           Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
           from: process.env.EMAIL_FROM ?? 'Be Whole Care <bookings@bewholecare.co.za>',
+          // The sending domain has no inbox, so a reply to the From address
+          // bounces — and a sender nobody can reply to reads as spam to both
+          // clients and filters. Replies go to the practice's real mailbox.
+          reply_to: process.env.EMAIL_REPLY_TO ?? 'bewholecare@gmail.com',
           to: [input.to.email],
           subject: input.subject,
           html: emailShell(input.subject, input.body, input.details, input.cta),
@@ -93,6 +99,7 @@ const whatsappAdapter: Adapter = {
     try {
       const res = await fetch(process.env.WHATSAPP_API_URL as string, {
         method: 'POST',
+        signal: outboundTimeout(),
         headers: {
           Authorization: `Bearer ${process.env.WHATSAPP_API_TOKEN}`,
           'Content-Type': 'application/json',

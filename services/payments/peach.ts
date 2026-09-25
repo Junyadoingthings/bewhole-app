@@ -2,6 +2,8 @@ import 'server-only';
 
 import crypto from 'node:crypto';
 
+import { outboundTimeout } from '@/lib/outbound';
+
 import type {
   CheckoutResult,
   CheckoutStatus,
@@ -146,6 +148,7 @@ export const peachProvider: PaymentProvider = {
       },
       body: new URLSearchParams(body).toString(),
       cache: 'no-store',
+      signal: outboundTimeout(),
     });
 
     const text = await res.text();
@@ -199,6 +202,7 @@ export const peachProvider: PaymentProvider = {
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
       body: JSON.stringify(params),
       cache: 'no-store',
+      signal: outboundTimeout(),
     });
 
     const text = await res.text();
@@ -227,7 +231,11 @@ export const peachProvider: PaymentProvider = {
     query.signature = sign(query, secret);
 
     const url = `${base}/v2/checkout/${encodeURIComponent(checkoutId)}/payment?${new URLSearchParams(query)}`;
-    const res = await fetch(url, { headers: { Accept: 'application/json' }, cache: 'no-store' });
+    const res = await fetch(url, {
+      headers: { Accept: 'application/json' },
+      cache: 'no-store',
+      signal: outboundTimeout(),
+    });
     const text = await res.text();
 
     if (!res.ok) {
@@ -273,6 +281,7 @@ export const peachProvider: PaymentProvider = {
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams(params).toString(),
         cache: 'no-store',
+        signal: outboundTimeout(),
       });
       const json = (await res.json()) as { result?: { code?: string; description?: string } };
       const ok = mapResultCode(json.result?.code) === 'paid';
