@@ -2,6 +2,8 @@ import 'server-only';
 
 import crypto from 'node:crypto';
 
+import { outboundTimeout } from '@/lib/outbound';
+
 /**
  * Calendar provider contract + implementations.
  *
@@ -73,6 +75,7 @@ async function googleAccessToken(): Promise<string> {
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: params.toString(),
     cache: 'no-store',
+    signal: outboundTimeout(),
   });
 
   if (!res.ok) throw new Error(`Google token exchange failed (${res.status})`);
@@ -132,6 +135,7 @@ const googleProvider: CalendarProvider = {
           headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
           body: JSON.stringify(body),
           cache: 'no-store',
+          signal: outboundTimeout(),
         },
       );
 
@@ -164,7 +168,12 @@ const googleProvider: CalendarProvider = {
       const calendarId = encodeURIComponent(this.calendarId);
       const res = await fetch(
         `https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events/${externalId}?sendUpdates=none`,
-        { method: 'DELETE', headers: { Authorization: `Bearer ${token}` }, cache: 'no-store' },
+        {
+          method: 'DELETE',
+          headers: { Authorization: `Bearer ${token}` },
+          cache: 'no-store',
+          signal: outboundTimeout(),
+        },
       );
       // 410 means it is already gone, which is the outcome we wanted anyway.
       if (!res.ok && res.status !== 404 && res.status !== 410) {

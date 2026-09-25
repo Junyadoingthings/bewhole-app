@@ -22,7 +22,7 @@ import {
 import { COUNSELLING_CONSENT } from '@/config/business';
 import { hashPassword } from '@/lib/auth/password';
 import { fromLocalParts, hoursUntil, parts } from '@/lib/date';
-import { emit } from '@/services/events';
+import { emit, emitAfterResponse } from '@/services/events';
 import { createCheckoutForAppointment } from '@/services/payment.service';
 import { resolveSlot } from '@/services/availability.service';
 import type { Appointment, AppointmentView, ID, SessionUser } from '@/types';
@@ -275,28 +275,36 @@ export async function createBooking(
     meta: { reference: appointment.reference, amountCents: appointment.amountCents },
   });
 
-  await emit({ type: 'appointment.created', appointmentId: appointment.id });
-
   /* ------------------------------------------------------------- payment */
   /**
+   * The slot is claimed and the consent recorded: the booking exists. What is
+   * left — calendar sync, client and practice emails, reminders — runs after
+   * the response is sent (see emitAfterResponse). Those calls go out to Google,
+   * Resend and WhatsApp, and the client must not sit on a spinner while they
+   * do; when one stalled, the booking page never came back.
+   *
    * A medical aid booking tells the client it is being checked, and tells the
    * practice there is something to check. It must not emit
    * appointment.confirmed: that handler syncs the calendar, schedules
    * reminders and emails "You're booked" — all of which would be premature
    * for a session the practice has not agreed to fund yet.
    */
+  const created = { type: 'appointment.created', appointmentId: appointment.id } as const;
+
   if (appointment.status === 'pending_medical_aid') {
-    await emit({ type: 'appointment.medical_aid_pending', appointmentId: appointment.id });
-    const refreshed = (await getAppointment(appointment.id)) ?? appointment;
-    return { ok: true, data: { appointment: refreshed, requiresPayment: false, accountCreated } };
+    emitAfterResponse(created, {
+      type: 'appointment.medical_aid_pending',
+      appointmentId: appointment.id,
+    });
+    return { ok: true, data: { appointment, requiresPayment: false, accountCreated } };
   }
 
   if (!pricing.requiresPayment) {
-    await emit({ type: 'appointment.confirmed', appointmentId: appointment.id });
-    const refreshed = (await getAppointment(appointment.id)) ?? appointment;
-    return { ok: true, data: { appointment: refreshed, requiresPayment: false, accountCreated } };
+    emitAfterResponse(created, { type: 'appointment.confirmed', appointmentId: appointment.id });
+    return { ok: true, data: { appointment, requiresPayment: false, accountCreated } };
   }
 
+  emitAfterResponse(created);
   const checkout = await createCheckoutForAppointment(appointment.id);
   return {
     ok: true,

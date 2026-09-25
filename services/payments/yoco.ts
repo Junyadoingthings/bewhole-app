@@ -2,6 +2,8 @@ import 'server-only';
 
 import crypto from 'node:crypto';
 
+import { outboundTimeout } from '@/lib/outbound';
+
 import type {
   CheckoutResult,
   CheckoutStatus,
@@ -67,6 +69,7 @@ async function call<T>(path: string, init: RequestInit & { idempotencyKey?: stri
       ...(rest.headers ?? {}),
     },
     cache: 'no-store',
+    signal: outboundTimeout(),
   });
 
   const text = await res.text();

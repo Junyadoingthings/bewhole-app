@@ -58,8 +58,16 @@ export default async function ConfirmationPage({
 
   const [view] = await hydrateAppointments([appointment]);
   const when = parts(view.startAt);
-  const paid = view.payment?.status === 'paid' || view.amountCents === 0;
   const pendingPayment = view.status === 'pending_payment';
+  /**
+   * Held, not confirmed: the practice checks the scheme first. This page used
+   * to say "You're booked" here while the email that arrived a minute later
+   * said the opposite — the email is right, so the page now agrees with it.
+   */
+  const pendingMedicalAid = view.status === 'pending_medical_aid';
+  // Nothing due now is not the same as paid: a medical aid claim is still open.
+  const paid =
+    !pendingMedicalAid && (view.payment?.status === 'paid' || view.amountCents === 0);
 
   return (
     <div className="mx-auto max-w-2xl py-6">
@@ -74,14 +82,20 @@ export default async function ConfirmationPage({
           )}
 
           <h1 className="mt-7 font-display text-4xl text-ink text-balance sm:text-5xl">
-            {pendingPayment ? 'Almost there' : 'You’re booked.'}
+            {pendingPayment
+              ? 'Almost there'
+              : pendingMedicalAid
+                ? 'Your time is held.'
+                : 'You’re booked.'}
           </h1>
           <p className="mt-4 max-w-md leading-relaxed text-ink-soft text-pretty">
             {pendingPayment
               ? 'We’re holding this time for you. Your session is confirmed the moment payment clears.'
-              : view.mode === 'online'
-                ? 'Your confirmation is on its way, along with your session link.'
-                : 'Your confirmation is on its way. We look forward to seeing you.'}
+              : pendingMedicalAid
+                ? 'We’re confirming your medical aid cover — usually within one working day. We’ll email you as soon as it’s done, and your session is confirmed then.'
+                : view.mode === 'online'
+                  ? 'Your confirmation is on its way, along with your session link.'
+                  : 'Your confirmation is on its way. We look forward to seeing you.'}
           </p>
         </div>
       </Reveal>
@@ -207,7 +221,9 @@ export default async function ConfirmationPage({
             {[
               {
                 icon: CalendarPlus,
-                text: 'Your confirmation email arrives now, and your session goes onto our practice calendar.',
+                text: pendingMedicalAid
+                  ? 'We check your medical aid and email you the outcome. Once it is accepted, your session goes onto our practice calendar.'
+                  : 'Your confirmation email arrives now, and your session goes onto our practice calendar.',
               },
               {
                 icon: MessageCircle,

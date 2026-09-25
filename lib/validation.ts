@@ -11,7 +11,9 @@ const nameField = z
   .min(2, 'Please enter at least 2 characters')
   .max(60, 'That looks too long')
   // Deliberately permissive: SA names include hyphens, apostrophes, spaces.
-  .regex(/^[\p{L}\p{M}'\- .]+$/u, 'Letters, spaces, hyphens and apostrophes only');
+  // Curly apostrophes (’ ‘) are included because iPhones type them by default:
+  // "O’Brien" from an iPhone is the same name as "O'Brien" from a laptop.
+  .regex(/^[\p{L}\p{M}'’‘\- .]+$/u, 'Letters, spaces, hyphens and apostrophes only');
 
 export const emailSchema = z
   .string()
@@ -21,12 +23,42 @@ export const emailSchema = z
   .max(160)
   .email('That email address does not look right');
 
+/**
+ * Strip formatting and fold the international spellings of +27 into one form.
+ *
+ * People type the same number many ways — "083 000 0000", "083-000-0000",
+ * "+27 83 000 0000", "0027830000000", "27830000000". All of them are the same
+ * phone, so all of them must validate the same. A local number always starts
+ * with 0, so a leading "27" or "0027" can only be the country code.
+ */
+function normalizeSaPhone(value: string) {
+  const compact = value.replace(/[\s().-]/g, '');
+  if (compact.startsWith('0027')) return `+27${compact.slice(4)}`;
+  if (/^27\d{9}$/.test(compact)) return `+${compact}`;
+  return compact;
+}
+
 /** SA mobile: 0XX XXX XXXX or +27XXXXXXXXX. */
 export const phoneSchema = z
   .string()
   .trim()
-  .transform((v) => v.replace(/[\s()-]/g, ''))
+  .transform(normalizeSaPhone)
   .refine((v) => /^(\+27|0)[6-8][0-9]{8}$/.test(v), 'Enter a valid South African mobile number');
+
+/**
+ * Any SA number, landline included.
+ *
+ * For an emergency contact only. The client's own number must be a mobile —
+ * reminders go to it by WhatsApp and SMS — but the person to call in an
+ * emergency may well be reachable on a landline, and the form labels this
+ * field "Contact number", not "Mobile number". Demanding a mobile here
+ * rejected valid bookings with an error the client could not make sense of.
+ */
+export const contactPhoneSchema = z
+  .string()
+  .trim()
+  .transform(normalizeSaPhone)
+  .refine((v) => /^(\+27|0)[1-8][0-9]{8}$/.test(v), 'Enter a valid South African phone number');
 
 export const passwordSchema = z
   .string()
@@ -91,37 +123,50 @@ export const medicalAidSchema = z.object({
     .refine((v) => !v || /^\d{4}-\d{2}-\d{2}$/.test(v), 'Use the date picker'),
 });
 
-export const bookingSchema = z
-  .object({
+/**
+ * The booking wizard's "Your details" step, on its own.
+ *
+ * Split out so the wizard can check the step with exactly the rules the server
+ * will apply. It used to run its own looser checks ("10 digits" for a phone,
+ * "2 characters" for a name) — so a client could pass the details step with a
+ * value the server then rejected, and the rejection only surfaced on the
+ * payment step, where none of the offending fields are visible. One schema, used
+ * in both places, makes that mismatch impossible.
+ */
+export const bookingDetailsSchema = z.object({
+  firstName: nameField,
+  lastName: nameField,
+  email: emailSchema,
+  phone: phoneSchema,
+  address: z.string().trim().max(300, 'Please keep this under 300 characters').optional(),
+  /**
+   * Required, unlike the address.
+   *
+   * A counselling practice can encounter a client at risk during or after a
+   * session. "Who do we call" is not a question to be asking for the first
+   * time in that moment, so the booking form insists on it.
+   */
+  emergencyName: nameField,
+  emergencyPhone: contactPhoneSchema,
+  reason: z.string().trim().max(1000, 'Please keep this under 1000 characters').optional(),
+  isFirstSession: z.boolean().default(true),
+  consentTerms: z.literal(true, {
+    errorMap: () => ({ message: 'Please confirm you accept the terms' }),
+  }),
+  consentAge: z.literal(true, {
+    errorMap: () => ({ message: 'Please confirm the age requirement' }),
+  }),
+});
+
+export const bookingSchema = bookingDetailsSchema
+  .extend({
     serviceId: z.string().min(1, 'Choose a service'),
     mode: z.enum(['online', 'in_person']),
     locationId: z.string().nullable().optional(),
     date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Choose a date'),
     time: z.string().regex(/^\d{2}:\d{2}$/, 'Choose a time'),
-    firstName: nameField,
-    lastName: nameField,
-    email: emailSchema,
-    phone: phoneSchema,
-    address: z.string().trim().max(300).optional(),
-    /**
-     * Required, unlike the address.
-     *
-     * A counselling practice can encounter a client at risk during or after a
-     * session. "Who do we call" is not a question to be asking for the first
-     * time in that moment, so the booking form insists on it.
-     */
-    emergencyName: nameField,
-    emergencyPhone: phoneSchema,
-    reason: z.string().trim().max(1000, 'Please keep this under 1000 characters').optional(),
-    isFirstSession: z.boolean().default(true),
     paymentMethod: z.enum(['card', 'medical_aid']),
     medicalAid: medicalAidSchema.optional().nullable(),
-    consentTerms: z.literal(true, {
-      errorMap: () => ({ message: 'Please confirm you accept the terms' }),
-    }),
-    consentAge: z.literal(true, {
-      errorMap: () => ({ message: 'Please confirm the age requirement' }),
-    }),
     /**
      * Clause-by-clause informed consent, keyed by clause id. Optional at the
      * schema level so that a staff member booking on a client's behalf — who

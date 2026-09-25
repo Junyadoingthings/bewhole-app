@@ -1,6 +1,10 @@
 import 'server-only';
 
+import fs from 'node:fs';
+import path from 'node:path';
+
 import { createNotification, createNotificationLog } from '@/lib/db';
+import { outboundTimeout } from '@/lib/outbound';
 import type { NotificationChannel } from '@/types';
 
 /**
@@ -57,18 +61,31 @@ const emailAdapter: Adapter = {
     if (!this.live) return { ok: true }; // logged only
 
     try {
+      const logo = embeddedLogo();
       const res = await fetch('https://api.resend.com/emails', {
         method: 'POST',
+        signal: outboundTimeout(),
         headers: {
           Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
           from: process.env.EMAIL_FROM ?? 'Be Whole Care <bookings@bewholecare.co.za>',
+          // The sending domain has no inbox, so a reply to the From address
+          // bounces — and a sender nobody can reply to reads as spam to both
+          // clients and filters. Replies go to the practice's real mailbox.
+          reply_to: process.env.EMAIL_REPLY_TO ?? 'bewholecare@gmail.com',
           to: [input.to.email],
           subject: input.subject,
-          html: emailShell(input.subject, input.body, input.details, input.cta),
+          html: emailShell(input.subject, input.body, input.details, input.cta, Boolean(logo)),
           text: plainText(input),
+          // Embedded, not linked. A logo loaded from our own site failed
+          // silently for as long as the domain had a problem — and even
+          // once that is fixed, most mail clients block remote images by
+          // default until the person taps "load images". Attaching it as
+          // an inline part means it renders immediately, every time, with
+          // no request to anywhere.
+          ...(logo ? { attachments: [logo] } : {}),
         }),
       });
       if (!res.ok) return { ok: false, error: `Email provider returned ${res.status}` };
@@ -78,6 +95,27 @@ const emailAdapter: Adapter = {
     }
   },
 };
+
+/**
+ * The logo, read once and reused for every email sent by this instance.
+ *
+ * Resend embeds a base64 attachment under a `content_id`, which the HTML
+ * references as `cid:<id>` — the standard way an email carries its own
+ * image instead of fetching one. Returns null (and the shell falls back to a
+ * text wordmark) if the file is ever missing, rather than sending a broken
+ * image tag.
+ */
+let cachedLogo: { filename: string; content: string; content_id: string } | null | undefined;
+function embeddedLogo(): { filename: string; content: string; content_id: string } | null {
+  if (cachedLogo !== undefined) return cachedLogo;
+  try {
+    const file = fs.readFileSync(path.join(process.cwd(), 'public', 'logo.png'));
+    cachedLogo = { filename: 'logo.png', content: file.toString('base64'), content_id: 'bwc-logo' };
+  } catch {
+    cachedLogo = null;
+  }
+  return cachedLogo;
+}
 
 /* ---------------------------------------------------------------- whatsapp */
 
@@ -93,6 +131,7 @@ const whatsappAdapter: Adapter = {
     try {
       const res = await fetch(process.env.WHATSAPP_API_URL as string, {
         method: 'POST',
+        signal: outboundTimeout(),
         headers: {
           Authorization: `Bearer ${process.env.WHATSAPP_API_TOKEN}`,
           'Content-Type': 'application/json',
@@ -200,17 +239,6 @@ function normalizeMsisdn(phone: string) {
   return digits;
 }
 
-/** Minimal branded HTML shell. Inline styles only — email clients demand it. */
-/**
- * The public site URL, for assets that must resolve outside our own server —
- * an email client fetches images over the open internet, never from a
- * relative same-origin path. Falls back to localhost so a dev-mode send does
- * not throw; the image simply will not load there, which is expected.
- */
-function siteUrl(): string {
-  return (process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:5600').replace(/\/+$/, '');
-}
-
 /**
  * The plain-text alternative.
  *
@@ -228,37 +256,63 @@ function plainText(input: SendInput): string {
   return parts.join('\n\n');
 }
 
+/**
+ * The branded email shell.
+ *
+ * Modelled on the receipts Apple sends for the App Store and Apple Music: a
+ * plain pale backdrop, one white card with generously rounded corners and no
+ * heavy borders, a logo that sits above the card rather than boxed inside it,
+ * and a details block that reads as a receipt — a small muted label sitting
+ * above a large, confident value, each row separated by a hairline rather
+ * than a filled panel. One accent colour throughout (the brand forest green),
+ * used only where something can be tapped.
+ *
+ * Inline styles throughout, and no CSS class or <style> block anywhere —
+ * Gmail strips <style> tags entirely, so anything placed there simply would
+ * not exist for a large share of recipients.
+ */
 function emailShell(
   subject: string,
   body: string,
   details?: { label: string; value: string }[],
   cta?: { label: string; url: string } | null,
+  hasLogo = false,
 ) {
+  const FOREST = '#14401A'; // forest-800 — the one accent colour, tailwind.config.ts
+  const INK = '#1C231A';
+  const INK_SOFT = '#5B6357';
+  const INK_FAINT = '#8B9285';
+  const HAIRLINE = '#E9E4D8';
+  const CANVAS = '#F6F3EB'; // cream-100-ish backdrop the card floats on
+  const CARD = '#FFFFFF';
+
   const paragraphs = body
     .split('\n\n')
     .map(
       (p) =>
-        `<p style="margin:0 0 16px;font-size:15px;line-height:1.65;color:#4A5347;">${escapeHtml(p).replace(/\n/g, '<br/>')}</p>`,
+        `<p style="margin:0 0 15px;font-size:16px;line-height:1.6;color:${INK_SOFT};">${escapeHtml(p).replace(/\n/g, '<br/>')}</p>`,
     )
     .join('');
 
   /**
-   * Details table. Left column muted, right column ink and semibold, so the
-   * answer to "when is it?" wins the glance. Inline styles throughout — Gmail
-   * strips <style> blocks, so anything in a stylesheet simply would not exist.
+   * The receipt block: each fact on its own row, label first in small caps,
+   * the value beneath it large and unambiguous — the shape of an Apple Wallet
+   * pass or an App Store receipt, not a two-column form. A hairline divides
+   * consecutive rows; the first and last carry none, so the block reads as
+   * one continuous card rather than a stack of boxes.
    */
   const detailRows = (details ?? [])
-    .map(
-      (d, i) =>
-        `<tr>
-           <td style="padding:${i === 0 ? '0' : '10px'} 16px 10px 0;font-size:14px;line-height:1.5;color:#6E766B;white-space:nowrap;vertical-align:top;">${escapeHtml(d.label)}</td>
-           <td style="padding:${i === 0 ? '0' : '10px'} 0 10px;font-size:14px;line-height:1.5;color:#141A12;font-weight:600;vertical-align:top;">${escapeHtml(d.value)}</td>
-         </tr>`,
-    )
+    .map((d, i) => {
+      const border = i === 0 ? '' : `border-top:1px solid ${HAIRLINE};`;
+      return `<tr><td style="padding:${i === 0 ? '0 0 16px' : '16px 0'};${border}">
+           <div style="font-size:11px;line-height:1.4;letter-spacing:0.06em;text-transform:uppercase;color:${INK_FAINT};margin:${i === 0 ? '0' : '15px'} 0 5px;">${escapeHtml(d.label)}</div>
+           <div style="font-size:17px;line-height:1.35;color:${INK};font-weight:600;">${escapeHtml(d.value)}</div>
+         </td></tr>`;
+    })
     .join('');
 
   const detailBlock = detailRows
-    ? `<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin:4px 0 20px;padding:18px 20px;background:#F7F5EF;border-radius:16px;border:1px solid #E7E4DB;">${detailRows}</table>`
+    ? `<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin:6px 0 26px;">${detailRows}</table>`
     : '';
 
   /**
@@ -268,57 +322,59 @@ function emailShell(
    * that survives everywhere.
    */
   const ctaBlock = cta
-    ? `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:4px 0 20px;">
-         <tr><td align="center" bgcolor="#1E4620" style="border-radius:999px;">
+    ? `<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin:8px 0 22px;">
+         <tr><td align="center" bgcolor="${FOREST}" style="border-radius:14px;">
            <a href="${escapeHtml(cta.url)}"
-              style="display:inline-block;padding:13px 28px;font-size:15px;font-weight:600;color:#FFFFFF;text-decoration:none;border-radius:999px;">
+              style="display:block;padding:15px 28px;font-size:16px;font-weight:600;color:#FFFFFF;text-decoration:none;border-radius:14px;text-align:center;">
              ${escapeHtml(cta.label)}
            </a>
          </td></tr>
        </table>
-       <p style="margin:0 0 16px;font-size:12px;line-height:1.6;color:#6E766B;word-break:break-all;">
+       <p style="margin:0 0 4px;font-size:12px;line-height:1.6;color:${INK_FAINT};word-break:break-all;">
          If the button does not work, copy this into your browser:<br/>${escapeHtml(cta.url)}
        </p>`
     : '';
 
-  return `<!doctype html><html><body style="margin:0;background:#F5F2EA;padding:32px 16px;font-family:-apple-system,Segoe UI,Helvetica,Arial,sans-serif;">
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center">
-    <table role="presentation" width="100%" style="max-width:560px;background:#FFFFFF;border-radius:24px;overflow:hidden;border:1px solid #E7E4DB;">
-      <tr><td align="center" style="padding:28px 32px 0;">
-        <!--
-          The real logo file, not a text wordmark. Explicit width/height (not
-          just CSS) because several major email clients strip <style> blocks
-          entirely and need the attributes to reserve layout space before the
-          image loads — without them the logo can flash in at native size or
-          collapse the row. Sits on the card's white background, which is
-          deliberate: the PNG is transparent, and rendering it directly on a
-          dark-mode email client's own background can make the ink-coloured
-          wordmark unreadable.
-        -->
-        <img
-          src="${siteUrl()}/logo.png"
-          width="140"
-          height="84"
-          alt="Be Whole Care"
-          style="display:block;width:140px;height:auto;"
-        />
-      </td></tr>
-      <tr><td style="padding:16px 32px 8px;">
-        <h1 style="margin:0 0 18px;font-size:24px;line-height:1.2;color:#141A12;font-weight:600;">${escapeHtml(subject)}</h1>
-        ${paragraphs}
-        ${detailBlock}
-        ${ctaBlock}
-      </td></tr>
-      <tr><td style="padding:8px 32px 28px;">
-        <div style="border-top:1px solid #E7E4DB;padding-top:16px;font-size:12px;line-height:1.6;color:#6E766B;">
-          Be Whole Care &middot; 063 883 7170 &middot; bewholecare@gmail.com<br/>
-          A renewed mind, a prospering soul.<br/><br/>
-          Be Whole Care is not an emergency service. If you are in immediate danger, contact emergency services on 112 or the SADAG 24hr helpline on 0800 456 789.
-        </div>
-      </td></tr>
-    </table>
-  </td></tr></table>
-</body></html>`;
+  // The logo lives on the outer canvas, above the card — not boxed inside it —
+  // exactly where Apple's own receipt emails place their icon. A recipient
+  // whose mail client is still fetching the attachment (or has none) sees the
+  // wordmark instead of a broken image, never a blank gap.
+  const logoBlock = hasLogo
+    ? `<img src="cid:bwc-logo" width="132" height="79" alt="Be Whole Care" style="display:block;width:132px;height:auto;margin:0 auto;" />`
+    : `<div style="font-family:-apple-system,'SF Pro Display',Segoe UI,Helvetica,Arial,sans-serif;font-size:20px;font-weight:700;color:${FOREST};letter-spacing:-0.01em;">Be Whole Care</div>`;
+
+  return `<!doctype html>
+<html>
+  <head>
+    <meta name="color-scheme" content="light" />
+    <meta name="supported-color-schemes" content="light" />
+  </head>
+  <body style="margin:0;background:${CANVAS};padding:40px 16px;font-family:-apple-system,'SF Pro Text',Segoe UI,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center">
+      <table role="presentation" width="100%" style="max-width:480px;">
+        <tr><td align="center" style="padding-bottom:24px;">
+          ${logoBlock}
+        </td></tr>
+        <tr><td>
+          <table role="presentation" width="100%" style="background:${CARD};border-radius:28px;">
+            <tr><td style="padding:36px 32px 32px;">
+              <h1 style="margin:0 0 18px;font-size:23px;line-height:1.3;color:${INK};font-weight:700;letter-spacing:-0.01em;">${escapeHtml(subject)}</h1>
+              ${paragraphs}
+              ${detailBlock}
+              ${ctaBlock}
+            </td></tr>
+          </table>
+        </td></tr>
+        <tr><td style="padding:28px 16px 0;">
+          <div style="font-size:12px;line-height:1.7;color:${INK_FAINT};text-align:center;">
+            Be Whole Care &middot; 063 883 7170 &middot; bewholecare@gmail.com<br/>
+            A renewed mind, a prospering soul.
+          </div>
+        </td></tr>
+      </table>
+    </td></tr></table>
+  </body>
+</html>`;
 }
 
 function escapeHtml(value: string) {
