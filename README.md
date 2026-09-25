@@ -17,9 +17,9 @@ It runs with **no environment variables at all**: payments, calendar, and email 
 
 | Role | Email | Password |
 | --- | --- | --- |
-| Super admin | `admin@bewholecare.co.za` | `Wholeness2026!` |
-| Staff | `staff@bewholecare.co.za` | `Wholeness2026!` |
-| Client | `thandiwe.demo@example.com` | `Wholeness2026!` |
+| Super admin | `admin@bewholecare.co.za` | `!` |
+| Staff | `staff@bewholecare.co.za` | `!` |
+| Client | `thandiwe.demo@example.com` | `` |
 
 Demo clients, appointments, payments and follow-ups are all flagged `isDemo` and labelled as such in the interface. There are no fabricated testimonials and no invented practitioners.
 
