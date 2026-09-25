@@ -237,6 +237,12 @@ export function BookingWizard({
    * tries to move on, then live, so each error clears as its field is fixed.
    */
   const [revealed, setRevealed] = React.useState({ details: false, payment: false });
+  /**
+   * Fields the client has typed in and left. Each one shows its own error from
+   * then on, so a mistake turns red as soon as they move to the next field —
+   * not only when they press Continue — and clears the moment it is fixed.
+   */
+  const [touched, setTouched] = React.useState<Record<string, boolean>>({});
   /** Synchronous double-submit guard; two taps in one render both see `submitting` false. */
   const submitLock = React.useRef(false);
   /** Set once the server has created the booking on this page. */
@@ -315,14 +321,27 @@ export function BookingWizard({
     [usingMedicalAid, medicalAid],
   );
 
-  const errors = React.useMemo<Record<string, string>>(
-    () => ({
+  const errors = React.useMemo<Record<string, string>>(() => {
+    const shown = (issues: Record<string, string>, all: boolean) =>
+      Object.fromEntries(Object.entries(issues).filter(([key]) => all || touched[key]));
+    return {
       ...serverErrors,
-      ...(revealed.details ? detailsIssues : {}),
-      ...(revealed.payment ? medicalAidIssues : {}),
-    }),
-    [serverErrors, revealed, detailsIssues, medicalAidIssues],
-  );
+      ...shown(detailsIssues, revealed.details),
+      ...shown(medicalAidIssues, revealed.payment),
+    };
+  }, [serverErrors, revealed, touched, detailsIssues, medicalAidIssues]);
+
+  /**
+   * onBlur for a text field: once the client has typed something and moved
+   * on, its errors stay visible. Leaving a field empty on the way past does
+   * not count — nobody should see red for a field they have not reached.
+   */
+  function touch(key: string) {
+    return (event: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+      if (!event.target.value.trim()) return;
+      setTouched((current) => (current[key] ? current : { ...current, [key]: true }));
+    };
+  }
 
   // An edit supersedes what the server said about the previous values.
   React.useEffect(() => {
@@ -773,6 +792,7 @@ export function BookingWizard({
                       <Label htmlFor="firstName">First name</Label>
                       <Input
                         id="firstName"
+                        onBlur={touch('firstName')}
                         value={details.firstName}
                         onChange={(e) => setDetails({ ...details, firstName: e.target.value })}
                         autoComplete="given-name"
@@ -784,6 +804,7 @@ export function BookingWizard({
                       <Label htmlFor="lastName">Last name</Label>
                       <Input
                         id="lastName"
+                        onBlur={touch('lastName')}
                         value={details.lastName}
                         onChange={(e) => setDetails({ ...details, lastName: e.target.value })}
                         autoComplete="family-name"
@@ -795,6 +816,7 @@ export function BookingWizard({
                       <Label htmlFor="email">Email</Label>
                       <Input
                         id="email"
+                        onBlur={touch('email')}
                         type="email"
                         value={details.email}
                         onChange={(e) => setDetails({ ...details, email: e.target.value })}
@@ -807,6 +829,7 @@ export function BookingWizard({
                       <Label htmlFor="phone">Mobile number</Label>
                       <Input
                         id="phone"
+                        onBlur={touch('phone')}
                         type="tel"
                         placeholder="083 000 0000"
                         value={details.phone}
@@ -824,6 +847,7 @@ export function BookingWizard({
                     </Label>
                     <Textarea
                       id="address"
+                      onBlur={touch('address')}
                       rows={2}
                       value={details.address}
                       onChange={(e) => setDetails({ ...details, address: e.target.value })}
@@ -844,6 +868,7 @@ export function BookingWizard({
                         {/* autoComplete off: browsers otherwise fill in the client's OWN details here. */}
                         <Input
                             id="emergencyName"
+                            onBlur={touch('emergencyName')}
                             autoComplete="off"
                             value={details.emergencyName}
                             onChange={(e) =>
@@ -857,6 +882,7 @@ export function BookingWizard({
                         <Label htmlFor="emergencyPhone">Contact number</Label>
                         <Input
                             id="emergencyPhone"
+                            onBlur={touch('emergencyPhone')}
                             type="tel"
                             autoComplete="off"
                             placeholder="083 000 0000"
@@ -877,6 +903,7 @@ export function BookingWizard({
                     </Label>
                     <Textarea
                       id="reason"
+                      onBlur={touch('reason')}
                       rows={3}
                       value={details.reason}
                       onChange={(e) => setDetails({ ...details, reason: e.target.value })}
@@ -1022,6 +1049,7 @@ export function BookingWizard({
                                     <Label htmlFor="scheme">Scheme</Label>
                                     <Input
                                       id="scheme"
+                                      onBlur={touch('medicalAid.scheme')}
                                       value={medicalAid.scheme}
                                       onChange={(e) =>
                                         setMedicalAid({ ...medicalAid, scheme: e.target.value })
@@ -1035,6 +1063,7 @@ export function BookingWizard({
                                     <Label htmlFor="memberNumber">Membership number</Label>
                                     <Input
                                       id="memberNumber"
+                                      onBlur={touch('medicalAid.memberNumber')}
                                       value={medicalAid.memberNumber}
                                       onChange={(e) =>
                                         setMedicalAid({ ...medicalAid, memberNumber: e.target.value })
@@ -1051,6 +1080,7 @@ export function BookingWizard({
                                     </Label>
                                     <Input
                                       id="dateOfBirth"
+                                      onBlur={touch('medicalAid.dateOfBirth')}
                                       type="date"
                                       value={medicalAid.dateOfBirth}
                                       onChange={(e) =>
@@ -1066,6 +1096,7 @@ export function BookingWizard({
                                     <Label htmlFor="mainMember">Main member</Label>
                                     <Input
                                       id="mainMember"
+                                      onBlur={touch('medicalAid.mainMember')}
                                       value={medicalAid.mainMember}
                                       onChange={(e) =>
                                         setMedicalAid({ ...medicalAid, mainMember: e.target.value })
@@ -1083,6 +1114,7 @@ export function BookingWizard({
                                     </Label>
                                     <Input
                                       id="mainMemberId"
+                                      onBlur={touch('medicalAid.mainMemberId')}
                                       inputMode="numeric"
                                       value={medicalAid.mainMemberId}
                                       onChange={(e) =>
