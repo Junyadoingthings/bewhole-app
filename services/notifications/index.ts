@@ -267,9 +267,13 @@ function plainText(input: SendInput): string {
  * than a filled panel. One accent colour throughout (the brand forest green),
  * used only where something can be tapped.
  *
- * Inline styles throughout, and no CSS class or <style> block anywhere —
- * Gmail strips <style> tags entirely, so anything placed there simply would
- * not exist for a large share of recipients.
+ * Inline styles carry the whole design, because some clients drop <style>
+ * blocks. The one <style> block in the head only pins the light theme for the
+ * clients that read it (see LIGHT_ONLY_CSS); without it the email still
+ * renders exactly as designed.
+ *
+ * Light theme only, on purpose — the practice wants the same cream-and-white
+ * email in every inbox, whatever the phone's appearance setting.
  */
 function emailShell(
   subject: string,
@@ -286,11 +290,40 @@ function emailShell(
   const CANVAS = '#F6F3EB'; // cream-100-ish backdrop the card floats on
   const CARD = '#FFFFFF';
 
+  /**
+   * Keeps dark-mode mail apps from recolouring the email.
+   *
+   * - `color-scheme: light only` tells Apple Mail (iPhone, iPad, Mac) and
+   *   other clients that follow the standard that this email has no dark
+   *   version, so they leave it alone.
+   * - Outlook (web, iOS, Android) recolours anyway, and marks every element it
+   *   touched with `data-ogsc` (text colour) or `data-ogsb` (background). The
+   *   rules below catch those marks and put the original colours back.
+   *
+   * Gmail's apps apply their own dark mode and ignore both; nothing in an
+   * email can switch that off. Gmail on the web never darkens emails.
+   */
+  // Each rule matches the Outlook marker on a wrapper *or* on the element
+  // itself — Outlook versions differ on where they put it.
+  const restore = (marker: string, cls: string, prop: string, value: string) =>
+    `[${marker}] .${cls}, .${cls}[${marker}] { ${prop}: ${value} !important; }`;
+  const LIGHT_ONLY_CSS = [
+    ':root { color-scheme: light only; supported-color-schemes: light only; }',
+    restore('data-ogsb', 'bwc-canvas', 'background-color', CANVAS),
+    restore('data-ogsb', 'bwc-card', 'background-color', CARD),
+    restore('data-ogsb', 'bwc-button', 'background-color', FOREST),
+    restore('data-ogsc', 'bwc-ink', 'color', INK),
+    restore('data-ogsc', 'bwc-soft', 'color', INK_SOFT),
+    restore('data-ogsc', 'bwc-faint', 'color', INK_FAINT),
+    restore('data-ogsc', 'bwc-brand', 'color', FOREST),
+    restore('data-ogsc', 'bwc-on-accent', 'color', '#FFFFFF'),
+  ].join('\n');
+
   const paragraphs = body
     .split('\n\n')
     .map(
       (p) =>
-        `<p style="margin:0 0 15px;font-size:16px;line-height:1.6;color:${INK_SOFT};">${escapeHtml(p).replace(/\n/g, '<br/>')}</p>`,
+        `<p class="bwc-soft" style="margin:0 0 15px;font-size:16px;line-height:1.6;color:${INK_SOFT};">${escapeHtml(p).replace(/\n/g, '<br/>')}</p>`,
     )
     .join('');
 
@@ -305,8 +338,8 @@ function emailShell(
     .map((d, i) => {
       const border = i === 0 ? '' : `border-top:1px solid ${HAIRLINE};`;
       return `<tr><td style="padding:${i === 0 ? '0 0 16px' : '16px 0'};${border}">
-           <div style="font-size:11px;line-height:1.4;letter-spacing:0.06em;text-transform:uppercase;color:${INK_FAINT};margin:${i === 0 ? '0' : '15px'} 0 5px;">${escapeHtml(d.label)}</div>
-           <div style="font-size:17px;line-height:1.35;color:${INK};font-weight:600;">${escapeHtml(d.value)}</div>
+           <div class="bwc-faint" style="font-size:11px;line-height:1.4;letter-spacing:0.06em;text-transform:uppercase;color:${INK_FAINT};margin:${i === 0 ? '0' : '15px'} 0 5px;">${escapeHtml(d.label)}</div>
+           <div class="bwc-ink" style="font-size:17px;line-height:1.35;color:${INK};font-weight:600;">${escapeHtml(d.value)}</div>
          </td></tr>`;
     })
     .join('');
@@ -323,14 +356,14 @@ function emailShell(
    */
   const ctaBlock = cta
     ? `<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin:8px 0 22px;">
-         <tr><td align="center" bgcolor="${FOREST}" style="border-radius:14px;">
-           <a href="${escapeHtml(cta.url)}"
+         <tr><td class="bwc-button" align="center" bgcolor="${FOREST}" style="border-radius:14px;background-color:${FOREST};">
+           <a class="bwc-on-accent" href="${escapeHtml(cta.url)}"
               style="display:block;padding:15px 28px;font-size:16px;font-weight:600;color:#FFFFFF;text-decoration:none;border-radius:14px;text-align:center;">
              ${escapeHtml(cta.label)}
            </a>
          </td></tr>
        </table>
-       <p style="margin:0 0 4px;font-size:12px;line-height:1.6;color:${INK_FAINT};word-break:break-all;">
+       <p class="bwc-faint" style="margin:0 0 4px;font-size:12px;line-height:1.6;color:${INK_FAINT};word-break:break-all;">
          If the button does not work, copy this into your browser:<br/>${escapeHtml(cta.url)}
        </p>`
     : '';
@@ -341,24 +374,30 @@ function emailShell(
   // wordmark instead of a broken image, never a blank gap.
   const logoBlock = hasLogo
     ? `<img src="cid:bwc-logo" width="132" height="79" alt="Be Whole Care" style="display:block;width:132px;height:auto;margin:0 auto;" />`
-    : `<div style="font-family:-apple-system,'SF Pro Display',Segoe UI,Helvetica,Arial,sans-serif;font-size:20px;font-weight:700;color:${FOREST};letter-spacing:-0.01em;">Be Whole Care</div>`;
+    : `<div class="bwc-brand" style="font-family:-apple-system,'SF Pro Display',Segoe UI,Helvetica,Arial,sans-serif;font-size:20px;font-weight:700;color:${FOREST};letter-spacing:-0.01em;">Be Whole Care</div>`;
 
   return `<!doctype html>
 <html>
   <head>
-    <meta name="color-scheme" content="light" />
-    <meta name="supported-color-schemes" content="light" />
+    <meta name="color-scheme" content="light only" />
+    <meta name="supported-color-schemes" content="light only" />
+    <style>${LIGHT_ONLY_CSS}</style>
   </head>
-  <body style="margin:0;background:${CANVAS};padding:40px 16px;font-family:-apple-system,'SF Pro Text',Segoe UI,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased;">
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center">
+  <body class="bwc-canvas" style="margin:0;background:${CANVAS};padding:0;font-family:-apple-system,'SF Pro Text',Segoe UI,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased;">
+    <!--
+      The canvas colour is carried by this full-width table as well as <body>,
+      because several clients discard the body's styles; bgcolor is the
+      attribute form some of them fall back to.
+    -->
+    <table class="bwc-canvas" role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="${CANVAS}" style="background-color:${CANVAS};"><tr><td align="center" style="padding:40px 16px;">
       <table role="presentation" width="100%" style="max-width:480px;">
         <tr><td align="center" style="padding-bottom:24px;">
           ${logoBlock}
         </td></tr>
         <tr><td>
-          <table role="presentation" width="100%" style="background:${CARD};border-radius:28px;">
+          <table class="bwc-card" role="presentation" width="100%" bgcolor="${CARD}" style="background-color:${CARD};border-radius:28px;">
             <tr><td style="padding:36px 32px 32px;">
-              <h1 style="margin:0 0 18px;font-size:23px;line-height:1.3;color:${INK};font-weight:700;letter-spacing:-0.01em;">${escapeHtml(subject)}</h1>
+              <h1 class="bwc-ink" style="margin:0 0 18px;font-size:23px;line-height:1.3;color:${INK};font-weight:700;letter-spacing:-0.01em;">${escapeHtml(subject)}</h1>
               ${paragraphs}
               ${detailBlock}
               ${ctaBlock}
@@ -366,7 +405,7 @@ function emailShell(
           </table>
         </td></tr>
         <tr><td style="padding:28px 16px 0;">
-          <div style="font-size:12px;line-height:1.7;color:${INK_FAINT};text-align:center;">
+          <div class="bwc-faint" style="font-size:12px;line-height:1.7;color:${INK_FAINT};text-align:center;">
             Be Whole Care &middot; 063 883 7170 &middot; bewholecare@gmail.com<br/>
             A renewed mind, a prospering soul.
           </div>
