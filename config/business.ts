@@ -100,7 +100,9 @@ export const BUSINESS = {
     'We provide confidential, ethical and client-centred counselling services you can trust.',
   website: 'www.bewholecare.co.za',
   email: 'bewholecare@gmail.com',
-  phone: '',
+  // Shown and dialled in ~25 places (booking page, portal, footer, error
+  // pages). Emptying it left all of them blank rather than hiding them.
+  phone: '0638837170',
   phoneE164: '+27638837170',
   whatsapp: '27638837170',
   instagram: 'https://www.instagram.com/_bewhole/',

@@ -22,6 +22,7 @@ import {
 import { COUNSELLING_CONSENT } from '@/config/business';
 import { hashPassword } from '@/lib/auth/password';
 import { fromLocalParts, hoursUntil, parts } from '@/lib/date';
+import { money } from '@/lib/utils';
 import { emit, emitAfterResponse } from '@/services/events';
 import { createCheckoutForAppointment } from '@/services/payment.service';
 import { resolveSlot } from '@/services/availability.service';
@@ -87,9 +88,12 @@ export async function priceSession(
       amountCents: co,
       requiresPayment: false,
       label: co > 0 ? 'Medical aid co-payment' : 'Claimed from your medical aid',
+      // Quote the amount from settings rather than a fixed figure, and only
+      // when there is one — this read "A R100 co-payment" whatever the
+      // setting actually was.
       note:
-        mode === 'in_person'
-          ? 'A R100 co-payment applies to in-person consultations using medical aid benefits.'
+        co > 0
+          ? `A ${money(co)} co-payment applies to in-person consultations using medical aid benefits.`
           : 'Your session will be submitted to your scheme. Any amount not covered remains your responsibility.',
     };
   }
@@ -498,10 +502,11 @@ export interface MedicalAidDecisionResult {
  * medical-aid client is never left on a second-class version of "confirmed".
  *
  * Declining is where the money has to be got right. The amount on the
- * appointment was priced as a medical aid co-payment (R100 in person, nothing
- * online). If the scheme will not pay, that figure is meaningless: the client
- * now owes the private fee. Re-pricing here is the difference between invoicing
- * R850 and invoicing R100 for the same session — silently, every time.
+ * appointment was priced as a medical aid co-payment (whatever the setting was
+ * at booking — possibly nothing). If the scheme will not pay, that figure is
+ * meaningless: the client now owes the private fee. Re-pricing here is the
+ * difference between invoicing the full fee and invoicing the co-payment for
+ * the same session — silently, every time.
  */
 export async function decideMedicalAid(
   appointmentId: ID,

@@ -1446,7 +1446,7 @@ function SummaryCard({
           </div>
           {paymentMethod === 'medical_aid' && !requiresQuote && !isFree && (
             <p className="mt-2 text-xs leading-relaxed text-ink-soft">
-              {mode === 'in_person'
+              {amountCents > 0
                 ? 'Co-payment for an in-person consultation using medical aid benefits. Nothing is charged now — it is payable once your medical aid is confirmed.'
                 : 'Submitted to your scheme. Any amount not covered remains your responsibility.'}
             </p>

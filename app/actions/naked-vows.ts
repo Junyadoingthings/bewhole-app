@@ -79,8 +79,13 @@ export async function registerNakedVowsInterest(
     to: { email: BUSINESS.email },
     subject: 'Naked Vows — interest registered',
     body:
-      `Couple: ${data.names}\nEmail: ${data.email}\nPhone: ${data.phone}` +
-      (data.message ? `\n\nMessage:\n${data.message}` : ''),
+      'A couple has registered their interest in Naked Vows.' +
+      (data.message ? `\n\nTheir message:\n${data.message}` : ''),
+    details: [
+      { label: 'Couple', value: data.names },
+      { label: 'Email', value: data.email },
+      { label: 'Phone', value: data.phone },
+    ],
     href: '/admin/notifications',
   });
 
@@ -90,11 +95,12 @@ export async function registerNakedVowsInterest(
     channels: ['email'],
     to: { email: data.email },
     subject: 'Thank you for your interest in Naked Vows',
+    heading: 'Thank you for your interest',
+    greeting: data.names,
     body:
-      `Hi,\n\nThank you for registering your interest in Naked Vows — our marriage ` +
-      `segment for couples.\n\nNtombi will be in touch personally before the next ` +
-      `gathering. In the meantime you are welcome to join the marriage resources ` +
-      `channel for ongoing encouragement.\n\nWarmly,\nBe Whole Care`,
+      'Thank you for registering your interest in Naked Vows, our marriage programme for couples.\n\n' +
+      'Ntombi will be in contact with you personally before the next gathering. In the meantime, ' +
+      'you are welcome to join our marriage resources channel for ongoing encouragement.',
   });
 
   return {

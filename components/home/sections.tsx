@@ -257,9 +257,7 @@ export function MeetingModes() {
           <div>
             <p className="font-medium text-ink">Medical aid is accepted</p>
             <p className="mt-1 text-sm leading-relaxed text-ink-soft text-pretty">
-              A {money(RATES.medicalAidCoPaymentInPerson)} co-payment applies to in-person
-              consultations using medical aid benefits. Claims are subject to your scheme’s rules
-              and benefits.
+              Claims are subject to your scheme’s rules and benefits.
             </p>
           </div>
           <Link

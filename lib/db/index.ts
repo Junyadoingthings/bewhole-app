@@ -106,6 +106,7 @@ export const listNotificationLogs = repo.listNotificationLogs;
 export const listNotificationLogsForUser = repo.listNotificationLogsForUser;
 export const listDueNotificationLogs = repo.listDueNotificationLogs;
 export const markNotificationLogResult = repo.markNotificationLogResult;
+export const withdrawQueuedNotificationLogs = repo.withdrawQueuedNotificationLogs;
 
 /* ---------------------------------------------------------------- content */
 export const listResources = repo.listResources;

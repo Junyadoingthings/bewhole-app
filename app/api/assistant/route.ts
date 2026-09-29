@@ -102,7 +102,7 @@ async function answer(message: string): Promise<Answer> {
 
   if (/(medical aid|scheme|discovery|momentum|bonitas|claim|co-?pay)/.test(text)) {
     return {
-      reply: `Yes — medical aid is accepted. A ${money(RATES.medicalAidCoPaymentInPerson)} co-payment applies per in-person consultation when you use medical aid benefits.\n\n${POLICY.medicalAid}`,
+      reply: `Yes — medical aid is accepted.\n\n${POLICY.medicalAid}`,
       links: [{ href: '/book', label: 'Book with medical aid' }],
     };
   }

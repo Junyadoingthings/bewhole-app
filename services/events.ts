@@ -6,20 +6,20 @@ import {
   audit,
   getAppointment,
   getCalendarEventForAppointment,
+  getFollowUp,
   getProfile,
-  getService,
-  getLocation,
-  findUserById,
   getSettings,
   hydrateAppointments,
+  hydrateFollowUps,
   updateAppointment,
   upsertCalendarEvent,
+  withdrawQueuedNotificationLogs,
   newId,
   nowISO,
 } from '@/lib/db';
 import { BUSINESS } from '@/config/business';
-import { displayTime, formatFullDate, parts, relativeDay } from '@/lib/date';
-import { appointmentPaymentUrl } from '@/lib/links';
+import { addISODays, displayTime, formatFullDate, fromLocalParts, parts } from '@/lib/date';
+import { appUrl, appointmentPaymentUrl } from '@/lib/links';
 import { money } from '@/lib/utils';
 import { getCalendarProvider } from '@/services/calendar';
 import { notify } from '@/services/notifications';
@@ -27,9 +27,24 @@ import type { AppointmentView, FollowUpView, ID } from '@/types';
 
 const PRACTICE_INBOX = { email: BUSINESS.email } as const;
 
+/**
+ * House style for everything a client reads.
+ *
+ * Formal and calm, in the practice's own voice ("Professional. Ethical.
+ * Compassionate Care."): complete sentences, no contractions, no slang, and
+ * one clear message per email. Greeting ("Dear …,") and sign-off ("Kind
+ * regards, Be Whole Care") are added by the email template, so bodies here
+ * hold only the message. Dates are always written out in full, never as
+ * "tomorrow" or "in a couple of hours": messages are sent by a worker that
+ * runs once a day, and a relative time can be wrong by the time it arrives.
+ * Web addresses never go in a body — see SendInput.body.
+ */
+
 export type DomainEvent =
   | { type: 'appointment.created'; appointmentId: ID }
   | { type: 'appointment.confirmed'; appointmentId: ID }
+  | { type: 'appointment.calendar_sync'; appointmentId: ID }
+  | { type: 'appointment.session_link_added'; appointmentId: ID }
   | { type: 'appointment.medical_aid_pending'; appointmentId: ID }
   | { type: 'appointment.medical_aid_declined'; appointmentId: ID }
   | { type: 'appointment.rescheduled'; appointmentId: ID; previousStart: string }
@@ -58,6 +73,12 @@ export async function emit(event: DomainEvent): Promise<void> {
         break;
       case 'appointment.confirmed':
         await onAppointmentConfirmed(event.appointmentId);
+        break;
+      case 'appointment.calendar_sync':
+        await onCalendarSync(event.appointmentId);
+        break;
+      case 'appointment.session_link_added':
+        await onSessionLinkAdded(event.appointmentId);
         break;
       case 'appointment.rescheduled':
         await onAppointmentRescheduled(event.appointmentId, event.previousStart);
@@ -132,40 +153,75 @@ function appointmentWhen(a: AppointmentView) {
   return `${formatFullDate(p.date)} at ${displayTime(p.time)}`;
 }
 
-function sessionSummary(a: AppointmentView) {
-  return [
-    `Service: ${a.service.name}`,
-    `When: ${appointmentWhen(a)}`,
-    `Where: ${appointmentWhere(a)}`,
-    `Reference: ${a.reference}`,
-  ].join('\n');
+/** "Wednesday, 30 September 2026" — for subject lines. */
+function appointmentDate(a: AppointmentView) {
+  return formatFullDate(parts(a.startAt).date);
 }
 
-function generateCalendarLinks(a: AppointmentView) {
-  const title = encodeURIComponent(`${a.service.name} — Be Whole Care`);
-  const details = encodeURIComponent(sessionSummary(a));
-  const location = encodeURIComponent(appointmentWhere(a));
+function firstNameOf(a: AppointmentView) {
+  return a.client?.name?.split(' ')[0] || null;
+}
 
-  const formatUtc = (isoString: string) =>
-    new Date(isoString).toISOString().replace(/-|:|\.\d+/g, '');
+function clientRecipient(a: AppointmentView) {
+  return { email: a.client?.email, phone: a.client?.phone, userId: a.clientUserId };
+}
 
-  const startUtc = formatUtc(a.startAt);
-  const endUtc = formatUtc(a.endAt);
-
-  const googleUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${startUtc}/${endUtc}&details=${details}&location=${location}`;
-
-  return {
-    calendarLine: `\n\nAdd to your calendar:\n• Google Calendar: ${googleUrl}`,
-  };
+/** The appointment's own page — also the key its queued reminders are filed under. */
+function appointmentHref(a: { id: ID }) {
+  return `/portal/appointments/${a.id}`;
 }
 
 function appointmentDetails(a: AppointmentView) {
   return [
     { label: 'Service', value: a.service.name },
-    { label: 'When', value: appointmentWhen(a) },
-    { label: 'Where', value: appointmentWhere(a) },
+    { label: 'Date and time', value: appointmentWhen(a) },
+    { label: 'Duration', value: `${a.durationMinutes} minutes` },
+    { label: 'Location', value: appointmentWhere(a) },
     { label: 'Reference', value: a.reference },
   ];
+}
+
+/** Staff see who the client is alongside the session facts. */
+function staffDetails(a: AppointmentView) {
+  return [
+    { label: 'Client', value: a.client?.name || 'Not captured' },
+    { label: 'Email', value: a.client?.email || 'Not captured' },
+    { label: 'Phone', value: a.client?.phone || 'Not captured' },
+    ...appointmentDetails(a),
+  ];
+}
+
+/**
+ * Links for an online session and for the client's own calendar. Short labels
+ * only: the Google Calendar address runs to several hundred characters, and
+ * written out in the body it forced the email wider than a phone screen.
+ */
+function sessionLinks(a: AppointmentView, sessionLink: string | null) {
+  const links: { label: string; url: string }[] = [];
+  if (a.mode === 'online' && sessionLink) {
+    links.push({ label: 'Join the online session', url: sessionLink });
+  }
+  links.push({ label: 'Add to Google Calendar', url: googleCalendarLink(a) });
+  return links;
+}
+
+function googleCalendarLink(a: AppointmentView) {
+  const utc = (iso: string) => new Date(iso).toISOString().replace(/-|:|\.\d+/g, '');
+  const params = new URLSearchParams({
+    action: 'TEMPLATE',
+    text: `${a.service.name} — Be Whole Care`,
+    dates: `${utc(a.startAt)}/${utc(a.endAt)}`,
+    details: `Reference: ${a.reference}`,
+    location: appointmentWhere(a),
+  });
+  return `https://calendar.google.com/calendar/render?${params.toString()}`;
+}
+
+function onlineLinkSentence(a: AppointmentView, sessionLink: string | null) {
+  if (a.mode !== 'online') return '';
+  return sessionLink
+    ? 'You can join the online session using the link below.'
+    : 'Your practitioner will send you the link to join the online session before your appointment.';
 }
 
 /* ------------------------------------------------------ medical aid checks */
@@ -174,7 +230,6 @@ async function onMedicalAidPending(appointmentId: ID) {
   const a = await view(appointmentId);
   if (!a) return;
   const settings = await getSettings();
-  const firstName = a.client?.name?.split(' ')[0] ?? 'there';
   const profile = await getProfile(a.clientUserId);
   const scheme = profile?.medicalAid?.scheme;
 
@@ -182,15 +237,18 @@ async function onMedicalAidPending(appointmentId: ID) {
     type: 'appointment.medical_aid_pending',
     audience: 'client',
     channels: [...settings.reminders.channels, 'in_app'],
-    to: { email: a.client?.email, phone: a.client?.phone, userId: a.clientUserId },
-    subject: 'We have your booking — checking your medical aid',
+    to: clientRecipient(a),
+    subject: 'Booking received — medical aid verification in progress',
+    heading: 'We have received your booking',
+    greeting: firstNameOf(a),
     body:
-      `Hi ${firstName},\n\nThank you for booking with Be Whole Care. We have held this time for you ` +
-      `while we confirm your medical aid cover${scheme ? ` with ${scheme}` : ''}.\n\n` +
-      `You do not need to do anything right now. We will email you as soon as the check is done — ` +
-      `usually within one working day — and your session is confirmed at that point, not before.`,
+      `Thank you for booking with Be Whole Care. We have reserved the time below for you while we ` +
+      `verify your medical aid cover${scheme ? ` with ${scheme}` : ''}.\n\n` +
+      'No action is required from you at this stage. We will contact you once the verification is ' +
+      'complete, usually within one working day. Please note that your appointment is confirmed ' +
+      'only once your medical aid has been verified.',
     details: appointmentDetails(a),
-    href: `/portal/appointments/${a.id}`,
+    href: appointmentHref(a),
   });
 
   await notify({
@@ -200,13 +258,16 @@ async function onMedicalAidPending(appointmentId: ID) {
     to: PRACTICE_INBOX,
     subject: `Medical aid to verify — ${a.client?.name ?? 'Client'}, ${appointmentWhen(a)}`,
     body:
-      `${a.client?.name ?? 'Client'} booked using medical aid and is waiting on verification.\n\n` +
-      (profile?.medicalAid
-        ? `Scheme: ${profile.medicalAid.scheme}\nMember number: ${profile.medicalAid.memberNumber}\n` +
-          `Main member: ${profile.medicalAid.mainMember}\n\n`
-        : 'No medical aid details were captured on the profile.\n\n') +
-      `Accept or decline it on the appointments page — the client is emailed either way.`,
-    details: appointmentDetails(a),
+      `${a.client?.name ?? 'A client'} has booked using medical aid. The appointment is reserved ` +
+      'and awaiting verification.\n\n' +
+      'Please accept or decline the medical aid on the appointments page. The client is notified ' +
+      'automatically either way.',
+    details: [
+      ...staffDetails(a),
+      { label: 'Scheme', value: profile?.medicalAid?.scheme || 'Not captured' },
+      { label: 'Member number', value: profile?.medicalAid?.memberNumber || 'Not captured' },
+      { label: 'Main member', value: profile?.medicalAid?.mainMember || 'Not captured' },
+    ],
     href: `/admin/appointments?filter=medical_aid`,
   });
 }
@@ -215,29 +276,27 @@ async function onMedicalAidDeclined(appointmentId: ID) {
   const a = await view(appointmentId);
   if (!a) return;
   const settings = await getSettings();
-  const firstName = a.client?.name?.split(' ')[0] ?? 'there';
   const reason = a.medicalAidDeclineReason?.trim();
 
   await notify({
     type: 'appointment.medical_aid_declined',
     audience: 'client',
     channels: [...settings.reminders.channels, 'in_app'],
-    to: { email: a.client?.email, phone: a.client?.phone, userId: a.clientUserId },
-    subject: 'About your medical aid — your session is still held',
+    to: clientRecipient(a),
+    subject: 'Update regarding your medical aid',
+    heading: 'An update regarding your medical aid',
+    greeting: firstNameOf(a),
     body:
-      `Hi ${firstName},\n\nWe have heard back about your medical aid, and unfortunately this session ` +
-      `cannot be claimed from your scheme.\n\n` +
+      'We have completed the verification of your medical aid. Unfortunately, this session cannot ' +
+      'be claimed from your scheme.\n\n' +
       (reason ? `${reason}\n\n` : '') +
-      `Your time is still held. To keep it, the session can be paid for by card using the button ` +
-      `below — it takes about a minute, and your booking is confirmed the moment it goes through.\n\n` +
-      `If you would rather move or cancel the session instead, reply to this email and we will sort ` +
-      `it out. Nothing has been charged to you.`,
-    details: [
-      ...appointmentDetails(a),
-      { label: 'Amount due', value: money(a.amountCents) },
-    ],
+      'Your appointment remains reserved. To keep it, the session may be settled by card using the ' +
+      'button below. Your appointment is confirmed as soon as the payment is received.\n\n' +
+      'Should you prefer to reschedule or cancel instead, please reply to this email and our team ' +
+      'will assist you. No payment has been taken.',
+    details: [...appointmentDetails(a), { label: 'Amount due', value: money(a.amountCents) }],
     cta: { label: 'Pay by card', url: appointmentPaymentUrl(a.id) },
-    href: `/portal/appointments/${a.id}`,
+    href: appointmentHref(a),
   });
 }
 
@@ -254,7 +313,7 @@ async function onAppointmentCreated(appointmentId: ID) {
     channels: ['in_app'],
     to: {},
     subject: `New booking — ${a.service.name}`,
-    body: `${a.client?.name ?? 'A client'} booked a ${a.mode === 'online' ? 'online' : 'in-person'} session.\n\n${sessionSummary(a)}`,
+    body: `${a.client?.name ?? 'A client'} booked ${a.mode === 'online' ? 'an online' : 'an in-person'} session for ${appointmentWhen(a)}. Reference ${a.reference}.`,
     href: `/admin/appointments?ref=${a.reference}`,
   });
 
@@ -263,35 +322,31 @@ async function onAppointmentCreated(appointmentId: ID) {
       type: 'payment.requested',
       audience: 'client',
       channels: [...settings.reminders.channels, 'in_app'],
-      to: { email: a.client?.email, phone: a.client?.phone, userId: a.clientUserId },
-      subject: 'Complete your payment to confirm your session',
-      body: `Hi ${a.client?.name?.split(' ')[0] ?? 'there'},\n\nWe've held this time for you. Your booking is confirmed once payment is received.\n\n${sessionSummary(a)}\nAmount: ${money(a.amountCents)}\n\nYou can pay from your appointment page at any time.`,
-      href: `/portal/appointments/${a.id}`,
+      to: clientRecipient(a),
+      subject: 'Payment required to confirm your appointment',
+      heading: 'Your appointment is reserved',
+      greeting: firstNameOf(a),
+      body:
+        'Thank you for booking with Be Whole Care. We have reserved the time below for you.\n\n' +
+        'Your appointment will be confirmed once payment has been received. You may complete the ' +
+        'payment securely using the button below.',
+      details: [...appointmentDetails(a), { label: 'Amount due', value: money(a.amountCents) }],
+      cta: { label: 'Complete payment', url: appointmentPaymentUrl(a.id) },
+      href: appointmentHref(a),
     });
   }
 }
 
-async function onAppointmentConfirmed(appointmentId: ID) {
-  const a = await view(appointmentId);
-  if (!a) return;
-  const settings = await getSettings();
+/**
+ * Keep the practice calendar in step with the appointment. Returns the
+ * meeting link the calendar created, if any.
+ */
+async function syncCalendar(a: AppointmentView, description: string) {
   const calendar = getCalendarProvider();
-
   const result = await calendar.createOrUpdate({
     appointmentId: a.id,
     summary: `${a.service.name} — ${a.client?.name ?? 'Client'}`,
-    description: [
-      `Client: ${a.client?.name ?? '—'}`,
-      `Email: ${a.client?.email ?? '—'}`,
-      `Phone: ${a.client?.phone ?? '—'}`,
-      `Service: ${a.service.name}`,
-      `Type: ${a.mode === 'online' ? 'Online' : 'In person'}`,
-      `Payment: ${a.paymentMethod === 'card' ? 'Card' : 'Medical aid'} — ${money(a.amountCents)}`,
-      `Reference: ${a.reference}`,
-      a.reason ? `\nClient note: ${a.reason}` : '',
-    ]
-      .filter(Boolean)
-      .join('\n'),
+    description,
     location: appointmentWhere(a),
     startISO: a.startAt,
     endISO: a.endAt,
@@ -311,47 +366,79 @@ async function onAppointmentConfirmed(appointmentId: ID) {
     htmlLink: result.htmlLink ?? null,
     status: result.ok ? 'synced' : 'failed',
     lastError: result.error ?? null,
-    syncedAt: result.ok ? nowISO() : null,
+    syncedAt: result.ok ? nowISO() : (existing?.syncedAt ?? null),
     createdAt: existing?.createdAt ?? nowISO(),
     updatedAt: nowISO(),
   });
 
+  // Keep a link staff entered by hand; otherwise take the calendar's.
   const sessionLink = a.sessionLink ?? result.meetLink ?? null;
   if (sessionLink && sessionLink !== a.sessionLink) {
     await updateAppointment(a.id, { sessionLink });
   }
 
-  const firstName = a.client?.name?.split(' ')[0] ?? 'there';
-  const joinLine = a.mode === 'online' && sessionLink ? `\n\nYour session link: ${sessionLink}` : '';
+  return { ok: result.ok, live: calendar.live, sessionLink };
+}
+
+function calendarDescription(a: AppointmentView) {
+  return [
+    `Client: ${a.client?.name ?? '—'}`,
+    `Email: ${a.client?.email ?? '—'}`,
+    `Phone: ${a.client?.phone ?? '—'}`,
+    `Service: ${a.service.name}`,
+    `Type: ${a.mode === 'online' ? 'Online' : 'In person'}`,
+    `Payment: ${a.paymentMethod === 'card' ? 'Card' : 'Medical aid'} — ${money(a.amountCents)}`,
+    `Reference: ${a.reference}`,
+    a.reason ? `\nClient note: ${a.reason}` : '',
+  ]
+    .filter(Boolean)
+    .join('\n');
+}
+
+/** Staff-facing note when the practice calendar is not actually receiving events. */
+function calendarNote(sync: { ok: boolean; live: boolean }) {
+  if (!sync.live) {
+    return '\n\nGoogle Calendar is not connected, so this appointment has not been added to the practice calendar.';
+  }
+  return sync.ok ? '' : '\n\nThe calendar sync failed. Please retry it from the appointment.';
+}
+
+async function onAppointmentConfirmed(appointmentId: ID) {
+  const a = await view(appointmentId);
+  if (!a) return;
+  const settings = await getSettings();
+
+  const sync = await syncCalendar(a, calendarDescription(a));
+  const sessionLink = sync.sessionLink;
 
   const medicalAidLine =
     a.medicalAidDecision === 'accepted'
-      ? `\n\nYour medical aid has been verified and this session will be claimed from your scheme.` +
+      ? 'Your medical aid has been verified, and this session will be claimed from your scheme.' +
         (a.amountCents > 0
           ? ` A co-payment of ${money(a.amountCents)} is payable at your appointment.`
           : '')
       : '';
 
-  const { calendarLine: clientCalendarLinks } = generateCalendarLinks(a);
-  const calendarLine =
-    (result.ok
-      ? ''
-      : '\n\n(We could not sync this to our calendar automatically — our team has been notified and will confirm.)') +
-    clientCalendarLinks;
-
   await notify({
     type: 'appointment.confirmed',
     audience: 'client',
     channels: [...settings.reminders.channels, 'in_app'],
-    to: { email: a.client?.email, phone: a.client?.phone, userId: a.clientUserId },
-    subject: "You're booked",
-    body:
-      `Hi ${firstName},\n\nYour session with Be Whole Care is confirmed.` +
-      `${medicalAidLine}${joinLine}\n\n` +
-      `Thank you for trusting us with this. We are looking forward to seeing you.\n\n` +
-      `If you need to change or cancel, please give us at least 24 hours' notice.${calendarLine}`,
+    to: clientRecipient(a),
+    subject: `Appointment confirmed — ${appointmentDate(a)}`,
+    heading: 'Your appointment is confirmed',
+    greeting: firstNameOf(a),
+    body: [
+      'Thank you for choosing Be Whole Care. We are pleased to confirm your appointment. The details are below.',
+      medicalAidLine,
+      onlineLinkSentence(a, sessionLink),
+      'Should you need to reschedule or cancel, we kindly ask that you give us at least 24 hours’ notice. ' +
+        'Late cancellations and missed appointments may be charged in full.',
+    ]
+      .filter(Boolean)
+      .join('\n\n'),
     details: appointmentDetails(a),
-    href: `/portal/appointments/${a.id}`,
+    links: sessionLinks(a, sessionLink),
+    href: appointmentHref(a),
   });
 
   await notify({
@@ -359,60 +446,142 @@ async function onAppointmentConfirmed(appointmentId: ID) {
     audience: 'staff',
     channels: ['in_app', 'email'],
     to: PRACTICE_INBOX,
-    subject: `New booking — ${a.service.name}, ${appointmentWhen(a)}`,
-    body: `${a.client?.name ?? 'Client'} · ${appointmentWhen(a)}\n\n${sessionSummary(a)}${
-      a.client?.email ? `\n\nClient email: ${a.client.email}` : ''
-    }${result.ok ? '' : '\n\nCalendar sync failed — retry from the appointment.'}`,
+    subject: `New booking — ${a.client?.name ?? 'Client'}, ${appointmentWhen(a)}`,
+    body: `A new appointment has been confirmed.${calendarNote(sync)}`,
+    details: staffDetails(a),
     href: `/admin/appointments?ref=${a.reference}`,
   });
 
-  await scheduleReminders(a);
+  // The link is passed in, not read from `a`: `a` was loaded before the
+  // calendar produced it, so reminders used to go out without the link.
+  await scheduleReminders(a, sessionLink);
 }
 
-async function scheduleReminders(a: AppointmentView) {
-  const settings = await getSettings();
-  const start = new Date(a.startAt).getTime();
-  const firstName = a.client?.name?.split(' ')[0] ?? 'there';
+/** Admin "retry calendar sync": the calendar only — no emails to anyone. */
+async function onCalendarSync(appointmentId: ID) {
+  const a = await view(appointmentId);
+  if (!a) return;
+  await syncCalendar(a, calendarDescription(a));
+}
 
-  const jobs: { hoursBefore: number | null; subject: string; body: string; type: string }[] = [];
+/** Staff added (or changed) the link for an online session. */
+async function onSessionLinkAdded(appointmentId: ID) {
+  const a = await view(appointmentId);
+  if (!a || a.mode !== 'online' || !a.sessionLink) return;
+  if (a.status !== 'confirmed' || new Date(a.startAt).getTime() <= Date.now()) return;
+  const settings = await getSettings();
+
+  await notify({
+    type: 'appointment.session_link',
+    audience: 'client',
+    channels: [...settings.reminders.channels, 'in_app'],
+    to: clientRecipient(a),
+    subject: `Your online session link — ${appointmentDate(a)}`,
+    heading: 'Your online session link',
+    greeting: firstNameOf(a),
+    body:
+      'The link to join your online session is now available. Please use the button below at the ' +
+      'time of your appointment. We recommend joining a few minutes early from a quiet, private space.',
+    details: appointmentDetails(a),
+    cta: { label: 'Join the online session', url: a.sessionLink },
+    href: appointmentHref(a),
+  });
+
+  // Reminders already queued were written without the link.
+  await scheduleReminders(a, a.sessionLink);
+}
+
+/**
+ * Queue the appointment reminders and the post-session message.
+ *
+ * The reminder worker runs once a day, in the morning (Vercel Cron,
+ * vercel.json). Reminders are therefore timed to that run — the morning
+ * before the session and the morning of it — instead of "24 hours" and
+ * "2 hours" before, which the daily worker could only ever deliver late:
+ * "Your session is tomorrow" arrived on the day itself, and a "couple of
+ * hours" reminder reached an 08:00 client at 07:51.
+ *
+ * Anything already queued for this appointment is withdrawn first, so
+ * confirming twice, moving the session or adding a link never leaves two sets
+ * of reminders behind.
+ */
+async function scheduleReminders(a: AppointmentView, sessionLink: string | null) {
+  await withdrawQueuedNotificationLogs(appointmentHref(a), 'Superseded by updated reminders');
+
+  const settings = await getSettings();
+  const sessionDate = parts(a.startAt).date;
+  const morningOf = (isoDate: string) => fromLocalParts(isoDate, '06:00').toISOString();
+  const links = sessionLinks(a, sessionLink);
+
+  const jobs: {
+    at: string;
+    type: string;
+    subject: string;
+    heading: string;
+    body: string;
+    withDetails: boolean;
+  }[] = [];
 
   if (settings.reminders.firstReminderHours) {
     jobs.push({
-      hoursBefore: settings.reminders.firstReminderHours,
-      type: 'reminder.24h',
-      subject: 'Your session is tomorrow',
-      body: `Hi ${firstName},\n\nA gentle reminder about your session.\n\n${sessionSummary(a)}${a.sessionLink ? `\nLink: ${a.sessionLink}` : ''}\n\nIf you need to reschedule, please let us know at least 24 hours beforehand.`,
+      at: morningOf(addISODays(sessionDate, -1)),
+      type: 'reminder.day_before',
+      subject: `Reminder: your appointment on ${appointmentDate(a)}`,
+      heading: 'Appointment reminder',
+      body: [
+        'This is a courtesy reminder of your upcoming appointment with Be Whole Care. The details are below.',
+        onlineLinkSentence(a, sessionLink),
+        'Should you need to reschedule, please let us know at least 24 hours before your appointment.',
+      ]
+        .filter(Boolean)
+        .join('\n\n'),
+      withDetails: true,
     });
   }
   if (settings.reminders.secondReminderHours) {
     jobs.push({
-      hoursBefore: settings.reminders.secondReminderHours,
-      type: 'reminder.2h',
-      subject: 'Your session is in a couple of hours',
-      body: `Hi ${firstName},\n\nSee you at ${displayTime(parts(a.startAt).time)}.\n\n${appointmentWhere(a)}${a.sessionLink ? `\nLink: ${a.sessionLink}` : ''}`,
+      at: morningOf(sessionDate),
+      type: 'reminder.day_of',
+      subject: `Your appointment today at ${displayTime(parts(a.startAt).time)}`,
+      heading: 'Your appointment is today',
+      body: [
+        'We look forward to seeing you today. The details of your appointment are below.',
+        onlineLinkSentence(a, sessionLink),
+      ]
+        .filter(Boolean)
+        .join('\n\n'),
+      withDetails: true,
     });
   }
   if (settings.reminders.followUpAfterHours) {
     jobs.push({
-      hoursBefore: -settings.reminders.followUpAfterHours,
+      at: morningOf(addISODays(sessionDate, 1)),
       type: 'followup.check_in',
-      subject: 'How are you doing?',
-      body: `Hi ${firstName},\n\nThank you for making the time yesterday. If you'd like to book your next session, you can do that from your portal whenever you're ready.\n\nThere's no pressure either way — we're here when you need us.`,
+      subject: 'Thank you for your recent session',
+      heading: 'Thank you for your recent session',
+      body:
+        'Thank you for attending your recent session with Be Whole Care. We trust that it was of value to you.\n\n' +
+        'When you are ready to book your next session, you are welcome to do so at any time. ' +
+        'Should you have any questions in the meantime, please reply to this email.',
+      withDetails: false,
     });
   }
 
   for (const job of jobs) {
-    const when = new Date(start - (job.hoursBefore ?? 0) * 3_600_000).toISOString();
-    if (new Date(when).getTime() <= Date.now()) continue;
+    if (new Date(job.at).getTime() <= Date.now()) continue;
     await notify({
       type: job.type,
       audience: 'client',
       channels: settings.reminders.channels,
-      to: { email: a.client?.email, phone: a.client?.phone, userId: a.clientUserId },
+      to: clientRecipient(a),
       subject: job.subject,
+      heading: job.heading,
+      greeting: firstNameOf(a),
       body: job.body,
-      href: `/portal/appointments/${a.id}`,
-      scheduledFor: when,
+      details: job.withDetails ? appointmentDetails(a) : undefined,
+      links: job.withDetails ? links : [{ label: 'Book your next session', url: appUrl('/book') }],
+      href: appointmentHref(a),
+      scheduledFor: job.at,
     });
   }
 }
@@ -421,41 +590,31 @@ async function onAppointmentRescheduled(appointmentId: ID, previousStart: string
   const a = await view(appointmentId);
   if (!a) return;
   const settings = await getSettings();
+  const previous = `${formatFullDate(parts(previousStart).date)} at ${displayTime(parts(previousStart).time)}`;
 
-  const calendar = getCalendarProvider();
-  const existing = await getCalendarEventForAppointment(a.id);
-  const result = await calendar.createOrUpdate({
-    appointmentId: a.id,
-    summary: `${a.service.name} — ${a.client?.name ?? 'Client'}`,
-    description: `Rescheduled from ${formatFullDate(parts(previousStart).date)} ${displayTime(parts(previousStart).time)}.\nReference: ${a.reference}`,
-    location: appointmentWhere(a),
-    startISO: a.startAt,
-    endISO: a.endAt,
-    timeZone: BUSINESS.timezone,
-    attendeeEmail: a.client?.email ?? null,
-    attendeeName: a.client?.name ?? null,
-    conference: a.mode === 'online',
-  });
-
-  if (existing) {
-    await upsertCalendarEvent({
-      ...existing,
-      externalId: result.externalId ?? existing.externalId,
-      status: result.ok ? 'synced' : 'failed',
-      lastError: result.error ?? null,
-      syncedAt: result.ok ? nowISO() : existing.syncedAt,
-      updatedAt: nowISO(),
-    });
-  }
+  const sync = await syncCalendar(
+    a,
+    `${calendarDescription(a)}\n\nRescheduled from ${previous}.`,
+  );
 
   await notify({
     type: 'appointment.rescheduled',
     audience: 'client',
     channels: [...settings.reminders.channels, 'in_app'],
-    to: { email: a.client?.email, phone: a.client?.phone, userId: a.clientUserId },
-    subject: 'Your session has been moved',
-    body: `Your session is now on ${appointmentWhen(a)}.\n\n${sessionSummary(a)}`,
-    href: `/portal/appointments/${a.id}`,
+    to: clientRecipient(a),
+    subject: `Appointment rescheduled — ${appointmentDate(a)}`,
+    heading: 'Your appointment has been rescheduled',
+    greeting: firstNameOf(a),
+    body: [
+      `Your appointment, previously scheduled for ${previous}, has been moved. The updated details are below.`,
+      onlineLinkSentence(a, sync.sessionLink),
+      'Should this time not suit you, please reply to this email and our team will assist you.',
+    ]
+      .filter(Boolean)
+      .join('\n\n'),
+    details: appointmentDetails(a),
+    links: sessionLinks(a, sync.sessionLink),
+    href: appointmentHref(a),
   });
 
   await notify({
@@ -463,10 +622,19 @@ async function onAppointmentRescheduled(appointmentId: ID, previousStart: string
     audience: 'staff',
     channels: ['in_app', 'email'],
     to: PRACTICE_INBOX,
-    subject: `Rescheduled — ${a.client?.name ?? 'Client'}`,
-    body: `Moved from ${formatFullDate(parts(previousStart).date)} to ${appointmentWhen(a)}.`,
+    subject: `Rescheduled — ${a.client?.name ?? 'Client'}, now ${appointmentWhen(a)}`,
+    body: `This appointment was moved from ${previous}.${calendarNote(sync)}`,
+    details: staffDetails(a),
     href: `/admin/appointments?ref=${a.reference}`,
   });
+
+  // The old reminders named the old date. Replace them — but only for a
+  // confirmed session; one still awaiting payment or medical aid has none.
+  if (a.status === 'confirmed') {
+    await scheduleReminders(a, sync.sessionLink);
+  } else {
+    await withdrawQueuedNotificationLogs(appointmentHref(a), 'Appointment rescheduled');
+  }
 }
 
 async function onAppointmentCancelled(appointmentId: ID, byStaff: boolean, late: boolean) {
@@ -474,14 +642,58 @@ async function onAppointmentCancelled(appointmentId: ID, byStaff: boolean, late:
   if (!a) return;
   const settings = await getSettings();
 
+  // A cancelled session must not keep sending "your appointment is today".
+  await withdrawQueuedNotificationLogs(appointmentHref(a), 'Appointment cancelled');
+
+  const event = await getCalendarEventForAppointment(a.id);
+  if (event?.externalId) {
+    const result = await getCalendarProvider().cancel(event.externalId);
+    await upsertCalendarEvent({
+      ...event,
+      status: result.ok ? 'cancelled' : 'failed',
+      lastError: result.error ?? null,
+      updatedAt: nowISO(),
+    });
+  }
+
   await notify({
     type: 'appointment.cancelled',
     audience: 'client',
     channels: [...settings.reminders.channels, 'in_app'],
-    to: { email: a.client?.email, phone: a.client?.phone, userId: a.clientUserId },
-    subject: 'Session cancelled',
-    body: `Your session on ${appointmentWhen(a)} has been cancelled.`,
-    href: `/portal/appointments/${a.id}`,
+    to: clientRecipient(a),
+    subject: `Appointment cancelled — ${appointmentDate(a)}`,
+    heading: 'Your appointment has been cancelled',
+    greeting: firstNameOf(a),
+    body: [
+      byStaff
+        ? `We regret to inform you that your appointment on ${appointmentWhen(a)} has been cancelled. ` +
+          'Our team will be in contact with you to arrange a new time.'
+        : `This email confirms that your appointment on ${appointmentWhen(a)} has been cancelled.`,
+      !byStaff && late
+        ? 'Please note that this cancellation was made less than 24 hours before the appointment. ' +
+          'In line with our cancellation policy, a late cancellation may be charged in full. ' +
+          'Our team will contact you regarding this.'
+        : '',
+      'You are welcome to book a new appointment whenever you are ready.',
+    ]
+      .filter(Boolean)
+      .join('\n\n'),
+    details: appointmentDetails(a),
+    links: [{ label: 'Book a new appointment', url: appUrl('/book') }],
+    href: appointmentHref(a),
+  });
+
+  await notify({
+    type: 'appointment.cancelled.staff',
+    audience: 'staff',
+    channels: ['in_app', 'email'],
+    to: PRACTICE_INBOX,
+    subject: `Cancelled — ${a.client?.name ?? 'Client'}, ${appointmentWhen(a)}`,
+    body:
+      `This appointment was cancelled ${byStaff ? 'by the practice' : 'by the client'}.` +
+      (late ? ' The cancellation falls within the 24-hour window.' : ''),
+    details: staffDetails(a),
+    href: `/admin/appointments?ref=${a.reference}`,
   });
 }
 
@@ -490,14 +702,24 @@ async function onAppointmentCompleted(appointmentId: ID) {
   if (!a) return;
   const settings = await getSettings();
 
+  // The session is over: nothing queued for it (including the next-morning
+  // check-in) should follow this message.
+  await withdrawQueuedNotificationLogs(appointmentHref(a), 'Session completed');
+
   await notify({
     type: 'appointment.completed',
     audience: 'client',
     channels: [...settings.reminders.channels, 'in_app'],
-    to: { email: a.client?.email, phone: a.client?.phone, userId: a.clientUserId },
-    subject: 'Session completed',
-    body: `Thank you for attending your session on ${appointmentWhen(a)}.`,
-    href: `/portal/appointments/${a.id}`,
+    to: clientRecipient(a),
+    subject: 'Thank you for your session',
+    heading: 'Thank you for your session',
+    greeting: firstNameOf(a),
+    body:
+      `Thank you for attending your session with Be Whole Care on ${appointmentWhen(a)}.\n\n` +
+      'When you are ready to book your next session, you are welcome to do so at any time. ' +
+      'Should you have any questions in the meantime, please reply to this email.',
+    links: [{ label: 'Book your next session', url: appUrl('/book') }],
+    href: appointmentHref(a),
   });
 }
 
@@ -511,38 +733,119 @@ async function onPaymentFailed(appointmentId: ID | null, reason?: string) {
     type: 'payment.failed',
     audience: 'client',
     channels: [...settings.reminders.channels, 'in_app'],
-    to: { email: a.client?.email, phone: a.client?.phone, userId: a.clientUserId },
-    subject: 'Payment was unsuccessful',
-    body: `We were unable to process your payment for the session on ${appointmentWhen(a)}.${reason ? ` Reason: ${reason}` : ''}`,
-    href: appointmentPaymentUrl(a.id),
+    to: clientRecipient(a),
+    subject: 'Your payment was unsuccessful',
+    heading: 'Your payment was unsuccessful',
+    greeting: firstNameOf(a),
+    body:
+      'Unfortunately, we were unable to process your payment for the appointment below.' +
+      (reason ? ` The reason given was: ${reason}.` : '') +
+      '\n\nYour appointment remains reserved for now. You may try the payment again using the button ' +
+      'below. Should you need assistance, please reply to this email.',
+    details: [...appointmentDetails(a), { label: 'Amount due', value: money(a.amountCents) }],
+    cta: { label: 'Try the payment again', url: appointmentPaymentUrl(a.id) },
+    href: appointmentHref(a),
   });
 }
 
-/* --------------------------------------------------- followup notifications */
+/* --------------------------------------------------- follow-up messages */
 
-export async function sendFollowUpPaymentRequest(
-  followUp: unknown,
-  paymentUrl?: string,
-): Promise<void> {
-  const followUpId = typeof followUp === 'string' ? followUp : (followUp as FollowUpView)?.id;
-  if (!followUpId) return;
-  await emit({ type: 'followup.payment_required', followUpId });
+/**
+ * Follow-up sessions a practitioner arranges from the dashboard.
+ *
+ * These used to only emit events that nothing handled, so no email was ever
+ * sent — a client asked to pay for a follow-up never received the request.
+ */
+async function followUpView(followUpId: ID): Promise<FollowUpView | null> {
+  const followUp = await getFollowUp(followUpId);
+  if (!followUp) return null;
+  const [hydrated] = await hydrateFollowUps([followUp]);
+  return hydrated ?? null;
 }
 
-export async function sendFollowUpConfirmed(
-  followUp: unknown,
-  ..._rest: unknown[]
-): Promise<void> {
-  const followUpId = typeof followUp === 'string' ? followUp : (followUp as FollowUpView)?.id;
-  if (!followUpId) return;
-  await emit({ type: 'followup.confirmed', followUpId });
+function followUpDetails(f: FollowUpView) {
+  const where =
+    f.mode === 'online'
+      ? 'Online session'
+      : f.location
+        ? `${f.location.name} — ${f.location.addressLine}, ${f.location.city}, ${f.location.postalCode}`
+        : 'In person';
+  return [
+    { label: 'Service', value: f.service.name },
+    {
+      label: 'Date',
+      value: `${formatFullDate(f.dueDate)}${f.preferredTime ? ` at ${displayTime(f.preferredTime)}` : ''}`,
+    },
+    { label: 'Location', value: where },
+  ];
 }
 
-export async function sendFollowUpReminder(
-  followUp: unknown,
-  ..._rest: unknown[]
-): Promise<void> {
-  const followUpId = typeof followUp === 'string' ? followUp : (followUp as FollowUpView)?.id;
-  if (!followUpId) return;
-  await emit({ type: 'followup.check_in', followUpId });
+function followUpRecipient(f: FollowUpView) {
+  return { email: f.client?.email, phone: f.client?.phone, userId: f.clientUserId };
+}
+
+export async function sendFollowUpPaymentRequest(followUpId: ID, paymentUrl?: string): Promise<void> {
+  const f = await followUpView(followUpId);
+  if (!f) return;
+
+  await notify({
+    type: 'followup.payment_required',
+    audience: 'client',
+    channels: [f.channel, 'in_app'],
+    to: followUpRecipient(f),
+    subject: `Your follow-up session — payment required to confirm`,
+    heading: 'Your follow-up session',
+    greeting: f.client?.name?.split(' ')[0] || null,
+    body:
+      'Your practitioner has arranged a follow-up session for you. The details are below.\n\n' +
+      'To confirm the session, please complete the payment using the button below. Once the payment ' +
+      'has been received, we will send you a confirmation.' +
+      (f.notes ? `\n\nA note from your practitioner: ${f.notes}` : ''),
+    details: [...followUpDetails(f), { label: 'Amount due', value: money(f.amountCents) }],
+    cta: paymentUrl ? { label: 'Complete payment', url: paymentUrl } : null,
+    href: '/portal/follow-ups',
+  });
+}
+
+export async function sendFollowUpConfirmed(followUpId: ID): Promise<void> {
+  const f = await followUpView(followUpId);
+  // Once the follow-up has become an appointment, that appointment's own
+  // confirmation is sent — sending this as well would be a duplicate.
+  if (!f || f.appointmentId) return;
+
+  await notify({
+    type: 'followup.confirmed',
+    audience: 'client',
+    channels: [f.channel, 'in_app'],
+    to: followUpRecipient(f),
+    subject: 'Your follow-up session is confirmed',
+    heading: 'Your follow-up session is confirmed',
+    greeting: f.client?.name?.split(' ')[0] || null,
+    body:
+      'Thank you. Your payment has been received and your follow-up session is confirmed. ' +
+      'Our team will be in contact to finalise the time if it has not yet been set.',
+    details: followUpDetails(f),
+    href: '/portal/follow-ups',
+  });
+}
+
+export async function sendFollowUpReminder(followUpId: ID): Promise<void> {
+  const f = await followUpView(followUpId);
+  if (!f) return;
+
+  await notify({
+    type: 'followup.reminder',
+    audience: 'client',
+    channels: [f.channel, 'in_app'],
+    to: followUpRecipient(f),
+    subject: `Your follow-up session — ${formatFullDate(f.dueDate)}`,
+    heading: 'Your follow-up session',
+    greeting: f.client?.name?.split(' ')[0] || null,
+    body:
+      'Your practitioner has arranged a follow-up session for you. The details are below.' +
+      (f.notes ? `\n\nA note from your practitioner: ${f.notes}` : '') +
+      '\n\nShould this time not suit you, please reply to this email and our team will assist you.',
+    details: followUpDetails(f),
+    href: '/portal/follow-ups',
+  });
 }
