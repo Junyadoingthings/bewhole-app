@@ -21,8 +21,26 @@ export interface SendInput {
   channels: NotificationChannel[];
   to: { email?: string | null; phone?: string | null; userId?: string | null };
   subject: string;
-  /** Plain text body. Email adapters wrap it in the branded HTML shell. */
+  /**
+   * The message itself, as paragraphs separated by a blank line. No greeting
+   * and no sign-off — client emails get both from the shell ("Dear …," and
+   * "Kind regards"), so every message opens and closes the same way.
+   *
+   * Never put a web address in here: a long unbroken URL cannot wrap, which
+   * forces the email wider than a phone screen and makes the mail app shrink
+   * the whole message to fit. Links belong in `cta` or `links`.
+   */
   body: string;
+  /** The heading inside the email. Defaults to the subject line. */
+  heading?: string;
+  /** The client's first name, for "Dear …,". Omit for staff messages. */
+  greeting?: string | null;
+  /**
+   * Secondary links shown as short, tappable lines under the details — e.g.
+   * "Add to Google Calendar". The label is what the reader sees; the URL
+   * never appears in the text.
+   */
+  links?: { label: string; url: string }[];
   /** Deep link included in the in-app notification. */
   href?: string | null;
   /**
@@ -77,7 +95,7 @@ const emailAdapter: Adapter = {
           reply_to: process.env.EMAIL_REPLY_TO ?? 'bewholecare@gmail.com',
           to: [input.to.email],
           subject: input.subject,
-          html: emailShell(input.subject, input.body, input.details, input.cta, Boolean(logo)),
+          html: emailShell(input, Boolean(logo)),
           text: plainText(input),
           // Embedded, not linked. A logo loaded from our own site failed
           // silently for as long as the domain had a problem — and even
@@ -140,7 +158,7 @@ const whatsappAdapter: Adapter = {
           messaging_product: 'whatsapp',
           to: normalizeMsisdn(input.to.phone),
           type: 'text',
-          text: { body: `${input.subject}\n\n${input.body}` },
+          text: { body: `${input.subject}\n\n${plainText(input)}` },
         }),
       });
       if (!res.ok) return { ok: false, error: `WhatsApp provider returned ${res.status}` };
@@ -208,8 +226,9 @@ export async function notify(input: SendInput): Promise<void> {
         channel,
         to: recipient,
         subject: input.subject,
-        // The worker that sends this later has nothing else to send.
-        body: input.body,
+        // The worker that sends this later has nothing else to send, so the
+        // whole message goes in — greeting, details and links included.
+        body: serializeQueued(input),
         href: input.href ?? null,
         status: 'queued',
         provider: adapter.live ? adapter.channel : `${adapter.channel}:log-only`,
@@ -248,12 +267,47 @@ function normalizeMsisdn(phone: string) {
  * text-only would get a confirmation with no date and no way to pay.
  */
 function plainText(input: SendInput): string {
-  const parts = [input.body];
+  const parts: string[] = [];
+  if (input.greeting) parts.push(`Dear ${input.greeting},`);
+  parts.push(input.body);
   if (input.details?.length) {
     parts.push(input.details.map((d) => `${d.label}: ${d.value}`).join('\n'));
   }
   if (input.cta) parts.push(`${input.cta.label}:\n${input.cta.url}`);
+  for (const link of input.links ?? []) parts.push(`${link.label}:\n${link.url}`);
+  if (isClientMessage(input)) parts.push(SIGN_OFF.join('\n'));
   return parts.join('\n\n');
+}
+
+const SIGN_OFF = ['Kind regards,', 'Be Whole Care'];
+
+function isClientMessage(input: SendInput) {
+  return (input.audience ?? 'client') === 'client';
+}
+
+/**
+ * Queued messages are stored whole, so the reminder the worker sends hours
+ * later has the same greeting, details and links as a message sent at once.
+ * Rows queued before this format existed hold plain text and are sent as
+ * they are.
+ */
+const QUEUED_PREFIX = 'bwc:v1:';
+
+function serializeQueued(input: SendInput): string {
+  const { subject, heading, body, greeting, details, cta, links, audience, type } = input;
+  return (
+    QUEUED_PREFIX +
+    JSON.stringify({ subject, heading, body, greeting, details, cta, links, audience, type })
+  );
+}
+
+function parseQueued(stored: string): Partial<SendInput> | null {
+  if (!stored.startsWith(QUEUED_PREFIX)) return null;
+  try {
+    return JSON.parse(stored.slice(QUEUED_PREFIX.length)) as Partial<SendInput>;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -275,13 +329,9 @@ function plainText(input: SendInput): string {
  * Light theme only, on purpose — the practice wants the same cream-and-white
  * email in every inbox, whatever the phone's appearance setting.
  */
-function emailShell(
-  subject: string,
-  body: string,
-  details?: { label: string; value: string }[],
-  cta?: { label: string; url: string } | null,
-  hasLogo = false,
-) {
+function emailShell(input: SendInput, hasLogo = false) {
+  const { subject, body, details, cta, links, greeting } = input;
+  const heading = input.heading ?? subject;
   const FOREST = '#14401A'; // forest-800 — the one accent colour, tailwind.config.ts
   const INK = '#1C231A';
   const INK_SOFT = '#5B6357';
@@ -319,13 +369,28 @@ function emailShell(
     restore('data-ogsc', 'bwc-on-accent', 'color', '#FFFFFF'),
   ].join('\n');
 
-  const paragraphs = body
-    .split('\n\n')
-    .map(
-      (p) =>
-        `<p class="bwc-soft" style="margin:0 0 15px;font-size:16px;line-height:1.6;color:${INK_SOFT};">${escapeHtml(p).replace(/\n/g, '<br/>')}</p>`,
-    )
-    .join('');
+  /**
+   * Every text block may wrap anywhere. A single long unbroken string — a web
+   * address, a reference — used to push the email wider than a phone screen,
+   * and the mail app then shrank the entire message to fit, so it displayed at
+   * a fraction of its size. `overflow-wrap:anywhere` keeps any such string
+   * inside the card.
+   */
+  const WRAP = 'word-break:break-word;overflow-wrap:anywhere;';
+
+  const paragraph = (text: string, extra = '') =>
+    `<p class="bwc-soft" style="margin:0 0 16px;font-size:16px;line-height:1.65;color:${INK_SOFT};${WRAP}${extra}">${escapeHtml(text).replace(/\n/g, '<br/>')}</p>`;
+
+  const isClient = isClientMessage(input);
+  const salutation = greeting ? paragraph(`Dear ${greeting},`, `color:${INK};`) : '';
+  const paragraphs = body.split('\n\n').filter(Boolean).map((p) => paragraph(p)).join('');
+  const signOff = isClient
+    ? `<p class="bwc-soft" style="margin:8px 0 0;font-size:16px;line-height:1.65;color:${INK_SOFT};">${SIGN_OFF[0]}<br/><span class="bwc-ink" style="color:${INK};font-weight:600;">${SIGN_OFF[1]}</span></p>`
+    : '';
+
+  // The line most inboxes show under the subject. Without it they show the
+  // first text they find, which is the logo's alt text.
+  const preheader = escapeHtml(body.split('\n\n')[0]?.replace(/\n/g, ' ').slice(0, 140) ?? '');
 
   /**
    * The receipt block: each fact on its own row, label first in small caps,
@@ -339,7 +404,7 @@ function emailShell(
       const border = i === 0 ? '' : `border-top:1px solid ${HAIRLINE};`;
       return `<tr><td style="padding:${i === 0 ? '0 0 16px' : '16px 0'};${border}">
            <div class="bwc-faint" style="font-size:11px;line-height:1.4;letter-spacing:0.06em;text-transform:uppercase;color:${INK_FAINT};margin:${i === 0 ? '0' : '15px'} 0 5px;">${escapeHtml(d.label)}</div>
-           <div class="bwc-ink" style="font-size:17px;line-height:1.35;color:${INK};font-weight:600;">${escapeHtml(d.value)}</div>
+           <div class="bwc-ink" style="font-size:17px;line-height:1.35;color:${INK};font-weight:600;${WRAP}">${escapeHtml(d.value)}</div>
          </td></tr>`;
     })
     .join('');
@@ -363,9 +428,24 @@ function emailShell(
            </a>
          </td></tr>
        </table>
-       <p class="bwc-faint" style="margin:0 0 4px;font-size:12px;line-height:1.6;color:${INK_FAINT};word-break:break-all;">
-         If the button does not work, copy this into your browser:<br/>${escapeHtml(cta.url)}
+       <p class="bwc-faint" style="margin:0 0 22px;font-size:12px;line-height:1.6;color:${INK_FAINT};">
+         If the button does not work, copy this address into your browser:<br/>
+         <span style="font-size:11px;line-height:1.5;word-break:break-all;overflow-wrap:anywhere;">${escapeHtml(cta.url)}</span>
        </p>`
+    : '';
+
+  // Secondary links: a short label the reader can tap, never the address
+  // itself. Separated from the details by the same hairline.
+  const linkRows = (links ?? [])
+    .map(
+      (l) =>
+        `<tr><td style="padding:12px 0;border-top:1px solid ${HAIRLINE};">
+           <a class="bwc-brand" href="${escapeHtml(l.url)}" style="font-size:15px;font-weight:600;color:${FOREST};text-decoration:none;">${escapeHtml(l.label)}&nbsp;&rsaquo;</a>
+         </td></tr>`,
+    )
+    .join('');
+  const linkBlock = linkRows
+    ? `<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin:0 0 24px;">${linkRows}</table>`
     : '';
 
   // The logo lives on the outer canvas, above the card — not boxed inside it —
@@ -377,40 +457,61 @@ function emailShell(
     : `<div class="bwc-brand" style="font-family:-apple-system,'SF Pro Display',Segoe UI,Helvetica,Arial,sans-serif;font-size:20px;font-weight:700;color:${FOREST};letter-spacing:-0.01em;">Be Whole Care</div>`;
 
   return `<!doctype html>
-<html>
+<html lang="en">
   <head>
+    <meta charset="utf-8" />
+    <!--
+      Render at the phone's own width. Without this some mail apps lay the
+      email out at desktop width and then scale it down to fit the screen.
+    -->
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="x-apple-disable-message-reformatting" />
     <meta name="color-scheme" content="light only" />
     <meta name="supported-color-schemes" content="light only" />
+    <title>${escapeHtml(subject)}</title>
     <style>${LIGHT_ONLY_CSS}</style>
   </head>
   <body class="bwc-canvas" style="margin:0;background:${CANVAS};padding:0;font-family:-apple-system,'SF Pro Text',Segoe UI,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased;">
+    <div style="display:none;max-height:0;overflow:hidden;opacity:0;mso-hide:all;">${preheader}</div>
     <!--
       The canvas colour is carried by this full-width table as well as <body>,
       because several clients discard the body's styles; bgcolor is the
       attribute form some of them fall back to.
     -->
     <table class="bwc-canvas" role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="${CANVAS}" style="background-color:${CANVAS};"><tr><td align="center" style="padding:40px 16px;">
-      <table role="presentation" width="100%" style="max-width:480px;">
+      <!--[if mso]><table role="presentation" width="480" align="center" cellpadding="0" cellspacing="0"><tr><td><![endif]-->
+      <!-- Desktop Outlook ignores max-width; the conditional table above holds it to 480px. -->
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:480px;margin:0 auto;">
         <tr><td align="center" style="padding-bottom:24px;">
           ${logoBlock}
         </td></tr>
         <tr><td>
-          <table class="bwc-card" role="presentation" width="100%" bgcolor="${CARD}" style="background-color:${CARD};border-radius:28px;">
+          <table class="bwc-card" role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="${CARD}" style="background-color:${CARD};border-radius:28px;">
             <tr><td style="padding:36px 32px 32px;">
-              <h1 class="bwc-ink" style="margin:0 0 18px;font-size:23px;line-height:1.3;color:${INK};font-weight:700;letter-spacing:-0.01em;">${escapeHtml(subject)}</h1>
+              <h1 class="bwc-ink" style="margin:0 0 20px;font-size:23px;line-height:1.3;color:${INK};font-weight:700;letter-spacing:-0.01em;${WRAP}">${escapeHtml(heading)}</h1>
+              ${salutation}
               ${paragraphs}
               ${detailBlock}
               ${ctaBlock}
+              ${linkBlock}
+              ${signOff}
             </td></tr>
           </table>
         </td></tr>
         <tr><td style="padding:28px 16px 0;">
           <div class="bwc-faint" style="font-size:12px;line-height:1.7;color:${INK_FAINT};text-align:center;">
-            Be Whole Care &middot; 063 883 7170 &middot; bewholecare@gmail.com<br/>
+            <strong style="font-weight:600;">Be Whole Care</strong> &middot; Professional counselling services<br/>
+            063 883 7170 &middot; bewholecare@gmail.com<br/>
             A renewed mind, a prospering soul.
           </div>
+          ${
+            isClient
+              ? `<div class="bwc-faint" style="margin-top:14px;font-size:11px;line-height:1.6;color:${INK_FAINT};text-align:center;">You may reply to this email to reach our team directly.</div>`
+              : ''
+          }
         </td></tr>
       </table>
+      <!--[if mso]></td></tr></table><![endif]-->
     </td></tr></table>
   </body>
 </html>`;
@@ -421,7 +522,8 @@ function escapeHtml(value: string) {
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
 export function activeChannels(): { channel: NotificationChannel; live: boolean }[] {
@@ -451,11 +553,16 @@ export async function sendQueued(input: {
   if (!adapter) return { ok: false, error: `Unknown channel ${input.channel}` };
 
   const isEmail = input.channel === 'email';
+  const stored = parseQueued(input.body);
   return adapter.send({
+    // Structured rows carry the full message. Older plain-text rows (queued
+    // before this format) are client reminders that already open with their
+    // own "Hi …", so they are sent with no greeting added.
+    ...(stored ?? { audience: 'client' as const }),
     channels: [input.channel],
     to: { email: isEmail ? input.to : null, phone: isEmail ? null : input.to },
     subject: input.subject,
-    body: input.body,
-    type: 'reminder.dispatch',
+    body: stored?.body ?? input.body,
+    type: stored?.type ?? 'reminder.dispatch',
   });
 }

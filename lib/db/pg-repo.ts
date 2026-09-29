@@ -1054,6 +1054,22 @@ export async function markNotificationLogResult(
     where id = ${id}`;
 }
 
+/**
+ * Withdraw messages still waiting to be sent for one link (an appointment's
+ * page), e.g. the reminders for a session that was cancelled or moved.
+ * Recorded as failed with the reason, because the schema allows only
+ * queued/sent/failed — a withdrawn reminder stays visible in the log.
+ */
+export async function withdrawQueuedNotificationLogs(href: string, reason: string): Promise<number> {
+  const sql = getSql();
+  const rows = await sql`
+    update notification_logs
+    set status = 'failed', error = ${reason}
+    where status = 'queued' and href = ${href}
+    returning id`;
+  return rows.length;
+}
+
 /* ---------------------------------------------------------------- content */
 
 export async function listResources(publishedOnly = true): Promise<Resource[]> {

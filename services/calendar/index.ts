@@ -199,14 +199,11 @@ const mockProvider: CalendarProvider = {
   async createOrUpdate(input: CalendarEventInput): Promise<CalendarResult> {
     const externalId = deterministicEventId(input.appointmentId);
     mockEvents.set(externalId, input);
-    return {
-      ok: true,
-      externalId,
-      htmlLink: null,
-      meetLink: input.conference
-        ? `https://meet.google.com/lookup/${externalId.slice(3, 13)}`
-        : null,
-    };
+    // No meeting link. This used to return a made-up Google Meet address,
+    // which was emailed to real clients whenever Google Calendar was not
+    // connected — and it led nowhere. Without a real calendar there is no
+    // link; staff add one on the appointment instead.
+    return { ok: true, externalId, htmlLink: null, meetLink: null };
   },
 
   async cancel(externalId: string): Promise<CalendarResult> {

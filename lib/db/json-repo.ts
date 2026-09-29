@@ -557,6 +557,21 @@ export async function markNotificationLogResult(
   });
 }
 
+/** See the Postgres version: withdraws unsent messages for one link. */
+export async function withdrawQueuedNotificationLogs(href: string, reason: string): Promise<number> {
+  return transact((db) => {
+    let count = 0;
+    for (const log of db.notificationLogs) {
+      if (log.status === 'queued' && log.href === href) {
+        log.status = 'failed';
+        log.error = reason;
+        count++;
+      }
+    }
+    return count;
+  });
+}
+
 export async function listNotificationLogsForUser(email: string) {
   const db = await getDb();
   return db.notificationLogs.filter((l) => l.to === email);

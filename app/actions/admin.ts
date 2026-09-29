@@ -101,7 +101,13 @@ export async function setSessionLink(appointmentId: string, link: string): Promi
   if (trimmed && !/^https?:\/\//i.test(trimmed)) {
     return { ok: false, error: 'Please paste a full link starting with https://' };
   }
+  const before = await getAppointment(appointmentId);
   await updateAppointment(appointmentId, { sessionLink: trimmed || null });
+  // Send the client the link (and refresh their reminders) when it is new —
+  // saving the same link again should not email them twice.
+  if (trimmed && trimmed !== before?.sessionLink) {
+    await emit({ type: 'appointment.session_link_added', appointmentId });
+  }
   revalidatePath('/admin/appointments');
   return { ok: true };
 }
@@ -114,7 +120,9 @@ export async function retryCalendarSync(appointmentId: string): Promise<AdminRes
   if (appointment.status !== 'confirmed') {
     return { ok: false, error: 'Only a confirmed appointment syncs to the calendar.' };
   }
-  await emit({ type: 'appointment.confirmed', appointmentId });
+  // Calendar only. This used to re-run the whole confirmation, so retrying a
+  // sync re-emailed the client and re-queued their reminders.
+  await emit({ type: 'appointment.calendar_sync', appointmentId });
   const event = await getCalendarEventForAppointment(appointmentId);
   if (event && event.status === 'failed') {
     return { ok: false, error: event.lastError ?? 'Calendar sync failed again.' };

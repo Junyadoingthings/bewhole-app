@@ -196,8 +196,13 @@ export async function register(_prev: AuthState, formData: FormData): Promise<Au
       audience: 'client',
       channels: ['email', 'in_app'],
       to: { email: user.email, userId: user.id },
-      subject: 'Your Be Whole Care account',
-      body: `Hi ${parsed.data.firstName},\n\nYour account is ready. You can book sessions, see your appointment history and manage everything from your portal.\n\nWe're glad you're here.`,
+      subject: 'Welcome to Be Whole Care',
+      heading: 'Your account has been created',
+      greeting: parsed.data.firstName,
+      body:
+        'Thank you for creating an account with Be Whole Care. Your account is now active.\n\n' +
+        'Through your client portal you may book sessions, view your appointment history and manage ' +
+        'your details. We are glad to welcome you.',
       href: '/portal',
     }),
     undefined,
@@ -240,8 +245,13 @@ export async function requestPasswordReset(_prev: AuthState, formData: FormData)
       audience: 'client',
       channels: ['email'],
       to: { email: user.email, userId: user.id },
-      subject: 'Set your Be Whole Care password',
-      body: 'You asked to set or reset your password.\n\nOur team will confirm your identity and send you a secure link. If you did not request this, you can ignore this message — nothing has changed on your account.',
+      subject: 'Your password request',
+      heading: 'We have received your password request',
+      body:
+        'We have received a request to set or reset the password for your Be Whole Care account.\n\n' +
+        'A member of our team will verify your identity and send you a secure link to complete the ' +
+        'process. If you did not make this request, no action is required and your account remains ' +
+        'unchanged.',
     });
     await audit({
       actorUserId: user.id,
