@@ -56,17 +56,20 @@ export default async function PortalSettingsPage() {
                 Immediately
               </Badge>
             </li>
-            <li className="flex items-center justify-between gap-4">
-              <span className="text-ink-muted">First reminder</span>
-              <Badge tone="neutral" size="sm">
-                {settings.reminders.firstReminderHours} hours before
-              </Badge>
-            </li>
-            {settings.reminders.secondReminderHours && (
+            {/* Reminders go out at 06:00; the settings only switch them on or off. */}
+            {Boolean(settings.reminders.firstReminderHours) && (
+              <li className="flex items-center justify-between gap-4">
+                <span className="text-ink-muted">First reminder</span>
+                <Badge tone="neutral" size="sm">
+                  The morning before
+                </Badge>
+              </li>
+            )}
+            {Boolean(settings.reminders.secondReminderHours) && (
               <li className="flex items-center justify-between gap-4">
                 <span className="text-ink-muted">Second reminder</span>
                 <Badge tone="neutral" size="sm">
-                  {settings.reminders.secondReminderHours} hours before
+                  The morning of your session
                 </Badge>
               </li>
             )}

@@ -120,7 +120,8 @@ const SETTINGS = {
   business: {
     name: 'Be Whole Care',
     email: 'bewholecare@gmail.com',
-    phone: '', // EDITED: Removed phone number to hide the "Need help?" button
+    // Printed on receipts. (The "Need help?" button reads config/business.ts.)
+    phone: '063 883 7170',
     whatsapp: '27638837170',
     website: 'www.bewholecare.co.za',
     timezone: 'Africa/Johannesburg',

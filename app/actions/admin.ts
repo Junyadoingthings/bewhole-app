@@ -10,11 +10,7 @@ import {
   deleteAvailabilityBlock,
   getAppointment,
   getPayment,
-  markNotificationsRead,
   updateAppointment,
-  updateResource,
-  updateService,
-  updateSettings,
 } from '@/lib/db';
 import { noteSchema, fieldErrors } from '@/lib/validation';
 import { cancelAppointment, decideMedicalAid, markAppointmentStatus } from '@/services/booking.service';
@@ -194,56 +190,6 @@ export async function addClientNote(input: unknown): Promise<AdminResult> {
   return { ok: true };
 }
 
-/* ---------------------------------------------------------------- catalogue */
-
-export async function updateServicePricing(
-  serviceId: string,
-  input: { priceInPersonRands: number; priceOnlineRands: number; active: boolean },
-): Promise<AdminResult> {
-  const actor = await requireAdmin();
-  if (input.priceInPersonRands < 0 || input.priceOnlineRands < 0) {
-    return { ok: false, error: 'Prices cannot be negative.' };
-  }
-
-  await updateService(serviceId, {
-    priceInPersonCents: Math.round(input.priceInPersonRands * 100),
-    priceOnlineCents: Math.round(input.priceOnlineRands * 100),
-    active: input.active,
-  });
-
-  await audit({
-    actorUserId: actor.id,
-    actorRole: actor.role,
-    action: 'service.updated',
-    entity: 'service',
-    entityId: serviceId,
-    meta: input as unknown as Record<string, unknown>,
-  });
-
-  revalidatePath('/admin/services');
-  revalidatePath('/services');
-  revalidatePath('/book');
-  return { ok: true };
-}
-
-export async function toggleResourcePublished(
-  resourceId: string,
-  published: boolean,
-): Promise<AdminResult> {
-  const actor = await requireStaff();
-  await updateResource(resourceId, { published });
-  await audit({
-    actorUserId: actor.id,
-    actorRole: actor.role,
-    action: published ? 'resource.published' : 'resource.unpublished',
-    entity: 'resource',
-    entityId: resourceId,
-  });
-  revalidatePath('/admin/resources');
-  revalidatePath('/resources');
-  return { ok: true };
-}
-
 /* ------------------------------------------------------------- availability */
 
 export async function blockTime(input: {
@@ -285,35 +231,5 @@ export async function unblockTime(blockId: string): Promise<AdminResult> {
   await deleteAvailabilityBlock(blockId);
   revalidatePath('/admin/calendar');
   revalidatePath('/book');
-  return { ok: true };
-}
-
-/* ----------------------------------------------------------------- settings */
-
-export async function saveSettings(patch: unknown): Promise<AdminResult> {
-  const actor = await requireAdmin();
-  const data = patch as Record<string, unknown>;
-
-  await updateSettings(data as never);
-  await audit({
-    actorUserId: actor.id,
-    actorRole: actor.role,
-    action: 'settings.updated',
-    entity: 'settings',
-    meta: { keys: Object.keys(data) },
-  });
-
-  revalidatePath('/admin/settings');
-  revalidatePath('/book');
-  return { ok: true };
-}
-
-/* ------------------------------------------------------------ notifications */
-
-export async function markNotificationsSeen(ids: string[]): Promise<AdminResult> {
-  await requireStaff();
-  await markNotificationsRead(ids);
-  revalidatePath('/admin/notifications');
-  revalidatePath('/admin');
   return { ok: true };
 }

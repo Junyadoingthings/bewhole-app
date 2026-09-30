@@ -86,7 +86,7 @@ export async function registerNakedVowsInterest(
       { label: 'Email', value: data.email },
       { label: 'Phone', value: data.phone },
     ],
-    href: '/admin/notifications',
+    href: '/admin',
   });
 
   await notify({
