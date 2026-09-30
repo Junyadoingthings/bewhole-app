@@ -12,6 +12,7 @@ import { BUSINESS } from '@/config/business';
 import { requireUser } from '@/lib/auth';
 import { displayTime, formatFullDate, parts, relativeDay } from '@/lib/date';
 import { getAppointment, hydrateAppointments, listPaymentEvents } from '@/lib/db';
+import { joinLinkFor } from '@/lib/session-link';
 import { money } from '@/lib/utils';
 import { checkCancellationPolicy } from '@/services/booking.service';
 
@@ -32,6 +33,7 @@ export default async function AppointmentDetailPage({
   if (!appointment || appointment.clientUserId !== user.id) notFound();
 
   const [view] = await hydrateAppointments([appointment]);
+  const joinLink = joinLinkFor(view);
   const policy = await checkCancellationPolicy(appointment.id);
   const events = view.payment ? await listPaymentEvents(view.payment.id) : [];
 
@@ -95,14 +97,14 @@ export default async function AppointmentDetailPage({
         </div>
       </Reveal>
 
-      {view.mode === 'online' && view.sessionLink && view.status === 'confirmed' && (
+      {joinLink && (
         <Reveal delay={0.05}>
           <div className="mt-8 rounded-3xl bg-forest-900 p-6 text-cream-100 sm:p-8">
             <p className="text-2xs font-medium uppercase tracking-[0.16em] text-forest-300">
               Your session link
             </p>
             <a
-              href={view.sessionLink}
+              href={joinLink}
               target="_blank"
               rel="noreferrer noopener"
               className="mt-3 inline-flex h-13 items-center gap-2 rounded-full bg-cream-100 dark:bg-card px-6 text-[0.95rem] font-medium text-forest-900 dark:text-forest-200 transition-all duration-200 hover:-translate-y-0.5 hover:bg-white"
@@ -110,7 +112,7 @@ export default async function AppointmentDetailPage({
               <Video className="h-4 w-4" />
               Join session
             </a>
-            <p className="mt-4 break-all text-sm text-cream-100/55">{view.sessionLink}</p>
+            <p className="mt-4 break-all text-sm text-cream-100/55">{joinLink}</p>
           </div>
         </Reveal>
       )}
@@ -192,7 +194,7 @@ export default async function AppointmentDetailPage({
               end: view.endAt,
               location:
                 view.mode === 'online'
-                  ? (view.sessionLink ?? 'Online session')
+                  ? (joinLink ?? 'Online session')
                   : `${view.location?.addressLine}, ${view.location?.city}`,
               details: `Reference ${view.reference}.`,
               reference: view.reference,

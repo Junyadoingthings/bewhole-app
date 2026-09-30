@@ -26,11 +26,24 @@ export interface SendInput {
    * and no sign-off — client emails get both from the shell ("Dear …," and
    * "Kind regards"), so every message opens and closes the same way.
    *
-   * Never put a web address in here: a long unbroken URL cannot wrap, which
-   * forces the email wider than a phone screen and makes the mail app shrink
-   * the whole message to fit. Links belong in `cta` or `links`.
+   * Never put a long web address inside a sentence: a long unbroken URL
+   * cannot wrap, which forces the email wider than a phone screen and makes
+   * the mail app shrink the whole message to fit. Links belong in `cta`,
+   * `links`, or a paragraph of their own (below).
+   *
+   * A few paragraph forms lay out an email the practice has worded itself:
+   *   "## Title"        a section heading
+   *   "• item" lines    a bulleted list (lines before the first are its lead-in)
+   *   a bare https URL  a tappable link, shown as written
+   *   "{{details}}"     where the details block goes (default: after the body)
+   *   "{{cta}}"         where the button goes (default: after the details)
    */
   body: string;
+  /**
+   * Replaces the default "Kind regards, Be Whole Care". First line is the
+   * closing ("Warm regards,"), second the name, the rest smaller beneath it.
+   */
+  signOff?: string[];
   /** The heading inside the email. Defaults to the subject line. */
   heading?: string;
   /** The client's first name, for "Dear …,". Omit for staff messages. */
@@ -267,19 +280,33 @@ function normalizeMsisdn(phone: string) {
  * text-only would get a confirmation with no date and no way to pay.
  */
 function plainText(input: SendInput): string {
+  const details = input.details?.length
+    ? input.details.map((d) => `${d.label}: ${d.value}`).join('\n')
+    : '';
+  const cta = input.cta ? `${input.cta.label}:\n${input.cta.url}` : '';
+  const blocks = input.body.split('\n\n').filter(Boolean);
+  const hasDetailsSlot = blocks.some((b) => b.trim() === DETAILS_SLOT);
+  const hasCtaSlot = blocks.some((b) => b.trim() === CTA_SLOT);
+
   const parts: string[] = [];
   if (input.greeting) parts.push(`Dear ${input.greeting},`);
-  parts.push(input.body);
-  if (input.details?.length) {
-    parts.push(input.details.map((d) => `${d.label}: ${d.value}`).join('\n'));
+  for (const block of blocks) {
+    const text = block.trim();
+    if (text === DETAILS_SLOT) parts.push(details);
+    else if (text === CTA_SLOT) parts.push(cta);
+    else if (text.startsWith('## ')) parts.push(text.slice(3));
+    else parts.push(block);
   }
-  if (input.cta) parts.push(`${input.cta.label}:\n${input.cta.url}`);
+  if (!hasDetailsSlot) parts.push(details);
+  if (!hasCtaSlot) parts.push(cta);
   for (const link of input.links ?? []) parts.push(`${link.label}:\n${link.url}`);
-  if (isClientMessage(input)) parts.push(SIGN_OFF.join('\n'));
-  return parts.join('\n\n');
+  if (isClientMessage(input)) parts.push((input.signOff ?? SIGN_OFF).join('\n'));
+  return parts.filter(Boolean).join('\n\n');
 }
 
 const SIGN_OFF = ['Kind regards,', 'Be Whole Care'];
+const DETAILS_SLOT = '{{details}}';
+const CTA_SLOT = '{{cta}}';
 
 function isClientMessage(input: SendInput) {
   return (input.audience ?? 'client') === 'client';
@@ -294,10 +321,10 @@ function isClientMessage(input: SendInput) {
 const QUEUED_PREFIX = 'bwc:v1:';
 
 function serializeQueued(input: SendInput): string {
-  const { subject, heading, body, greeting, details, cta, links, audience, type } = input;
+  const { subject, heading, body, greeting, details, cta, links, signOff, audience, type } = input;
   return (
     QUEUED_PREFIX +
-    JSON.stringify({ subject, heading, body, greeting, details, cta, links, audience, type })
+    JSON.stringify({ subject, heading, body, greeting, details, cta, links, signOff, audience, type })
   );
 }
 
@@ -383,14 +410,45 @@ function emailShell(input: SendInput, hasLogo = false) {
 
   const isClient = isClientMessage(input);
   const salutation = greeting ? paragraph(`Dear ${greeting},`, `color:${INK};`) : '';
-  const paragraphs = body.split('\n\n').filter(Boolean).map((p) => paragraph(p)).join('');
+
+  const [closing, name, ...credentials] = input.signOff ?? SIGN_OFF;
   const signOff = isClient
-    ? `<p class="bwc-soft" style="margin:8px 0 0;font-size:16px;line-height:1.65;color:${INK_SOFT};">${SIGN_OFF[0]}<br/><span class="bwc-ink" style="color:${INK};font-weight:600;">${SIGN_OFF[1]}</span></p>`
+    ? `<p class="bwc-soft" style="margin:8px 0 0;font-size:16px;line-height:1.65;color:${INK_SOFT};">${escapeHtml(closing)}<br/><span class="bwc-ink" style="color:${INK};font-weight:600;">${escapeHtml(name ?? '')}</span>${credentials
+        .map((line) => `<br/><span class="bwc-soft" style="font-size:14px;line-height:1.6;color:${INK_SOFT};">${escapeHtml(line)}</span>`)
+        .join('')}</p>`
     : '';
+
+  const sectionHeading = (text: string) =>
+    `<h2 class="bwc-ink" style="margin:28px 0 12px;font-size:17px;line-height:1.35;color:${INK};font-weight:700;${WRAP}">${escapeHtml(text)}</h2>`;
+
+  // Shown as written. <wbr> after each "/" and "." lets a long address wrap
+  // at a natural point ("…psychologytoday.com/" | "bewholecare") instead of
+  // mid-word; `overflow-wrap:anywhere` stays as the last resort.
+  const linkParagraph = (url: string) =>
+    `<p style="margin:0 0 16px;font-size:15px;line-height:1.6;${WRAP}"><a class="bwc-brand" href="${escapeHtml(url)}" style="color:${FOREST};font-weight:600;text-decoration:underline;${WRAP}">${escapeHtml(url).replace(/([/.])(?=[^/])/g, '$1<wbr>')}</a></p>`;
+
+  // A lead-in ("Kindly ensure that you:") followed by "• " lines. A table,
+  // not <ul>: Outlook's Word engine indents lists unpredictably.
+  const bulletList = (block: string) => {
+    const lines = block.split('\n');
+    const lead = lines.filter((l) => !l.startsWith('• ')).join('\n');
+    const items = lines
+      .filter((l) => l.startsWith('• '))
+      .map(
+        (l) =>
+          `<tr><td valign="top" class="bwc-soft" style="width:18px;padding:0 0 8px;font-size:16px;line-height:1.6;color:${INK_SOFT};">&bull;</td><td class="bwc-soft" style="padding:0 0 8px;font-size:16px;line-height:1.6;color:${INK_SOFT};${WRAP}">${escapeHtml(l.slice(2))}</td></tr>`,
+      )
+      .join('');
+    return `${lead ? paragraph(lead, 'margin-bottom:8px;') : ''}<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin:0 0 16px;">${items}</table>`;
+  };
 
   // The line most inboxes show under the subject. Without it they show the
   // first text they find, which is the logo's alt text.
-  const preheader = escapeHtml(body.split('\n\n')[0]?.replace(/\n/g, ' ').slice(0, 140) ?? '');
+  const firstSentence = body
+    .split('\n\n')
+    .map((b) => b.trim())
+    .find((b) => b && !b.startsWith('{{') && !b.startsWith('## '));
+  const preheader = escapeHtml(firstSentence?.replace(/\n/g, ' ').slice(0, 140) ?? '');
 
   /**
    * The receipt block: each fact on its own row, label first in small caps,
@@ -448,6 +506,30 @@ function emailShell(input: SendInput, hasLogo = false) {
     ? `<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin:0 0 24px;">${linkRows}</table>`
     : '';
 
+  // The body, in order, with the details block and the button placed wherever
+  // the message puts {{details}} / {{cta}} (after the text when it does not).
+  let detailsPlaced = false;
+  let ctaPlaced = false;
+  const paragraphs = body
+    .split('\n\n')
+    .filter(Boolean)
+    .map((block) => {
+      const text = block.trim();
+      if (text === DETAILS_SLOT) {
+        detailsPlaced = true;
+        return detailBlock;
+      }
+      if (text === CTA_SLOT) {
+        ctaPlaced = true;
+        return ctaBlock;
+      }
+      if (text.startsWith('## ')) return sectionHeading(text.slice(3));
+      if (/^https?:\/\/\S+$/.test(text)) return linkParagraph(text);
+      if (text.split('\n').some((l) => l.startsWith('• '))) return bulletList(text);
+      return paragraph(text);
+    })
+    .join('');
+
   // The logo lives on the outer canvas, above the card — not boxed inside it —
   // exactly where Apple's own receipt emails place their icon. A recipient
   // whose mail client is still fetching the attachment (or has none) sees the
@@ -491,8 +573,8 @@ function emailShell(input: SendInput, hasLogo = false) {
               <h1 class="bwc-ink" style="margin:0 0 20px;font-size:23px;line-height:1.3;color:${INK};font-weight:700;letter-spacing:-0.01em;${WRAP}">${escapeHtml(heading)}</h1>
               ${salutation}
               ${paragraphs}
-              ${detailBlock}
-              ${ctaBlock}
+              ${detailsPlaced ? '' : detailBlock}
+              ${ctaPlaced ? '' : ctaBlock}
               ${linkBlock}
               ${signOff}
             </td></tr>

@@ -147,6 +147,31 @@ export const LOCATIONS = [
   },
 ] as const;
 
+/**
+ * What confirmed clients are sent, as specified by the practice.
+ *
+ * The session link and street addresses go out only once a booking is
+ * confirmed — after payment, or once the practice has accepted the medical
+ * aid — never in a "booking received" or "payment required" email.
+ */
+export const CLIENT_EMAIL = {
+  /** Every online session is held here. */
+  onlineSessionLink: 'https://sessions.psychologytoday.com/bewholecare',
+  /** In-person addresses, by location slug, exactly as the practice gives them. */
+  practiceAddresses: {
+    centurion: '56 Van Ryneveld Avenue, Die Hoewes, Centurion',
+    tembisa: '1423 Flint Mazibuko Street, Hospital View, Tembisa',
+  } as Record<string, string>,
+  /** Sent when the medical aid does not cover counselling. */
+  medicalAidDeclinedPaymentLink: 'https://pay.yoco.com/r/4gWv8B',
+  practitioner: {
+    name: 'Ntombi Mothoagae',
+    title: 'Registered Counsellor (HPCSA)',
+    registration: 'PRC0038660',
+    practiceNumber: '1096974',
+  },
+} as const;
+
 /** Session defaults — 60 minutes, appointment only, online or in-person. */
 export const SESSION_DEFAULTS = {
   durationMinutes: 60,

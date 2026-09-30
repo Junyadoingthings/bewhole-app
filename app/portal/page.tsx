@@ -27,6 +27,7 @@ import {
   listPayments,
   listResources,
 } from '@/lib/db';
+import { joinLinkFor } from '@/lib/session-link';
 import { money } from '@/lib/utils';
 
 export const metadata: Metadata = { title: 'Your portal', robots: { index: false } };
@@ -247,9 +248,9 @@ function NextSessionCard({ appointment }: { appointment: Awaited<ReturnType<type
         </div>
 
         <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-          {appointment.mode === 'online' && appointment.sessionLink && !pending ? (
+          {joinLinkFor(appointment) ? (
             <a
-              href={appointment.sessionLink}
+              href={joinLinkFor(appointment) ?? undefined}
               target="_blank"
               rel="noreferrer noopener"
               className="inline-flex h-13 items-center justify-center gap-2 rounded-full bg-cream-100 dark:bg-card px-7 text-[0.95rem] font-medium text-forest-900 dark:text-forest-200 transition-all duration-200 hover:-translate-y-0.5 hover:bg-white"
@@ -271,7 +272,7 @@ function NextSessionCard({ appointment }: { appointment: Awaited<ReturnType<type
           </ButtonLink>
         </div>
 
-        {appointment.mode === 'online' && !appointment.sessionLink && !pending && (
+        {appointment.mode === 'online' && !joinLinkFor(appointment) && !pending && (
           <p className="mt-5 text-sm text-cream-100/55">
             Your session link will appear here before we meet — we send it with your reminder too.
           </p>
