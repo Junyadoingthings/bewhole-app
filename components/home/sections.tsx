@@ -459,7 +459,7 @@ export function ClosingCta() {
               </ButtonLink>
             </div>
             <p className="mt-8 text-sm text-cream-100/50">
-              Call or WhatsApp {BUSINESS.phone} · Mon–Fri 08:00–17:00, Sat 08:00–12:00
+              Call or WhatsApp {BUSINESS.phone} · Mon–Fri 09:00–17:00, Sat 09:00–13:00
             </p>
           </div>
         </div>

@@ -11,13 +11,12 @@ import {
   getSettings,
   hydrateAppointments,
   hydrateFollowUps,
-  updateAppointment,
   upsertCalendarEvent,
   withdrawQueuedNotificationLogs,
   newId,
   nowISO,
 } from '@/lib/db';
-import { BUSINESS } from '@/config/business';
+import { BUSINESS, CLIENT_EMAIL } from '@/config/business';
 import { addISODays, displayTime, formatFullDate, fromLocalParts, parts } from '@/lib/date';
 import { appUrl, appointmentPaymentUrl } from '@/lib/links';
 import { money } from '@/lib/utils';
@@ -153,11 +152,6 @@ function appointmentWhen(a: AppointmentView) {
   return `${formatFullDate(p.date)} at ${displayTime(p.time)}`;
 }
 
-/** "Wednesday, 30 September 2026" — for subject lines. */
-function appointmentDate(a: AppointmentView) {
-  return formatFullDate(parts(a.startAt).date);
-}
-
 function firstNameOf(a: AppointmentView) {
   return a.client?.name?.split(' ')[0] || null;
 }
@@ -171,8 +165,97 @@ function appointmentHref(a: { id: ID }) {
   return `/portal/appointments/${a.id}`;
 }
 
+/* ------------------------------------------ the practice's email wording */
+
+/** "03 September 2026" — the date style the practice uses in its emails. */
+function emailDate(a: AppointmentView) {
+  const [year, month, day] = parts(a.startAt).date.split('-');
+  const monthName = new Intl.DateTimeFormat('en-ZA', { month: 'long', timeZone: 'UTC' }).format(
+    new Date(Date.UTC(Number(year), Number(month) - 1, 1)),
+  );
+  return `${day} ${monthName} ${year}`;
+}
+
+function emailTime(a: AppointmentView) {
+  return displayTime(parts(a.startAt).time);
+}
+
+/** The street address given to in-person clients once they are confirmed. */
+function practiceAddress(a: AppointmentView) {
+  const slug = a.location?.slug;
+  return (slug && CLIENT_EMAIL.practiceAddresses[slug]) || appointmentWhere(a);
+}
+
+/**
+ * Where every online session is held. A link staff set on one appointment
+ * (admin → session link) takes precedence; otherwise the practice's room.
+ */
+function onlineSessionLink(a: AppointmentView) {
+  return a.sessionLink || CLIENT_EMAIL.onlineSessionLink;
+}
+
+/**
+ * Details for emails sent BEFORE a booking is confirmed (awaiting payment or
+ * medical aid). By the practice's rule these carry neither the street address
+ * nor the session link — those go out only after payment or verification.
+ */
 function appointmentDetails(a: AppointmentView) {
   return [
+    { label: 'Service', value: a.service.name },
+    { label: 'Date and time', value: appointmentWhen(a) },
+    { label: 'Duration', value: `${a.durationMinutes} minutes` },
+    {
+      label: 'Location',
+      value: a.mode === 'online' ? 'Online session' : `In person — ${a.location?.name ?? 'practice'}`,
+    },
+    { label: 'Reference', value: a.reference },
+  ];
+}
+
+/**
+ * Details for a CONFIRMED booking, in the practice's own layout: date, time,
+ * duration, and the address for an in-person session. (An online session's
+ * link has its own section — see sessionLinkSection.)
+ */
+function confirmedDetails(a: AppointmentView, { duration = true } = {}) {
+  return [
+    { label: 'Date', value: emailDate(a) },
+    { label: 'Time', value: emailTime(a) },
+    ...(duration ? [{ label: 'Duration', value: `${a.durationMinutes} minutes` }] : []),
+    ...(a.mode === 'in_person' ? [{ label: 'Address', value: practiceAddress(a) }] : []),
+  ];
+}
+
+/** The practice's online-session section: heading, link and checklist. */
+function sessionLinkSection(a: AppointmentView) {
+  if (a.mode !== 'online') return '';
+  return [
+    '## Session Link',
+    'Please join your session using the link below:',
+    onlineSessionLink(a),
+    'Kindly ensure that you:\n' +
+      '• Join from a private and quiet space.\n' +
+      '• Have a stable internet connection.\n' +
+      '• Join a few minutes before the scheduled start time.',
+  ].join('\n\n');
+}
+
+/** Ntombi's signature, as written in the practice's templates. */
+function practitionerSignOff(closing: string, practiceNumberLabel: 'Practice No' | 'Practice Number') {
+  const p = CLIENT_EMAIL.practitioner;
+  return [closing, p.name, p.title, p.registration, `${practiceNumberLabel}: ${p.practiceNumber}`];
+}
+
+function joinParagraphs(...paragraphs: string[]) {
+  return paragraphs.filter(Boolean).join('\n\n');
+}
+
+/** Staff see who the client is alongside the session facts, full address included. */
+function staffDetails(a: AppointmentView) {
+  return [
+    { label: 'Client', value: a.client?.name || 'Not captured' },
+    { label: 'Email', value: a.client?.email || 'Not captured' },
+    { label: 'Phone', value: a.client?.phone || 'Not captured' },
     { label: 'Service', value: a.service.name },
     { label: 'Date and time', value: appointmentWhen(a) },
     { label: 'Duration', value: `${a.durationMinutes} minutes` },
@@ -181,28 +264,9 @@ function appointmentDetails(a: AppointmentView) {
   ];
 }
 
-/** Staff see who the client is alongside the session facts. */
-function staffDetails(a: AppointmentView) {
-  return [
-    { label: 'Client', value: a.client?.name || 'Not captured' },
-    { label: 'Email', value: a.client?.email || 'Not captured' },
-    { label: 'Phone', value: a.client?.phone || 'Not captured' },
-    ...appointmentDetails(a),
-  ];
-}
-
-/**
- * Links for an online session and for the client's own calendar. Short labels
- * only: the Google Calendar address runs to several hundred characters, and
- * written out in the body it forced the email wider than a phone screen.
- */
-function sessionLinks(a: AppointmentView, sessionLink: string | null) {
-  const links: { label: string; url: string }[] = [];
-  if (a.mode === 'online' && sessionLink) {
-    links.push({ label: 'Join the online session', url: sessionLink });
-  }
-  links.push({ label: 'Add to Google Calendar', url: googleCalendarLink(a) });
-  return links;
+/** "Add to Google Calendar", as a short tappable line (never the raw address). */
+function calendarLinks(a: AppointmentView) {
+  return [{ label: 'Add to Google Calendar', url: googleCalendarLink(a) }];
 }
 
 function googleCalendarLink(a: AppointmentView) {
@@ -217,12 +281,6 @@ function googleCalendarLink(a: AppointmentView) {
   return `https://calendar.google.com/calendar/render?${params.toString()}`;
 }
 
-function onlineLinkSentence(a: AppointmentView, sessionLink: string | null) {
-  if (a.mode !== 'online') return '';
-  return sessionLink
-    ? 'You can join the online session using the link below.'
-    : 'Your practitioner will send you the link to join the online session before your appointment.';
-}
 
 /* ------------------------------------------------------ medical aid checks */
 
@@ -286,16 +344,21 @@ async function onMedicalAidDeclined(appointmentId: ID) {
     subject: 'Update regarding your medical aid',
     heading: 'An update regarding your medical aid',
     greeting: firstNameOf(a),
-    body:
-      'We have completed the verification of your medical aid. Unfortunately, this session cannot ' +
-      'be claimed from your scheme.\n\n' +
-      (reason ? `${reason}\n\n` : '') +
-      'Your appointment remains reserved. To keep it, the session may be settled by card using the ' +
-      'button below. Your appointment is confirmed as soon as the payment is received.\n\n' +
-      'Should you prefer to reschedule or cancel instead, please reply to this email and our team ' +
-      'will assist you. No payment has been taken.',
-    details: [...appointmentDetails(a), { label: 'Amount due', value: money(a.amountCents) }],
-    cta: { label: 'Pay by card', url: appointmentPaymentUrl(a.id) },
+    // The practice's own wording. Any note staff typed when declining is kept,
+    // placed after the explanation it adds to.
+    body: joinParagraphs(
+      'I hope you are doing well.',
+      'Unfortunately, your medical aid benefits do not provide cover for counselling services. ' +
+        'As a result, payment for your sessions will need to be made on a cash basis.',
+      reason ?? '',
+      'Please find the payment link below to complete your payment at your earliest convenience, ' +
+        'to confirm your counselling session.',
+      '{{cta}}',
+      "If you have any questions or need any assistance with the payment process, please don't " +
+        'hesitate to get in touch.',
+    ),
+    cta: { label: 'Make payment', url: CLIENT_EMAIL.medicalAidDeclinedPaymentLink },
+    signOff: practitionerSignOff('Kind regards,', 'Practice No'),
     href: appointmentHref(a),
   });
 }
@@ -338,8 +401,10 @@ async function onAppointmentCreated(appointmentId: ID) {
 }
 
 /**
- * Keep the practice calendar in step with the appointment. Returns the
- * meeting link the calendar created, if any.
+ * Keep the practice calendar in step with the appointment.
+ *
+ * A meeting link the calendar might create is not kept: every online session
+ * is held at the practice's own link (CLIENT_EMAIL.onlineSessionLink).
  */
 async function syncCalendar(a: AppointmentView, description: string) {
   const calendar = getCalendarProvider();
@@ -371,13 +436,7 @@ async function syncCalendar(a: AppointmentView, description: string) {
     updatedAt: nowISO(),
   });
 
-  // Keep a link staff entered by hand; otherwise take the calendar's.
-  const sessionLink = a.sessionLink ?? result.meetLink ?? null;
-  if (sessionLink && sessionLink !== a.sessionLink) {
-    await updateAppointment(a.id, { sessionLink });
-  }
-
-  return { ok: result.ok, live: calendar.live, sessionLink };
+  return { ok: result.ok, live: calendar.live };
 }
 
 function calendarDescription(a: AppointmentView) {
@@ -409,37 +468,59 @@ async function onAppointmentConfirmed(appointmentId: ID) {
   const settings = await getSettings();
 
   const sync = await syncCalendar(a, calendarDescription(a));
-  const sessionLink = sync.sessionLink;
 
-  const medicalAidLine =
-    a.medicalAidDecision === 'accepted'
-      ? 'Your medical aid has been verified, and this session will be claimed from your scheme.' +
-        (a.amountCents > 0
-          ? ` A co-payment of ${money(a.amountCents)} is payable at your appointment.`
-          : '')
-      : '';
-
-  await notify({
-    type: 'appointment.confirmed',
-    audience: 'client',
-    channels: [...settings.reminders.channels, 'in_app'],
-    to: clientRecipient(a),
-    subject: `Appointment confirmed — ${appointmentDate(a)}`,
-    heading: 'Your appointment is confirmed',
-    greeting: firstNameOf(a),
-    body: [
-      'Thank you for choosing Be Whole Care. We are pleased to confirm your appointment. The details are below.',
-      medicalAidLine,
-      onlineLinkSentence(a, sessionLink),
-      'Should you need to reschedule or cancel, we kindly ask that you give us at least 24 hours’ notice. ' +
-        'Late cancellations and missed appointments may be charged in full.',
-    ]
-      .filter(Boolean)
-      .join('\n\n'),
-    details: appointmentDetails(a),
-    links: sessionLinks(a, sessionLink),
-    href: appointmentHref(a),
-  });
+  // This handler only runs once a booking is confirmed — paid, medical aid
+  // accepted, or a service that needs no payment — so the session link and
+  // street address may go out here (and in the reminders queued below).
+  if (a.medicalAidDecision === 'accepted') {
+    // The practice's medical aid verification email, which is also the
+    // confirmation — the client receives one email, not two.
+    await notify({
+      type: 'appointment.confirmed',
+      audience: 'client',
+      channels: [...settings.reminders.channels, 'in_app'],
+      to: clientRecipient(a),
+      subject: `Medical aid verified — appointment confirmed for ${emailDate(a)}`,
+      heading: 'Your medical aid has been verified',
+      greeting: firstNameOf(a),
+      body: joinParagraphs(
+        'Thank you for submitting your medical aid information.',
+        'We are pleased to confirm that your medical aid details have been successfully verified ' +
+          'and that you are registered as a beneficiary on the medical aid scheme provided.',
+        'Your appointment details are as follows:',
+        '{{details}}',
+        sessionLinkSection(a),
+        'Should there be any changes to your medical aid membership or benefits prior to your ' +
+          'appointment, please notify us as soon as possible.',
+        'We look forward to supporting you on your wellness journey.',
+      ),
+      details: confirmedDetails(a, { duration: false }),
+      signOff: practitionerSignOff('Warm regards,', 'Practice Number'),
+      href: appointmentHref(a),
+    });
+  } else {
+    // The practice's booking confirmation (after payment).
+    await notify({
+      type: 'appointment.confirmed',
+      audience: 'client',
+      channels: [...settings.reminders.channels, 'in_app'],
+      to: clientRecipient(a),
+      subject: `Appointment confirmation — ${emailDate(a)}`,
+      heading: 'Appointment confirmation',
+      greeting: firstNameOf(a),
+      body: joinParagraphs(
+        'Thank you for booking your counselling session with Be Whole Care.',
+        'This email serves as confirmation of your upcoming appointment.',
+        '## Appointment Details',
+        '{{details}}',
+        sessionLinkSection(a),
+        'I look forward to meeting with you.',
+      ),
+      details: confirmedDetails(a),
+      signOff: practitionerSignOff('Warm regards,', 'Practice No'),
+      href: appointmentHref(a),
+    });
+  }
 
   await notify({
     type: 'appointment.confirmed.staff',
@@ -452,9 +533,7 @@ async function onAppointmentConfirmed(appointmentId: ID) {
     href: `/admin/appointments?ref=${a.reference}`,
   });
 
-  // The link is passed in, not read from `a`: `a` was loaded before the
-  // calendar produced it, so reminders used to go out without the link.
-  await scheduleReminders(a, sessionLink);
+  await scheduleReminders(a);
 }
 
 /** Admin "retry calendar sync": the calendar only — no emails to anyone. */
@@ -476,19 +555,23 @@ async function onSessionLinkAdded(appointmentId: ID) {
     audience: 'client',
     channels: [...settings.reminders.channels, 'in_app'],
     to: clientRecipient(a),
-    subject: `Your online session link — ${appointmentDate(a)}`,
+    subject: `Your online session link — ${emailDate(a)}`,
     heading: 'Your online session link',
     greeting: firstNameOf(a),
-    body:
-      'The link to join your online session is now available. Please use the button below at the ' +
-      'time of your appointment. We recommend joining a few minutes early from a quiet, private space.',
-    details: appointmentDetails(a),
-    cta: { label: 'Join the online session', url: a.sessionLink },
+    body: joinParagraphs(
+      'Please note that the link for your upcoming online session has been updated.',
+      '## Appointment Details',
+      '{{details}}',
+      sessionLinkSection(a),
+      'I look forward to meeting with you.',
+    ),
+    details: confirmedDetails(a),
+    signOff: practitionerSignOff('Warm regards,', 'Practice No'),
     href: appointmentHref(a),
   });
 
-  // Reminders already queued were written without the link.
-  await scheduleReminders(a, a.sessionLink);
+  // Reminders already queued carry the previous link.
+  await scheduleReminders(a);
 }
 
 /**
@@ -505,13 +588,14 @@ async function onSessionLinkAdded(appointmentId: ID) {
  * confirming twice, moving the session or adding a link never leaves two sets
  * of reminders behind.
  */
-async function scheduleReminders(a: AppointmentView, sessionLink: string | null) {
+async function scheduleReminders(a: AppointmentView) {
   await withdrawQueuedNotificationLogs(appointmentHref(a), 'Superseded by updated reminders');
 
   const settings = await getSettings();
   const sessionDate = parts(a.startAt).date;
   const morningOf = (isoDate: string) => fromLocalParts(isoDate, '06:00').toISOString();
-  const links = sessionLinks(a, sessionLink);
+  // Reminders only exist for confirmed sessions, so every one carries the
+  // session link (online) or the practice address (in person).
 
   const jobs: {
     at: string;
@@ -526,15 +610,15 @@ async function scheduleReminders(a: AppointmentView, sessionLink: string | null)
     jobs.push({
       at: morningOf(addISODays(sessionDate, -1)),
       type: 'reminder.day_before',
-      subject: `Reminder: your appointment on ${appointmentDate(a)}`,
+      subject: `Reminder: your appointment on ${emailDate(a)}`,
       heading: 'Appointment reminder',
-      body: [
-        'This is a courtesy reminder of your upcoming appointment with Be Whole Care. The details are below.',
-        onlineLinkSentence(a, sessionLink),
+      body: joinParagraphs(
+        'This is a courtesy reminder of your upcoming appointment with Be Whole Care.',
+        '## Appointment Details',
+        '{{details}}',
+        sessionLinkSection(a),
         'Should you need to reschedule, please let us know at least 24 hours before your appointment.',
-      ]
-        .filter(Boolean)
-        .join('\n\n'),
+      ),
       withDetails: true,
     });
   }
@@ -544,12 +628,13 @@ async function scheduleReminders(a: AppointmentView, sessionLink: string | null)
       type: 'reminder.day_of',
       subject: `Your appointment today at ${displayTime(parts(a.startAt).time)}`,
       heading: 'Your appointment is today',
-      body: [
-        'We look forward to seeing you today. The details of your appointment are below.',
-        onlineLinkSentence(a, sessionLink),
-      ]
-        .filter(Boolean)
-        .join('\n\n'),
+      body: joinParagraphs(
+        'This is a reminder that your appointment with Be Whole Care is today.',
+        '## Appointment Details',
+        '{{details}}',
+        sessionLinkSection(a),
+        'I look forward to meeting with you.',
+      ),
       withDetails: true,
     });
   }
@@ -578,8 +663,11 @@ async function scheduleReminders(a: AppointmentView, sessionLink: string | null)
       heading: job.heading,
       greeting: firstNameOf(a),
       body: job.body,
-      details: job.withDetails ? appointmentDetails(a) : undefined,
-      links: job.withDetails ? links : [{ label: 'Book your next session', url: appUrl('/book') }],
+      details: job.withDetails ? confirmedDetails(a) : undefined,
+      links: job.withDetails
+        ? calendarLinks(a)
+        : [{ label: 'Book your next session', url: appUrl('/book') }],
+      signOff: job.withDetails ? practitionerSignOff('Warm regards,', 'Practice No') : undefined,
       href: appointmentHref(a),
       scheduledFor: job.at,
     });
@@ -597,23 +685,26 @@ async function onAppointmentRescheduled(appointmentId: ID, previousStart: string
     `${calendarDescription(a)}\n\nRescheduled from ${previous}.`,
   );
 
+  // A confirmed session gets the new details with its link or address; one
+  // still awaiting payment or medical aid gets neither yet.
+  const confirmed = a.status === 'confirmed';
   await notify({
     type: 'appointment.rescheduled',
     audience: 'client',
     channels: [...settings.reminders.channels, 'in_app'],
     to: clientRecipient(a),
-    subject: `Appointment rescheduled — ${appointmentDate(a)}`,
+    subject: `Appointment rescheduled — ${emailDate(a)}`,
     heading: 'Your appointment has been rescheduled',
     greeting: firstNameOf(a),
-    body: [
+    body: joinParagraphs(
       `Your appointment, previously scheduled for ${previous}, has been moved. The updated details are below.`,
-      onlineLinkSentence(a, sync.sessionLink),
+      '## Appointment Details',
+      '{{details}}',
+      confirmed ? sessionLinkSection(a) : '',
       'Should this time not suit you, please reply to this email and our team will assist you.',
-    ]
-      .filter(Boolean)
-      .join('\n\n'),
-    details: appointmentDetails(a),
-    links: sessionLinks(a, sync.sessionLink),
+    ),
+    details: confirmed ? confirmedDetails(a) : appointmentDetails(a),
+    links: confirmed ? calendarLinks(a) : undefined,
     href: appointmentHref(a),
   });
 
@@ -630,8 +721,8 @@ async function onAppointmentRescheduled(appointmentId: ID, previousStart: string
 
   // The old reminders named the old date. Replace them — but only for a
   // confirmed session; one still awaiting payment or medical aid has none.
-  if (a.status === 'confirmed') {
-    await scheduleReminders(a, sync.sessionLink);
+  if (confirmed) {
+    await scheduleReminders(a);
   } else {
     await withdrawQueuedNotificationLogs(appointmentHref(a), 'Appointment rescheduled');
   }
@@ -661,7 +752,7 @@ async function onAppointmentCancelled(appointmentId: ID, byStaff: boolean, late:
     audience: 'client',
     channels: [...settings.reminders.channels, 'in_app'],
     to: clientRecipient(a),
-    subject: `Appointment cancelled — ${appointmentDate(a)}`,
+    subject: `Appointment cancelled — ${emailDate(a)}`,
     heading: 'Your appointment has been cancelled',
     greeting: firstNameOf(a),
     body: [

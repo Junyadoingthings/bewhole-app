@@ -282,6 +282,25 @@ export function BookingWizard({
   const [stepIndex, setStepIndex] = React.useState(0);
   const step = steps[Math.min(stepIndex, steps.length - 1)];
 
+  /**
+   * Every step starts at the top of the page.
+   *
+   * On a phone the Continue button sits at the bottom, so the client has
+   * scrolled to the end of the step when they press it. Nothing reset the
+   * scroll position, so the next step opened at its bottom and had to be
+   * scrolled back up to be filled in. Skipped on first load so arriving on
+   * the page is untouched. A jump to a field with an error (focusFirstError)
+   * runs after the new step has rendered, so it still wins.
+   */
+  const isFirstStep = React.useRef(true);
+  React.useEffect(() => {
+    if (isFirstStep.current) {
+      isFirstStep.current = false;
+      return;
+    }
+    window.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior });
+  }, [step]);
+
   React.useEffect(() => {
     if (prefilledCategory && prefilledCategory.concerns[0]) setConcern(prefilledCategory.concerns[0]);
   }, [prefilledCategory]);

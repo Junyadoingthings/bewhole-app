@@ -20,6 +20,7 @@ import { BUSINESS } from '@/config/business';
 import { getCurrentUser } from '@/lib/auth';
 import { displayTime, formatFullDate, parts, relativeDay } from '@/lib/date';
 import { getAppointmentByReference, hydrateAppointments } from '@/lib/db';
+import { joinLinkFor } from '@/lib/session-link';
 import { money } from '@/lib/utils';
 import { verifyAndApplyPayment } from '@/services/payment.service';
 
@@ -68,6 +69,7 @@ export default async function ConfirmationPage({
   // Nothing due now is not the same as paid: a medical aid claim is still open.
   const paid =
     !pendingMedicalAid && (view.payment?.status === 'paid' || view.amountCents === 0);
+  const joinLink = joinLinkFor(view);
 
   return (
     <div className="mx-auto max-w-2xl py-6">
@@ -157,13 +159,18 @@ export default async function ConfirmationPage({
 
           {view.mode === 'online' && (
             <div className="border-t border-line px-7 py-6">
-              {view.sessionLink ? (
+              {joinLink ? (
                 <>
                   <p className="text-sm font-medium text-ink">Your session link</p>
-                  <p className="mt-1.5 break-all text-sm text-ink-soft">{view.sessionLink}</p>
+                  <a
+                    href={joinLink}
+                    className="mt-1.5 block break-all text-sm font-medium text-forest-700 underline underline-offset-4 dark:text-forest-300"
+                  >
+                    {joinLink}
+                  </a>
                   <p className="mt-2 text-xs text-ink-faint">
-                    It’s also saved on your appointment in the portal, and we’ll send it again before
-                    the session.
+                    It’s also in your confirmation email and on your appointment in the portal, and
+                    we’ll send it again with your reminders.
                   </p>
                 </>
               ) : (
@@ -204,10 +211,10 @@ export default async function ConfirmationPage({
             end: view.endAt,
             location:
               view.mode === 'online'
-                ? (view.sessionLink ?? 'Online session')
+                ? (joinLink ?? 'Online session')
                 : `${view.location?.addressLine}, ${view.location?.city}, ${view.location?.postalCode}`,
             details: `Reference ${view.reference}. ${view.durationMinutes}-minute session with Be Whole Care.${
-              view.sessionLink ? ` Link: ${view.sessionLink}` : ''
+              joinLink ? ` Link: ${joinLink}` : ''
             }`,
             reference: view.reference,
           }}

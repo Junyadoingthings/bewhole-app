@@ -76,9 +76,10 @@ export async function submitContact(
     greeting: data.name.split(' ')[0],
     body:
       'Thank you for contacting Be Whole Care. We have received your message, and a member of our ' +
-      'team will respond during business hours: Monday to Friday, 08:00 to 17:00, and Saturday, ' +
-      '08:00 to 12:00.\n\n' +
-      // Written out rather than taken from BUSINESS.phone, which is empty —
+      // The practice's published hours (BUSINESS_HOURS in config/business.ts).
+      'team will respond during business hours: Monday to Friday, 09:00 to 17:00, and Saturday, ' +
+      '09:00 to 13:00.\n\n' +
+      // Written out rather than taken from BUSINESS.phone, which was empty —
       // this line used to read "call or WhatsApp us on ." as a result.
       'Should your matter be urgent, please call or WhatsApp us on 063 883 7170.\n\n' +
       `For your reference, your message read:\n“${data.message}”`,
