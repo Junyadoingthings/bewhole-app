@@ -151,7 +151,6 @@ export const SERVICE_CATEGORIES = [
       'Online support group services',
       'Workshops & wellness programs',
       'Coaching & mentorship',
-      'Faith & wellness resources',
     ],
     concerns: ['personal-growth', 'emotional-wellbeing'],
     icon: 'Users',

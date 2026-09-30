@@ -650,8 +650,9 @@ export function BookingWizard({
                           }}
                           icon={<ServiceIcon name={cat?.icon ?? 'Sprout'} className="h-5 w-5" />}
                           title={s.name}
-                          description={s.summary}
-                          meta={s.requiresQuote ? 'Billed separately after first session' : undefined}
+                          // Pre-Marital is listed by name alone, at the
+                          // practice's request (2026-09).
+                          description={s.id === 'svc_pre_marital' ? undefined : s.summary}
                         />
                       );
                     })}

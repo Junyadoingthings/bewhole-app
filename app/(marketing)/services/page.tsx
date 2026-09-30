@@ -27,6 +27,9 @@ import { listCategories, listServices } from '@/lib/db';
  */
 export const revalidate = 300;
 
+/** Services that stay bookable but are not listed as tags on their card. */
+const HIDDEN_SERVICE_TAGS = new Set(['svc_coaching', 'svc_support_group']);
+
 const APPOINTMENT_STEPS = [
   {
     title: 'Choose a service',
@@ -107,7 +110,11 @@ export default async function ServicesPage() {
       <section className="shell pb-section">
         <Stagger className="grid gap-5 lg:grid-cols-2">
           {categories.map((category) => {
-            const inCategory = services.filter((s) => s.categoryId === category.id);
+            // Coaching and the support group are not shown as bookable tags
+            // here, at the practice's request (2026-09).
+            const inCategory = services.filter(
+              (s) => s.categoryId === category.id && !HIDDEN_SERVICE_TAGS.has(s.id),
+            );
             return (
               <StaggerItem key={category.id} className="h-full">
                 <Link
@@ -122,7 +129,6 @@ export default async function ServicesPage() {
                   </div>
 
                   <h2 className="mt-7 font-display text-2xl text-ink text-balance">{category.name}</h2>
-                  <p className="mt-3 leading-relaxed text-ink-soft text-pretty">{category.description}</p>
 
                   <ul className="mt-7 grid gap-2 sm:grid-cols-2">
                     {category.areas.map((area) => (

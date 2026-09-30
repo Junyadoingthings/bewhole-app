@@ -4,7 +4,7 @@ import * as React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { BookOpen, CalendarPlus, HeartHandshake, House, UserRound } from 'lucide-react';
+import { CalendarPlus, HeartHandshake, House, UserRound } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
@@ -34,9 +34,6 @@ const TABS = [
   { href: '/', label: 'Home', icon: House, exact: true },
   { href: '/services', label: 'Services', icon: HeartHandshake },
   { href: '/book', label: 'Book', icon: CalendarPlus, primary: true },
-  // "Resources", not "Reading" — the page carries the podcast as well as
-  // written material now, so the narrower word was wrong.
-  { href: '/resources', label: 'Resources', icon: BookOpen },
 ] as const;
 
 export function SiteDock({ user }: { user: SessionUser | null }) {
