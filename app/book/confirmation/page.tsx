@@ -87,18 +87,36 @@ export default async function ConfirmationPage({
             {pendingPayment
               ? 'Almost there'
               : pendingMedicalAid
-                ? 'Your time is held.'
+                ? 'Provisional Confirmation'
                 : 'You’re booked.'}
           </h1>
-          <p className="mt-4 max-w-md leading-relaxed text-ink-soft text-pretty">
-            {pendingPayment
-              ? 'We’re holding this time for you. Your session is confirmed the moment payment clears.'
-              : pendingMedicalAid
-                ? 'We’re confirming your medical aid cover — usually within one working day. We’ll email you as soon as it’s done, and your session is confirmed then.'
+          {pendingMedicalAid ? (
+            // The practice's own wording (2026-09).
+            <div className="mt-4 max-w-md space-y-3 leading-relaxed text-ink-soft text-pretty">
+              <p>
+                Your appointment has been provisionally confirmed, pending verification of your
+                medical aid benefits.
+              </p>
+              <p>
+                Once your medical aid has been verified, you will receive a confirmation email with
+                the outcome of verification and the next steps.
+              </p>
+              <p>
+                Please note that your appointment will only be fully confirmed once your medical aid
+                benefits have been successfully verified. Should your medical aid not cover the
+                consultation, you will be contacted regarding the available payment options.
+              </p>
+              <p>Thank you for your understanding.</p>
+            </div>
+          ) : (
+            <p className="mt-4 max-w-md leading-relaxed text-ink-soft text-pretty">
+              {pendingPayment
+                ? 'We’re holding this time for you. Your session is confirmed the moment payment clears.'
                 : view.mode === 'online'
                   ? 'Your confirmation is on its way, along with your session link.'
                   : 'Your confirmation is on its way. We look forward to seeing you.'}
-          </p>
+            </p>
+          )}
         </div>
       </Reveal>
 
