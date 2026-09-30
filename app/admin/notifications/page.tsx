@@ -1,152 +1,117 @@
 import type { Metadata } from 'next';
-import Link from 'next/link';
-import { Bell, Mail, MessageCircle, Smartphone } from 'lucide-react';
 
-import { MarkAllRead } from '@/components/admin/mark-all-read';
+import {
+  NotificationsInbox,
+  type ActivityCategory,
+  type ActivityItem,
+  type EmailItem,
+} from '@/components/admin/notifications-inbox';
 import { Reveal } from '@/components/motion';
-import { Badge, EmptyState } from '@/components/ui/primitives';
 import { requireStaff } from '@/lib/auth';
-import { formatFullDate, parts, timeAgo } from '@/lib/date';
+import { parts, relativeDay, today } from '@/lib/date';
 import { listNotificationLogs, listNotifications } from '@/lib/db';
 import { activeChannels } from '@/services/notifications';
-import { cn } from '@/lib/utils';
+import type { NotificationLog, NotificationRecord } from '@/types';
 
 export const metadata: Metadata = { title: 'Notifications', robots: { index: false } };
 export const dynamic = 'force-dynamic';
 
-const CHANNEL_ICON = {
-  email: Mail,
-  whatsapp: MessageCircle,
-  sms: Smartphone,
-  push: Bell,
-  in_app: Bell,
-};
+function categoryOf(type: string): ActivityCategory {
+  if (type.includes('medical_aid')) return 'medical_aid';
+  if (type.includes('payment')) return 'payments';
+  if (type.startsWith('contact.') || type.startsWith('nakedvows.')) return 'messages';
+  if (/^(booking|appointment|reminder|followup)\./.test(type)) return 'bookings';
+  return 'other';
+}
+
+/**
+ * A staff notification's body is a summary paragraph followed by "Label:
+ * value" lines. The inbox shows the summary and lays the rest out as details.
+ */
+function splitBody(body: string) {
+  const [first = '', ...more] = body.split(/\n\s*\n/);
+  const summary = first.replace(/\s*\n\s*/g, ' ').trim();
+  const details: { label: string; value: string }[] = [];
+  const notes: string[] = [];
+  for (const raw of more.join('\n').split('\n')) {
+    const line = raw.trim().replace(/^##\s+/, '');
+    if (!line || /^\{\{.*\}\}$/.test(line)) continue;
+    const match = /^([^:]{1,32}):\s+(.+)$/.exec(line);
+    if (match) details.push({ label: match[1], value: match[2] });
+    else notes.push(line);
+  }
+  return { summary, details, notes };
+}
+
+// Labels are worked out here, on the server, so the page and the browser can
+// never disagree about what "Today" is.
+function toActivity(n: NotificationRecord): ActivityItem {
+  const when = parts(n.createdAt);
+  return {
+    id: n.id,
+    category: categoryOf(n.type),
+    title: n.title,
+    ...splitBody(n.body),
+    href: n.href ?? null,
+    read: n.read,
+    day: relativeDay(when.date),
+    time: when.time,
+    sortKey: n.createdAt,
+  };
+}
+
+function toEmail(log: NotificationLog): EmailItem {
+  const at =
+    log.status === 'queued' ? (log.scheduledFor ?? log.createdAt) : (log.sentAt ?? log.createdAt);
+  const when = parts(at);
+  return {
+    id: log.id,
+    subject: log.subject,
+    to: log.to,
+    status: log.status,
+    error: log.error ?? null,
+    day: relativeDay(when.date),
+    time: when.time,
+    sortKey: at,
+  };
+}
 
 export default async function AdminNotificationsPage() {
   await requireStaff();
   const [notifications, logs] = await Promise.all([
     listNotifications({ audience: 'staff' }),
-    listNotificationLogs(60),
+    listNotificationLogs(250),
   ]);
 
-  const unread = notifications.filter((n) => !n.read);
-  const channels = activeChannels();
-  const queued = logs.filter((l) => l.status === 'queued');
+  const activity = notifications.map(toActivity);
+  // Emails only: WhatsApp and SMS are not connected, and listing messages that
+  // were never sent would suggest otherwise.
+  const emailLogs = logs.filter((l) => l.channel === 'email');
+  const emails = emailLogs.map(toEmail);
+  const emailLive = activeChannels().some((c) => c.channel === 'email' && c.live);
+  const todayDate = today();
+
+  const stats = {
+    unread: activity.filter((a) => !a.read).length,
+    sentToday: emailLogs.filter(
+      (l) => l.status === 'sent' && l.sentAt && parts(l.sentAt).date === todayDate,
+    ).length,
+    scheduled: emails.filter((e) => e.status === 'queued').length,
+    failed: emails.filter((e) => e.status === 'failed').length,
+  };
 
   return (
     <div className="mx-auto max-w-4xl">
       <Reveal>
-        <div className="flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <h1 className="font-display text-3xl text-ink">Notifications</h1>
-            <p className="mt-2 text-ink-soft">
-              {unread.length > 0 ? `${unread.length} unread` : 'All caught up'} ·{' '}
-              {queued.length} scheduled for later
-            </p>
-          </div>
-          {unread.length > 0 && <MarkAllRead ids={unread.map((n) => n.id)} />}
-        </div>
+        <h1 className="font-display text-3xl text-ink">Notifications</h1>
+        <p className="mt-2 max-w-2xl text-ink-soft">
+          Everything happening in the practice — new bookings, medical aid, payments and messages
+          — and every email the website has sent or is due to send.
+        </p>
       </Reveal>
 
-      <div className="mt-8 grid gap-6 lg:grid-cols-[1.3fr_1fr]">
-        <section>
-          <h2 className="text-2xs font-medium uppercase tracking-[0.16em] text-ink-faint">
-            Practice activity
-          </h2>
-          <div className="mt-4 space-y-2">
-            {notifications.length === 0 ? (
-              <EmptyState compact icon={<Bell className="h-5 w-5" />} title="Nothing yet" />
-            ) : (
-              notifications.map((n) => (
-                <Link
-                  key={n.id}
-                  href={n.href ?? '/admin'}
-                  className={cn(
-                    'block rounded-2xl border p-5 transition-all duration-250 hover:-translate-y-0.5 hover:shadow-subtle',
-                    n.read ? 'border-line bg-white/60' : 'border-forest-200 bg-white',
-                  )}
-                >
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="min-w-0">
-                      <p className="flex items-center gap-2 text-sm font-medium text-ink">
-                        {!n.read && <span className="h-1.5 w-1.5 rounded-full bg-forest-600" />}
-                        {n.title}
-                      </p>
-                      <p className="mt-1.5 text-sm leading-relaxed text-ink-soft">{n.body}</p>
-                    </div>
-                    <span className="shrink-0 text-xs text-ink-faint">{timeAgo(n.createdAt)}</span>
-                  </div>
-                </Link>
-              ))
-            )}
-          </div>
-        </section>
-
-        <section>
-          <h2 className="text-2xs font-medium uppercase tracking-[0.16em] text-ink-faint">
-            Delivery channels
-          </h2>
-          <div className="mt-4 space-y-2">
-            {channels.map(({ channel, live }) => {
-              const Icon = CHANNEL_ICON[channel];
-              return (
-                <div
-                  key={channel}
-                  className="flex items-center justify-between gap-4 rounded-2xl border border-line bg-white px-5 py-4"
-                >
-                  <span className="flex items-center gap-3 text-sm capitalize text-ink">
-                    <Icon className="h-4 w-4 text-forest-600 dark:text-forest-300" />
-                    {channel.replace('_', '-')}
-                  </span>
-                  <Badge tone={live ? 'success' : 'neutral'} size="sm">
-                    {live ? 'Live' : 'Logged only'}
-                  </Badge>
-                </div>
-              );
-            })}
-          </div>
-          <p className="mt-3 text-xs leading-relaxed text-ink-faint">
-            Channels without credentials are recorded below rather than sent, so automation stays
-            visible in development.
-          </p>
-
-          <h2 className="mt-8 text-2xs font-medium uppercase tracking-[0.16em] text-ink-faint">
-            Message log
-          </h2>
-          <div className="mt-4 max-h-[28rem] space-y-2 overflow-y-auto pr-1">
-            {logs.length === 0 ? (
-              <p className="rounded-2xl border border-dashed border-line-strong p-6 text-center text-sm text-ink-soft">
-                Nothing sent yet.
-              </p>
-            ) : (
-              logs.map((log) => (
-                <div key={log.id} className="rounded-2xl border border-line bg-white px-4 py-3">
-                  <div className="flex items-start justify-between gap-3">
-                    <p className="min-w-0 flex-1 truncate text-sm text-ink">{log.subject}</p>
-                    <Badge
-                      tone={
-                        log.status === 'sent'
-                          ? 'success'
-                          : log.status === 'failed'
-                            ? 'danger'
-                            : 'warning'
-                      }
-                      size="sm"
-                    >
-                      {log.status}
-                    </Badge>
-                  </div>
-                  <p className="mt-1 truncate text-xs text-ink-faint">
-                    {log.channel} → {log.to}
-                    {log.scheduledFor &&
-                      log.status === 'queued' &&
-                      ` · ${formatFullDate(parts(log.scheduledFor).date)}`}
-                  </p>
-                </div>
-              ))
-            )}
-          </div>
-        </section>
+      <div className="mt-8">
+        <NotificationsInbox activity={activity} emails={emails} stats={stats} emailLive={emailLive} />
       </div>
     </div>
   );

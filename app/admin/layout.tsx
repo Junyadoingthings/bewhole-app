@@ -16,8 +16,6 @@ const NAV_COMMANDS: CommandItem[] = [
   { id: 'nav-clients', label: 'Clients', href: '/admin/clients', group: 'Go to' },
   { id: 'nav-followups', label: 'Follow-ups', href: '/admin/follow-ups', group: 'Go to' },
   { id: 'nav-payments', label: 'Payments', href: '/admin/payments', group: 'Go to' },
-  { id: 'nav-services', label: 'Services & pricing', href: '/admin/services', group: 'Go to' },
-  { id: 'nav-resources', label: 'Resources', href: '/admin/resources', group: 'Go to' },
   { id: 'nav-notifications', label: 'Notifications', href: '/admin/notifications', group: 'Go to' },
   { id: 'nav-settings', label: 'Settings', href: '/admin/settings', group: 'Go to' },
 ];

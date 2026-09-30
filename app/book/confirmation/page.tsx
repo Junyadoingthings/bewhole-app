@@ -234,7 +234,7 @@ export default async function ConfirmationPage({
               },
               {
                 icon: MessageCircle,
-                text: 'We send a reminder 24 hours before, and again a couple of hours before your session.',
+                text: 'We send a reminder the morning before your session, and again on the morning of it.',
               },
               {
                 icon: Phone,

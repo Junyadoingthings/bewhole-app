@@ -608,6 +608,41 @@ function escapeHtml(value: string) {
     .replace(/'/g, '&#39;');
 }
 
+/**
+ * One email, sent now, so an administrator can check from Settings that
+ * messages from the website actually arrive. Logged like any other email, so
+ * it also shows up under Notifications.
+ */
+export async function sendTestEmail(to: string): Promise<{ ok: boolean; error?: string }> {
+  if (!emailAdapter.live) {
+    return { ok: false, error: 'Email sending is not set up on the server (RESEND_API_KEY is missing).' };
+  }
+  const input: SendInput = {
+    type: 'settings.test_email',
+    audience: 'staff',
+    channels: ['email'],
+    to: { email: to },
+    subject: 'Test email from Be Whole Care',
+    heading: 'Test email',
+    body:
+      'This is a test email sent from the Be Whole Care practice console.\n\n' +
+      'If you are reading this, emails from the website are being delivered.',
+  };
+  const result = await emailAdapter.send(input);
+  await createNotificationLog({
+    channel: 'email',
+    to,
+    subject: input.subject,
+    body: input.body,
+    href: null,
+    status: result.ok ? 'sent' : 'failed',
+    provider: 'email',
+    error: result.error ?? null,
+    sentAt: result.ok ? new Date().toISOString() : null,
+  });
+  return result;
+}
+
 export function activeChannels(): { channel: NotificationChannel; live: boolean }[] {
   return [
     { channel: 'email', live: emailAdapter.live },

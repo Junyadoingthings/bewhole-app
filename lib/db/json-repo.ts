@@ -7,6 +7,7 @@ import type {
   AuditLog,
   AvailabilityBlock,
   AvailabilityRule,
+  WeeklyHours,
   CalendarEvent,
   ClientNote,
   Consent,
@@ -249,6 +250,35 @@ export async function listPractitioners(): Promise<Practitioner[]> {
 export async function listAvailabilityRules(): Promise<AvailabilityRule[]> {
   const db = await getDb();
   return db.availabilityRules.filter((r) => r.active);
+}
+
+/**
+ * Replace the practice's weekly opening hours with `hours` (open days only).
+ *
+ * The practice-wide rules are switched off rather than deleted, and each open
+ * day gets one active rule with a stable id, so saving twice changes nothing.
+ */
+export async function replaceWeeklyHours(hours: WeeklyHours[]): Promise<void> {
+  await transact((db) => {
+    for (const rule of db.availabilityRules) {
+      if (rule.mode === 'any' && !rule.locationId) rule.active = false;
+    }
+    for (const h of hours) {
+      const rule: AvailabilityRule = {
+        id: `avr_day_${h.weekday}`,
+        practitionerId: 'prc_practice',
+        weekday: h.weekday,
+        start: h.start,
+        end: h.end,
+        mode: 'any',
+        locationId: null,
+        active: true,
+      };
+      const existing = db.availabilityRules.find((r) => r.id === rule.id);
+      if (existing) Object.assign(existing, rule);
+      else db.availabilityRules.push(rule);
+    }
+  });
 }
 
 export async function listAvailabilityBlocks(): Promise<AvailabilityBlock[]> {

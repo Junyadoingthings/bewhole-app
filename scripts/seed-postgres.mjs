@@ -120,7 +120,8 @@ const SETTINGS = {
   business: {
     name: 'Be Whole Care',
     email: 'bewholecare@gmail.com',
-    phone: '', // EDITED: Removed phone number to hide the "Need help?" button
+    // Printed on receipts. (The "Need help?" button reads config/business.ts.)
+    phone: '063 883 7170',
     whatsapp: '27638837170',
     website: 'www.bewholecare.co.za',
     timezone: 'Africa/Johannesburg',
@@ -144,9 +145,8 @@ const SETTINGS = {
   payments: {
     provider: process.env.PEACH_ENTITY_ID ? 'peach' : process.env.PAYFAST_MERCHANT_ID ? 'payfast' : 'mock',
     medicalAidEnabled: true,
-    // No co-payment on medical aid sessions, at the practice's request. This
-    // row is rewritten on every deploy, so this — not the admin screen — is
-    // where the amount is actually decided.
+    // No co-payment on medical aid sessions, at the practice's request. Not
+    // editable in the admin screen, and re-applied on every deploy below.
     medicalAidCoPaymentCents: 0,
     requirePaymentToConfirm: true,
   },
@@ -172,6 +172,23 @@ const SETTINGS = {
   },
   updatedAt: new Date().toISOString(),
 };
+
+/**
+ * `saved`, with anything it lacks taken from `defaults`. A value counts as
+ * missing when it is absent, or an empty string where the default is not
+ * empty. Zero, false and null are deliberate choices (a reminder switched off)
+ * and are kept.
+ */
+function fillMissing(saved, defaults) {
+  const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
+  const out = { ...saved };
+  for (const [key, fallback] of Object.entries(defaults)) {
+    const value = saved[key];
+    if (isObject(fallback) && isObject(value)) out[key] = fillMissing(value, fallback);
+    else if (value === undefined || (value === '' && fallback !== '')) out[key] = fallback;
+  }
+  return out;
+}
 
 /* ------------------------------------------------------------- password */
 const scrypt = promisify(crypto.scrypt);
@@ -236,14 +253,15 @@ async function main() {
     on conflict (id) do update set location_ids = excluded.location_ids`;
   console.log('  ✓ practitioner record');
 
+  // Opening hours: inserted for a new database only. After that the practice
+  // edits them in Settings, and a deploy must never put the old hours back.
   for (const [i, h] of HOURS.entries()) {
     await sql`
       insert into availability_rules (id, practitioner_id, weekday, start_time, end_time, mode, active)
       values (${`avr_${i}`}, 'prc_practice', ${h.day}, ${h.open}, ${h.close}, 'any', true)
-      on conflict (id) do update set
-        weekday = excluded.weekday, start_time = excluded.start_time, end_time = excluded.end_time`;
+      on conflict (id) do nothing`;
   }
-  console.log(`  ✓ ${HOURS.length} availability rules (Mon–Fri 08:00–17:00, Sat 08:00–12:00)`);
+  console.log(`  ✓ availability rules (kept as edited in Settings)`);
 
   // Wellness content. Published state is owned by the admin dashboard after
   // the first insert, so re-running never silently republishes something the
@@ -273,11 +291,26 @@ async function main() {
   }
   console.log(`  \u2713 ${WORKSHOPS.length} workshops`);
 
-  // Settings: insert once, then leave alone — the admin dashboard owns this row.
+  // Settings: the admin dashboard owns this row. It used to be overwritten on
+  // every deploy, which silently undid anything saved in Settings (banking
+  // details included). Now saved values are kept, and the seed only fills in
+  // what is missing — a new field, or a blank one. Three things are still
+  // decided by the deploy rather than the screen: which payment provider and
+  // calendar are connected (from environment variables), and the medical aid
+  // co-payment, which the practice asked to be nil.
+  const [existingSettings] = await sql`select data from settings where id = 1`;
+  const saved = existingSettings?.data ?? {};
+  const merged = fillMissing(saved, SETTINGS);
+  merged.payments = {
+    ...merged.payments,
+    provider: SETTINGS.payments.provider,
+    medicalAidCoPaymentCents: SETTINGS.payments.medicalAidCoPaymentCents,
+  };
+  merged.calendar = SETTINGS.calendar;
   await sql`
-    insert into settings (id, data) values (1, ${sql.json(SETTINGS)})
-    on conflict (id) do update set data = ${sql.json(SETTINGS)}`; // EDITED: Ensure it overwrites old settings to hide the button
-  console.log('  ✓ settings row');
+    insert into settings (id, data) values (1, ${sql.json(merged)})
+    on conflict (id) do update set data = excluded.data`;
+  console.log('  ✓ settings row (saved values kept)');
 
   /* ------------------------------------------------------- admin account */
   const adminEmail = flag('admin');

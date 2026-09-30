@@ -137,6 +137,14 @@ export interface AvailabilityRule {
   active: boolean;
 }
 
+/** One open day in the practice's weekly hours, as edited in Settings. */
+export interface WeeklyHours {
+  /** 0 = Sunday … 6 = Saturday */
+  weekday: number;
+  start: TimeString;
+  end: TimeString;
+}
+
 /** A one-off closure: leave, public holiday, or a blocked afternoon. */
 export interface AvailabilityBlock {
   id: ID;

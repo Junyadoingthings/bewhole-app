@@ -16,6 +16,7 @@ import type {
   AuditLog,
   AvailabilityBlock,
   AvailabilityRule,
+  WeeklyHours,
   CalendarEvent,
   ClientNote,
   Consent,
@@ -621,6 +622,28 @@ export async function listAvailabilityRules(): Promise<AvailabilityRule[]> {
     locationId: r.location_id,
     active: r.active,
   }));
+}
+
+/**
+ * Replace the practice's weekly opening hours with `hours` (open days only).
+ *
+ * The practice-wide rules are switched off rather than deleted, and each open
+ * day gets one active rule with a stable id, so saving twice changes nothing.
+ * One transaction: a half-applied save would leave days with no hours at all.
+ */
+export async function replaceWeeklyHours(hours: WeeklyHours[]): Promise<void> {
+  const sql = getSql();
+  await sql.begin(async (tx) => {
+    await tx`update availability_rules set active = false where mode = 'any' and location_id is null`;
+    for (const h of hours) {
+      await tx`
+        insert into availability_rules (id, practitioner_id, weekday, start_time, end_time, mode, active)
+        values (${`avr_day_${h.weekday}`}, 'prc_practice', ${h.weekday}, ${h.start}, ${h.end}, 'any', true)
+        on conflict (id) do update set
+          weekday = excluded.weekday, start_time = excluded.start_time,
+          end_time = excluded.end_time, active = true`;
+    }
+  });
 }
 
 export async function listAvailabilityBlocks(): Promise<AvailabilityBlock[]> {

@@ -16,10 +16,7 @@ import {
   Repeat,
   Search,
   Settings,
-  Sprout,
   Users,
-  UserCog,
-  BookOpen,
   X,
 } from 'lucide-react';
 
@@ -35,10 +32,7 @@ const NAV = [
   { href: '/admin/clients', label: 'Clients', icon: Users },
   { href: '/admin/follow-ups', label: 'Follow-ups', icon: Repeat },
   { href: '/admin/payments', label: 'Payments', icon: CreditCard },
-  { href: '/admin/services', label: 'Services', icon: Sprout },
-  { href: '/admin/resources', label: 'Resources', icon: BookOpen },
   { href: '/admin/notifications', label: 'Notifications', icon: Bell },
-  { href: '/admin/staff', label: 'Staff', icon: UserCog, minRole: 'ADMIN' as const },
   { href: '/admin/settings', label: 'Settings', icon: Settings, minRole: 'ADMIN' as const },
 ];
 
