@@ -15,7 +15,7 @@ import {
 import { noteSchema, fieldErrors } from '@/lib/validation';
 import { cancelAppointment, decideMedicalAid, markAppointmentStatus } from '@/services/booking.service';
 import { markPaymentReceivedManually, refundPayment, verifyAndApplyPayment } from '@/services/payment.service';
-import { emit } from '@/services/events';
+import { emit, emitAfterResponse } from '@/services/events';
 import { getCalendarProvider } from '@/services/calendar';
 import { getCalendarEventForAppointment, upsertCalendarEvent, nowISO } from '@/lib/db';
 
@@ -102,7 +102,7 @@ export async function setSessionLink(appointmentId: string, link: string): Promi
   // Send the client the link (and refresh their reminders) when it is new —
   // saving the same link again should not email them twice.
   if (trimmed && trimmed !== before?.sessionLink) {
-    await emit({ type: 'appointment.session_link_added', appointmentId });
+    emitAfterResponse({ type: 'appointment.session_link_added', appointmentId });
   }
   revalidatePath('/admin/appointments');
   return { ok: true };
@@ -129,7 +129,7 @@ export async function retryCalendarSync(appointmentId: string): Promise<AdminRes
 
 export async function resendConfirmation(appointmentId: string): Promise<AdminResult> {
   await requireStaff();
-  await emit({ type: 'appointment.confirmed', appointmentId });
+  emitAfterResponse({ type: 'appointment.confirmed', appointmentId });
   return { ok: true };
 }
 

@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { newId, nowISO } from './ids';
+import { invoiceNumber, newId, nowISO } from './ids';
 import {
   EXCLUSION_VIOLATION,
   dateOnly,
@@ -720,15 +720,29 @@ export async function createAppointmentIfFree(
   appointment: Appointment,
 ): Promise<{ ok: true; appointment: Appointment } | { ok: false; reason: 'taken' }> {
   const sql = getSql();
+  await ensureCounters();
   try {
-    const [row] = await sql`
+    return await sql.begin(async (tx) => {
+      /**
+       * The reference is the next invoice number, taken in the same
+       * transaction as the insert. If the slot turns out to be taken the
+       * whole transaction rolls back, the counter with it, and the number is
+       * not skipped. The row lock on the counter also puts simultaneous
+       * bookings in a queue, so no two can get the same number.
+       */
+      const [counter] = await tx`
+        insert into counters (name, value) values ('invoice', 1)
+        on conflict (name) do update set value = counters.value + 1
+        returning value`;
+      const reference = invoiceNumber(Number(counter.value));
+      const [row] = await tx`
       insert into appointments (
         id, reference, client_user_id, service_id, practitioner_id, mode, location_id,
         start_at, end_at, duration_minutes, status, payment_method, amount_cents,
         reason, is_first_session, session_link, calendar_event_id, follow_up_id, is_demo,
         created_at, updated_at
       ) values (
-        ${appointment.id}, ${appointment.reference}, ${appointment.clientUserId},
+        ${appointment.id}, ${reference}, ${appointment.clientUserId},
         ${appointment.serviceId}, ${appointment.practitionerId ?? null}, ${appointment.mode},
         ${appointment.locationId ?? null}, ${appointment.startAt}, ${appointment.endAt},
         ${appointment.durationMinutes}, ${appointment.status}, ${appointment.paymentMethod},
@@ -737,11 +751,29 @@ export async function createAppointmentIfFree(
         ${appointment.followUpId ?? null}, ${appointment.isDemo ?? false},
         ${appointment.createdAt}, ${appointment.updatedAt}
       ) returning *`;
-    return { ok: true, appointment: mapAppointment(row) };
+      return { ok: true as const, appointment: mapAppointment(row) };
+    });
   } catch (error) {
     if (isPgError(error, EXCLUSION_VIOLATION)) return { ok: false, reason: 'taken' };
     throw error;
   }
+}
+
+/**
+ * The counters table normally comes from the deploy (scripts/seed-postgres.mjs);
+ * creating it here as well means a database that missed that step still takes
+ * bookings. Once per server instance.
+ */
+let countersReady: Promise<void> | null = null;
+function ensureCounters() {
+  countersReady ??= getSql()`
+    create table if not exists counters (name text primary key, value bigint not null)`
+    .then(() => undefined)
+    .catch((error) => {
+      countersReady = null;
+      throw error;
+    });
+  return countersReady;
 }
 
 export async function updateAppointment(id: ID, patch: Partial<Appointment>) {

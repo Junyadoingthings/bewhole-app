@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Modal } from '@/components/ui/modal';
 import { Label, Textarea } from '@/components/ui/field';
 import { useToast } from '@/components/ui/toast';
+import { settle } from '@/lib/settle';
 import { setMedicalAidDecision } from '@/app/actions/admin';
 import { money } from '@/lib/utils';
 
@@ -49,10 +50,8 @@ export function MedicalAidActions({
 
   async function submit(decision: 'accepted' | 'declined') {
     setBusy(true);
-    const result = await setMedicalAidDecision(
-      appointmentId,
-      decision,
-      decision === 'declined' ? reason : undefined,
+    const result = await settle(
+      setMedicalAidDecision(appointmentId, decision, decision === 'declined' ? reason : undefined),
     );
     setBusy(false);
 

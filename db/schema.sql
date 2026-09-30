@@ -190,6 +190,13 @@ create table if not exists availability_blocks (
 create index if not exists availability_blocks_date_idx on availability_blocks(block_date);
 
 -- ---------------------------------------------------------- appointments ---
+-- Running numbers. 'invoice' holds the last booking reference handed out
+-- (BWC0001, BWC0002, …), advanced in the same transaction as each booking.
+create table if not exists counters (
+  name  text primary key,
+  value bigint not null
+);
+
 create table if not exists appointments (
   id                  text primary key,
   reference           text not null unique,
