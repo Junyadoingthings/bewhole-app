@@ -63,7 +63,6 @@ export const listPractitioners = repo.listPractitioners;
 /* ----------------------------------------------------------- availability */
 export const listAvailabilityRules = repo.listAvailabilityRules;
 export const listAvailabilityBlocks = repo.listAvailabilityBlocks;
-export const replaceWeeklyHours = repo.replaceWeeklyHours;
 export const createAvailabilityBlock = repo.createAvailabilityBlock;
 export const deleteAvailabilityBlock = repo.deleteAvailabilityBlock;
 

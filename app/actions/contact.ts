@@ -63,7 +63,7 @@ export async function submitContact(
       { label: 'Phone', value: data.phone || 'Not provided' },
       { label: 'Topic', value: data.topic || 'General' },
     ],
-    href: '/admin/notifications',
+    href: '/admin',
   });
 
   await notify({

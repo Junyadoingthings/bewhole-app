@@ -1,33 +1,25 @@
 import type { Metadata } from 'next';
 
-import { SettingsForm } from '@/components/admin/settings-form';
+import { ChangePasswordForm } from '@/components/admin/change-password-form';
 import { Reveal } from '@/components/motion';
 import { requireStaff } from '@/lib/auth';
-import { getSettings, listAvailabilityRules } from '@/lib/db';
-import { activeChannels } from '@/services/notifications';
 
 export const metadata: Metadata = { title: 'Settings', robots: { index: false } };
 export const dynamic = 'force-dynamic';
 
+/** Only the console password, at the practice's request. */
 export default async function AdminSettingsPage() {
-  const user = await requireStaff();
-  const canEdit = user.role === 'ADMIN' || user.role === 'SUPER_ADMIN';
-  const [settings, rules] = await Promise.all([getSettings(), listAvailabilityRules()]);
-  const emailLive = activeChannels().some((c) => c.channel === 'email' && c.live);
+  await requireStaff();
 
   return (
     <div className="mx-auto max-w-3xl">
       <Reveal>
         <h1 className="font-display text-3xl text-ink">Settings</h1>
-        <p className="mt-2 max-w-xl text-ink-soft">
-          Your opening hours, booking rules and the emails clients receive. Changes apply as soon
-          as you save.
-          {!canEdit && ' You need administrator access to change these.'}
-        </p>
+        <p className="mt-2 max-w-xl text-ink-soft">Change the password you use to sign in to the console.</p>
       </Reveal>
 
       <div className="mt-8">
-        <SettingsForm settings={settings} rules={rules} canEdit={canEdit} emailLive={emailLive} />
+        <ChangePasswordForm />
       </div>
     </div>
   );

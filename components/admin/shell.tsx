@@ -6,7 +6,6 @@ import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
-  Bell,
   CalendarDays,
   CalendarRange,
   CreditCard,
@@ -32,8 +31,8 @@ const NAV = [
   { href: '/admin/clients', label: 'Clients', icon: Users },
   { href: '/admin/follow-ups', label: 'Follow-ups', icon: Repeat },
   { href: '/admin/payments', label: 'Payments', icon: CreditCard },
-  { href: '/admin/notifications', label: 'Notifications', icon: Bell },
-  { href: '/admin/settings', label: 'Settings', icon: Settings, minRole: 'ADMIN' as const },
+  // Open to every staff member: it holds only the password change.
+  { href: '/admin/settings', label: 'Settings', icon: Settings },
 ];
 
 export interface CommandItem {
@@ -46,12 +45,10 @@ export interface CommandItem {
 
 export function AdminShell({
   user,
-  unread,
   commands,
   children,
 }: {
   user: SessionUser;
-  unread: number;
   commands: CommandItem[];
   children: React.ReactNode;
 }) {
@@ -59,8 +56,7 @@ export function AdminShell({
   const [mobileOpen, setMobileOpen] = React.useState(false);
   const [paletteOpen, setPaletteOpen] = React.useState(false);
 
-  const isAdmin = user.role === 'ADMIN' || user.role === 'SUPER_ADMIN';
-  const items = NAV.filter((item) => !item.minRole || isAdmin);
+  const items = NAV;
 
   const isActive = (href: string, exact?: boolean) =>
     exact ? pathname === href : pathname === href || pathname.startsWith(`${href}/`);
@@ -120,11 +116,6 @@ export function AdminShell({
               )}
               <item.icon className="h-4.5 w-4.5 shrink-0" />
               <span className="flex-1">{item.label}</span>
-              {item.href === '/admin/notifications' && unread > 0 && (
-                <span className="rounded-full bg-forest-400 px-1.5 py-0.5 text-2xs font-medium text-forest-950 dark:text-forest-100">
-                  {unread}
-                </span>
-              )}
             </Link>
           );
         })}

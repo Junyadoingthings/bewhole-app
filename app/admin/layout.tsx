@@ -1,8 +1,5 @@
 import { AdminShell, type CommandItem } from '@/components/admin/shell';
 import { requireStaff } from '@/lib/auth';
-import { listNotifications } from '@/lib/db';
-import { withTimeout } from '@/lib/db/with-timeout';
-import type { NotificationRecord } from '@/types';
 
 export const dynamic = 'force-dynamic';
 
@@ -16,7 +13,6 @@ const NAV_COMMANDS: CommandItem[] = [
   { id: 'nav-clients', label: 'Clients', href: '/admin/clients', group: 'Go to' },
   { id: 'nav-followups', label: 'Follow-ups', href: '/admin/follow-ups', group: 'Go to' },
   { id: 'nav-payments', label: 'Payments', href: '/admin/payments', group: 'Go to' },
-  { id: 'nav-notifications', label: 'Notifications', href: '/admin/notifications', group: 'Go to' },
   { id: 'nav-settings', label: 'Settings', href: '/admin/settings', group: 'Go to' },
 ];
 
@@ -26,40 +22,17 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   const user = await requireStaff();
 
   /**
-   * This layout is intentionally CHEAP now.
+   * This layout is intentionally CHEAP: no database queries at all.
    *
-   * It used to load clients, all appointments and all services on EVERY admin
-   * page — four concurrent queries — purely to seed the ⌘K palette with
-   * searchable client and appointment entries. That was the reliability
-   * problem: with a small connection pool, those four queries competed with
-   * the page's own queries (the dashboard and calendar each fire another
-   * ~6 through `hydrateAppointments`), the pool starved, and the page hung
-   * until it timed out and showed the error card.
-   *
-   * The layout now runs ONE lightweight query — the unread count for the bell —
-   * and the palette is navigation-only. Every page therefore gets the
-   * connection pool to itself. Searching clients by name from ⌘K is a nice-to
-   * have that was never worth making every page unreliable; it can come back
-   * later as a dedicated, on-demand search endpoint.
+   * It used to load clients, appointments and services on every admin page to
+   * seed the ⌘K palette, and later the unread count for the Notifications tab.
+   * With a small connection pool those queries competed with the page's own
+   * and could hang it. The palette is navigation-only, and the Notifications
+   * tab has been removed at the practice's request, so every page now gets
+   * the connection pool to itself.
    */
-  // Short cap on purpose. The shell — sidebar, the mobile menu button, search
-  // — cannot become interactive until this async layout resolves, so a slow
-  // notifications query directly delays every tap working. The unread badge is
-  // the least important thing on the page; 2.5s is the most we will make the
-  // whole console wait for it. If it times out the badge shows nothing and the
-  // page is fully usable.
-  const notifications = await withTimeout<NotificationRecord[]>(
-    listNotifications({ audience: 'staff' }),
-    [],
-    2500,
-  );
-
   return (
-    <AdminShell
-      user={user}
-      unread={notifications.filter((n) => !n.read).length}
-      commands={NAV_COMMANDS}
-    >
+    <AdminShell user={user} commands={NAV_COMMANDS}>
       {children}
     </AdminShell>
   );
