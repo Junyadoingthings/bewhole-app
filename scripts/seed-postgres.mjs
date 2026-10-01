@@ -188,6 +188,12 @@ async function main() {
   const resetPrices = args.includes('--reset-prices');
   console.log(`Seeding ${url.replace(/:[^:@]+@/, ':****@')}`);
 
+  // Running numbers. 'invoice' is the last booking reference handed out
+  // (BWC0001, BWC0002, …). Never reset here: the row is created by the first
+  // booking and only ever counts up.
+  await sql`create table if not exists counters (name text primary key, value bigint not null)`;
+  console.log('  ✓ counters table');
+
   for (const c of CATEGORIES) {
     await sql`
       insert into service_categories (id, slug, name, summary, description, areas, concerns, icon, accent, sort_order, active)

@@ -18,6 +18,7 @@ import { Button } from '@/components/ui/button';
 import { Modal } from '@/components/ui/modal';
 import { Input, Label, Textarea } from '@/components/ui/field';
 import { useToast } from '@/components/ui/toast';
+import { settle } from '@/lib/settle';
 import {
   resendConfirmation,
   retryCalendarSync,
@@ -66,7 +67,7 @@ export function AppointmentRowActions({
 
   async function run(fn: () => Promise<{ ok: boolean; error?: string }>, success: string) {
     setBusy(true);
-    const result = await fn();
+    const result = await settle(fn());
     setBusy(false);
     setOpen(false);
     if (!result.ok) {

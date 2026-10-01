@@ -9,7 +9,6 @@ import {
   hydrateFollowUps,
   listFollowUps,
   newId,
-  newReference,
   nowISO,
   updateFollowUp,
 } from '@/lib/db';
@@ -143,7 +142,8 @@ async function materialiseAppointment(followUpId: ID): Promise<ID | null> {
 
   const appointment: Appointment = {
     id: newId('apt'),
-    reference: newReference(),
+    // The invoice number (BWC0001…) is assigned when the booking is saved.
+    reference: '',
     clientUserId: followUp.clientUserId,
     serviceId: followUp.serviceId,
     practitionerId: 'prc_practice',
@@ -166,6 +166,7 @@ async function materialiseAppointment(followUpId: ID): Promise<ID | null> {
 
   const claim = await createAppointmentIfFree(appointment);
   if (!claim.ok) return null;
+  appointment.reference = claim.appointment.reference;
 
   await audit({
     actorUserId: followUp.createdByUserId,

@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { invoiceNumber } from './ids';
 import { getDb, newId, nowISO, transact } from './store';
 import type {
   Appointment,
@@ -333,8 +334,12 @@ export async function createAppointmentIfFree(
         a.endAt > appointment.startAt,
     );
     if (clash) return { ok: false as const, reason: 'taken' as const };
-    db.appointments.push(appointment);
-    return { ok: true as const, appointment };
+    // The next invoice number, taken under the same lock as the save.
+    const next = (db.counters?.invoice ?? 0) + 1;
+    db.counters = { ...db.counters, invoice: next };
+    const saved = { ...appointment, reference: invoiceNumber(next) };
+    db.appointments.push(saved);
+    return { ok: true as const, appointment: saved };
   });
 }
 

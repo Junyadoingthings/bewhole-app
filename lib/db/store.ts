@@ -63,6 +63,8 @@ export interface Database {
   auditLogs: AuditLog[];
   sessions: { token: string; userId: string; expiresAt: string; createdAt: string }[];
   settings: Settings;
+  /** Running numbers, e.g. the last invoice number handed out. */
+  counters?: Record<string, number>;
 }
 
 const DATA_DIR = path.join(process.cwd(), '.data');

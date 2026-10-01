@@ -12,7 +12,6 @@ import {
   getSettings,
   hydrateAppointments,
   newId,
-  newReference,
   nowISO,
   recordConsent,
   rescheduleAppointment,
@@ -23,7 +22,7 @@ import { COUNSELLING_CONSENT } from '@/config/business';
 import { hashPassword } from '@/lib/auth/password';
 import { fromLocalParts, hoursUntil, parts } from '@/lib/date';
 import { money } from '@/lib/utils';
-import { emit, emitAfterResponse } from '@/services/events';
+import { emitAfterResponse } from '@/services/events';
 import { createCheckoutForAppointment } from '@/services/payment.service';
 import { resolveSlot } from '@/services/availability.service';
 import type { Appointment, AppointmentView, ID, SessionUser } from '@/types';
@@ -199,7 +198,8 @@ export async function createBooking(
 
   const appointment: Appointment = {
     id: newId('apt'),
-    reference: newReference(),
+    // The invoice number (BWC0001…) is assigned when the booking is saved.
+    reference: '',
     clientUserId,
     serviceId: service.id,
     practitionerId: slot.slot.practitionerId ?? null,
@@ -233,6 +233,7 @@ export async function createBooking(
   if (!claim.ok) {
     return { ok: false, error: 'That time was taken a moment ago. Please choose another.', field: 'time' };
   }
+  appointment.reference = claim.appointment.reference;
 
   await recordConsent({
     userId: clientUserId,
@@ -404,7 +405,7 @@ export async function cancelAppointment(
     meta: { late, byStaff },
   });
 
-  await emit({ type: 'appointment.cancelled', appointmentId, byStaff, late });
+  emitAfterResponse({ type: 'appointment.cancelled', appointmentId, byStaff, late });
   return { ok: true };
 }
 
@@ -441,7 +442,7 @@ export async function moveAppointment(
     meta: { from: previousStart, to: slot.slot.start },
   });
 
-  await emit({ type: 'appointment.rescheduled', appointmentId, previousStart });
+  emitAfterResponse({ type: 'appointment.rescheduled', appointmentId, previousStart });
   return { ok: true };
 }
 
@@ -466,8 +467,8 @@ export async function markAppointmentStatus(
     entityId: appointmentId,
   });
 
-  if (status === 'completed') await emit({ type: 'appointment.completed', appointmentId });
-  if (status === 'confirmed') await emit({ type: 'appointment.confirmed', appointmentId });
+  if (status === 'completed') emitAfterResponse({ type: 'appointment.completed', appointmentId });
+  if (status === 'confirmed') emitAfterResponse({ type: 'appointment.confirmed', appointmentId });
   return { ok: true };
 }
 
@@ -569,7 +570,9 @@ export async function decideMedicalAid(
       meta: { reference, amountCents: previousAmountCents },
     });
 
-    await emit({ type: 'appointment.confirmed', appointmentId });
+    // After the response: the calendar sync and the emails can take longer
+    // than the request is allowed to run, and the decision is already saved.
+    emitAfterResponse({ type: 'appointment.confirmed', appointmentId });
     return { ok: true };
   }
 
@@ -599,6 +602,6 @@ export async function decideMedicalAid(
     },
   });
 
-  await emit({ type: 'appointment.medical_aid_declined', appointmentId });
+  emitAfterResponse({ type: 'appointment.medical_aid_declined', appointmentId });
   return { ok: true };
 }

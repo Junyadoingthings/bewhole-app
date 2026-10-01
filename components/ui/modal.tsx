@@ -34,6 +34,16 @@ export function Modal({
   const returnFocusRef = React.useRef<HTMLElement | null>(null);
   const titleId = React.useId();
 
+  /**
+   * The latest onClose, read through a ref so the effect below runs only when
+   * the modal opens or closes. Callers pass an inline `() => setOpen(false)`,
+   * a new function on every render; with it as a dependency, every keystroke
+   * in a field re-ran the effect, which put focus back on the first field
+   * ([data-autofocus]). Typing "Public holiday" into Reason left just "P".
+   */
+  const onCloseRef = React.useRef(onClose);
+  onCloseRef.current = onClose;
+
   React.useEffect(() => {
     if (!open) return;
     returnFocusRef.current = document.activeElement as HTMLElement;
@@ -43,7 +53,7 @@ export function Modal({
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         event.stopPropagation();
-        onClose();
+        onCloseRef.current();
         return;
       }
       if (event.key !== 'Tab' || !panelRef.current) return;
@@ -75,7 +85,7 @@ export function Modal({
       window.clearTimeout(timer);
       returnFocusRef.current?.focus?.();
     };
-  }, [open, onClose]);
+  }, [open]);
 
   const width = { sm: 'sm:max-w-md', md: 'sm:max-w-lg', lg: 'sm:max-w-2xl' }[size];
 

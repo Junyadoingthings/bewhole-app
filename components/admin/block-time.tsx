@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Modal } from '@/components/ui/modal';
 import { CheckboxRow, Input, Label } from '@/components/ui/field';
 import { useToast } from '@/components/ui/toast';
+import { settle } from '@/lib/settle';
 import { blockTime, unblockTime } from '@/app/actions/admin';
 import { formatFullDate, today } from '@/lib/date';
 
@@ -39,12 +40,14 @@ export function BlockTimeControl({ blocks }: { blocks: Block[] }) {
 
   async function save() {
     setBusy(true);
-    const result = await blockTime({
-      date,
-      start: wholeDay ? null : start,
-      end: wholeDay ? null : end,
-      reason,
-    });
+    const result = await settle(
+      blockTime({
+        date,
+        start: wholeDay ? null : start,
+        end: wholeDay ? null : end,
+        reason,
+      }),
+    );
     setBusy(false);
     if (!result.ok) {
       toast({ tone: 'error', title: 'Could not block that time', description: result.error });
@@ -57,7 +60,7 @@ export function BlockTimeControl({ blocks }: { blocks: Block[] }) {
   }
 
   async function remove(id: string) {
-    const result = await unblockTime(id);
+    const result = await settle(unblockTime(id));
     if (!result.ok) {
       toast({ tone: 'error', title: 'Could not remove that block' });
       return;

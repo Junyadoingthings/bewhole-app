@@ -17,7 +17,7 @@ import {
   updateAppointment,
   updatePayment,
 } from '@/lib/db';
-import { emit } from '@/services/events';
+import { emitAfterResponse } from '@/services/events';
 import { getPaymentProvider } from '@/services/payments';
 import type { ID, Payment } from '@/types';
 
@@ -305,7 +305,7 @@ export async function verifyAndApplyPayment(
       failureReason: result.failureReason ?? null,
     });
     if (payment.appointmentId) {
-      await emit({
+      emitAfterResponse({
         type: 'payment.failed',
         paymentId,
         appointmentId: payment.appointmentId,
@@ -341,7 +341,7 @@ export async function applyPaymentSuccess(paymentId: ID) {
     const appointment = await getAppointment(payment.appointmentId);
     if (appointment && appointment.status === 'pending_payment') {
       await updateAppointment(appointment.id, { status: 'confirmed' });
-      await emit({ type: 'appointment.confirmed', appointmentId: appointment.id });
+      emitAfterResponse({ type: 'appointment.confirmed', appointmentId: appointment.id });
     }
   }
 

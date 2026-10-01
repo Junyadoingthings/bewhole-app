@@ -6,6 +6,7 @@ import { Check, RefreshCw, Undo2 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/toast';
+import { settle } from '@/lib/settle';
 import { markPaymentPaid, recheckPayment, refund } from '@/app/actions/admin';
 import type { PaymentStatus } from '@/types';
 
@@ -24,7 +25,7 @@ export function PaymentActions({
 
   async function run(key: string, fn: () => Promise<{ ok: boolean; error?: string }>, success: string) {
     setBusy(key);
-    const result = await fn();
+    const result = await settle(fn());
     setBusy(null);
     if (!result.ok) {
       toast({ tone: 'error', title: 'That didn’t work', description: result.error });

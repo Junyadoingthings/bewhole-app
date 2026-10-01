@@ -6,6 +6,7 @@ import { Check, Send, X } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/toast';
+import { settle } from '@/lib/settle';
 import { closeFollowUp, sendFollowUpNow } from '@/app/actions/follow-ups';
 
 export function FollowUpActions({
@@ -23,7 +24,7 @@ export function FollowUpActions({
 
   async function run(key: string, fn: () => Promise<{ ok: boolean; error?: string }>, success: string) {
     setBusy(key);
-    const result = await fn();
+    const result = await settle(fn());
     setBusy(null);
     if (!result.ok) {
       toast({ tone: 'error', title: 'That didn’t work', description: result.error });
