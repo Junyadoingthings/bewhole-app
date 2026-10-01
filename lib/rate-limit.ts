@@ -66,6 +66,7 @@ export const LIMITS = {
   availability: { limit: 240, windowMs: 60_000 },
   contact: { limit: 5, windowMs: 30 * 60_000, blockMs: 30 * 60_000 },
   assistant: { limit: 30, windowMs: 10 * 60_000 },
+  passwordChange: { limit: 5, windowMs: 15 * 60_000, blockMs: 15 * 60_000 },
 } as const;
 
 /** Best-effort caller identity for rate-limit keys. Never used for auth. */

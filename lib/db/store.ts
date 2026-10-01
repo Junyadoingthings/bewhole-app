@@ -18,6 +18,7 @@ import type {
   NotificationLog,
   NotificationRecord,
   Payment,
+  PasswordResetCode,
   PaymentEvent,
   Practitioner,
   Profile,
@@ -65,6 +66,7 @@ export interface Database {
   settings: Settings;
   /** Running numbers, e.g. the last invoice number handed out. */
   counters?: Record<string, number>;
+  passwordResetCodes?: PasswordResetCode[];
 }
 
 const DATA_DIR = path.join(process.cwd(), '.data');

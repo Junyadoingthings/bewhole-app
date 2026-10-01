@@ -25,6 +25,7 @@ import type {
   Location,
   NotificationLog,
   NotificationRecord,
+  PasswordResetCode,
   Payment,
   PaymentEvent,
   Practitioner,
@@ -1428,4 +1429,95 @@ export async function hydrateFollowUps(followUps: FollowUp[]): Promise<FollowUpV
       phone: null,
     },
   }));
+}
+
+/* ---------------------------------------------------- password reset codes */
+
+/**
+ * The table normally comes from the deploy (scripts/seed-postgres.mjs);
+ * creating it here as well means a database that missed that step still
+ * works. Once per server instance.
+ */
+let resetCodesReady: Promise<void> | null = null;
+function ensureResetCodes() {
+  resetCodesReady ??= getSql()`
+    create table if not exists password_reset_codes (
+      id         text primary key,
+      user_id    text not null references users(id) on delete cascade,
+      code_hash  text not null,
+      expires_at timestamptz not null,
+      attempts   int not null default 0,
+      used_at    timestamptz,
+      created_at timestamptz not null default now()
+    )`
+    .then(() => undefined)
+    .catch((error) => {
+      resetCodesReady = null;
+      throw error;
+    });
+  return resetCodesReady;
+}
+
+function mapResetCode(r: any): PasswordResetCode {
+  return {
+    id: r.id,
+    userId: r.user_id,
+    codeHash: r.code_hash,
+    expiresAt: isoRequired(r.expires_at),
+    attempts: Number(r.attempts),
+    usedAt: r.used_at ? isoRequired(r.used_at) : null,
+    createdAt: isoRequired(r.created_at),
+  };
+}
+
+/** Store a new code for the user. Any earlier unused code stops working. */
+export async function createPasswordResetCode(
+  userId: ID,
+  codeHash: string,
+  expiresAt: string,
+): Promise<PasswordResetCode> {
+  await ensureResetCodes();
+  const sql = getSql();
+  return sql.begin(async (tx) => {
+    await tx`update password_reset_codes set used_at = now() where user_id = ${userId} and used_at is null`;
+    const [row] = await tx`
+      insert into password_reset_codes (id, user_id, code_hash, expires_at)
+      values (${newId('prc')}, ${userId}, ${codeHash}, ${expiresAt})
+      returning *`;
+    return mapResetCode(row);
+  });
+}
+
+/** The user's newest code that is unused and unexpired, if any. */
+export async function getActivePasswordResetCode(userId: ID): Promise<PasswordResetCode | null> {
+  await ensureResetCodes();
+  const sql = getSql();
+  const [row] = await sql`
+    select * from password_reset_codes
+    where user_id = ${userId} and used_at is null and expires_at > now()
+    order by created_at desc limit 1`;
+  return row ? mapResetCode(row) : null;
+}
+
+/** How many codes were sent to the user since `sinceISO` (for rate limiting). */
+export async function countPasswordResetCodesSince(userId: ID, sinceISO: string): Promise<number> {
+  await ensureResetCodes();
+  const sql = getSql();
+  const [row] = await sql`
+    select count(*)::int as n from password_reset_codes
+    where user_id = ${userId} and created_at >= ${sinceISO}`;
+  return row.n;
+}
+
+/** Count a wrong guess; returns the new total. */
+export async function recordPasswordResetAttempt(id: ID): Promise<number> {
+  const sql = getSql();
+  const [row] = await sql`
+    update password_reset_codes set attempts = attempts + 1 where id = ${id} returning attempts`;
+  return row ? Number(row.attempts) : 0;
+}
+
+export async function markPasswordResetCodeUsed(id: ID): Promise<void> {
+  const sql = getSql();
+  await sql`update password_reset_codes set used_at = now() where id = ${id}`;
 }

@@ -194,6 +194,19 @@ async function main() {
   await sql`create table if not exists counters (name text primary key, value bigint not null)`;
   console.log('  ✓ counters table');
 
+  // One-time codes for an administrator who forgot their console password.
+  await sql`
+    create table if not exists password_reset_codes (
+      id         text primary key,
+      user_id    text not null references users(id) on delete cascade,
+      code_hash  text not null,
+      expires_at timestamptz not null,
+      attempts   int not null default 0,
+      used_at    timestamptz,
+      created_at timestamptz not null default now()
+    )`;
+  console.log('  ✓ password reset codes table');
+
   for (const c of CATEGORIES) {
     await sql`
       insert into service_categories (id, slug, name, summary, description, areas, concerns, icon, accent, sort_order, active)

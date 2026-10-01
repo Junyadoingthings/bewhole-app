@@ -137,6 +137,20 @@ export interface AvailabilityRule {
   active: boolean;
 }
 
+/**
+ * A one-time code emailed to an administrator who has forgotten their console
+ * password. Only a hash is stored; the code itself exists only in the email.
+ */
+export interface PasswordResetCode {
+  id: ID;
+  userId: ID;
+  codeHash: string;
+  expiresAt: ISODateTime;
+  attempts: number;
+  usedAt?: ISODateTime | null;
+  createdAt: ISODateTime;
+}
+
 /** A one-off closure: leave, public holiday, or a blocked afternoon. */
 export interface AvailabilityBlock {
   id: ID;

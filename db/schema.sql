@@ -190,6 +190,18 @@ create table if not exists availability_blocks (
 create index if not exists availability_blocks_date_idx on availability_blocks(block_date);
 
 -- ---------------------------------------------------------- appointments ---
+-- One-time codes emailed to an administrator who forgot their console
+-- password. Only a hash of each code is stored.
+create table if not exists password_reset_codes (
+  id         text primary key,
+  user_id    text not null references users(id) on delete cascade,
+  code_hash  text not null,
+  expires_at timestamptz not null,
+  attempts   int not null default 0,
+  used_at    timestamptz,
+  created_at timestamptz not null default now()
+);
+
 -- Running numbers. 'invoice' holds the last booking reference handed out
 -- (BWC0001, BWC0002, …), advanced in the same transaction as each booking.
 create table if not exists counters (
