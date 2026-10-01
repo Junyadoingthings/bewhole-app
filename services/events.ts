@@ -638,19 +638,8 @@ async function scheduleReminders(a: AppointmentView) {
       withDetails: true,
     });
   }
-  if (settings.reminders.followUpAfterHours) {
-    jobs.push({
-      at: morningOf(addISODays(sessionDate, 1)),
-      type: 'followup.check_in',
-      subject: 'Thank you for your recent session',
-      heading: 'Thank you for your recent session',
-      body:
-        'Thank you for attending your recent session with Be Whole Care. We trust that it was of value to you.\n\n' +
-        'When you are ready to book your next session, you are welcome to do so at any time. ' +
-        'Should you have any questions in the meantime, please reply to this email.',
-      withDetails: false,
-    });
-  }
+  // No email after the session, at the practice's request: the next-morning
+  // "Thank you for your recent session" check-in was removed (2026-10).
 
   for (const job of jobs) {
     if (new Date(job.at).getTime() <= Date.now()) continue;
@@ -791,27 +780,11 @@ async function onAppointmentCancelled(appointmentId: ID, byStaff: boolean, late:
 async function onAppointmentCompleted(appointmentId: ID) {
   const a = await view(appointmentId);
   if (!a) return;
-  const settings = await getSettings();
 
-  // The session is over: nothing queued for it (including the next-morning
-  // check-in) should follow this message.
+  // The session is over: nothing still queued for it should go out. The
+  // client is not emailed when a session is marked completed — the practice
+  // asked for no post-session email (2026-10).
   await withdrawQueuedNotificationLogs(appointmentHref(a), 'Session completed');
-
-  await notify({
-    type: 'appointment.completed',
-    audience: 'client',
-    channels: [...settings.reminders.channels, 'in_app'],
-    to: clientRecipient(a),
-    subject: 'Thank you for your session',
-    heading: 'Thank you for your session',
-    greeting: firstNameOf(a),
-    body:
-      `Thank you for attending your session with Be Whole Care on ${appointmentWhen(a)}.\n\n` +
-      'When you are ready to book your next session, you are welcome to do so at any time. ' +
-      'Should you have any questions in the meantime, please reply to this email.',
-    links: [{ label: 'Book your next session', url: appUrl('/book') }],
-    href: appointmentHref(a),
-  });
 }
 
 async function onPaymentFailed(appointmentId: ID | null, reason?: string) {
