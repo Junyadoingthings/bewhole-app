@@ -265,6 +265,39 @@ export async function notify(input: SendInput): Promise<void> {
   }
 }
 
+/**
+ * An email that carries a secret, such as a password verification code.
+ *
+ * Unlike notify(), the message body is never stored: there is no in-app copy,
+ * and the email log records that it was sent but not what it said. The result
+ * is returned so the caller can tell the person if it did not go out.
+ */
+export async function sendSecurityEmail(
+  input: Omit<SendInput, 'channels' | 'scheduledFor'>,
+): Promise<{ ok: boolean; error?: string }> {
+  const message: SendInput = { ...input, channels: ['email'] };
+  const result = await emailAdapter.send(message);
+  // Local development has no email provider; show the message in the dev
+  // server's terminal so the flow can be tested. Never in production.
+  if (!emailAdapter.live && process.env.NODE_ENV !== 'production') {
+    console.info(`[dev email to ${input.to.email}] ${input.subject}\n${input.body}`);
+  }
+  if (input.to.email) {
+    await createNotificationLog({
+      channel: 'email',
+      to: input.to.email,
+      subject: input.subject,
+      body: '[Security email: the content is not stored.]',
+      href: null,
+      status: result.ok ? 'sent' : 'failed',
+      provider: emailAdapter.live ? 'email' : 'email:log-only',
+      error: result.error ?? null,
+      sentAt: result.ok ? new Date().toISOString() : null,
+    });
+  }
+  return result;
+}
+
 function normalizeMsisdn(phone: string) {
   const digits = phone.replace(/\D/g, '');
   if (digits.startsWith('0')) return `27${digits.slice(1)}`;

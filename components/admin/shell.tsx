@@ -31,8 +31,8 @@ const NAV = [
   { href: '/admin/clients', label: 'Clients', icon: Users },
   { href: '/admin/follow-ups', label: 'Follow-ups', icon: Repeat },
   { href: '/admin/payments', label: 'Payments', icon: CreditCard },
-  // Open to every staff member: it holds only the password change.
-  { href: '/admin/settings', label: 'Settings', icon: Settings },
+  // The practice administrator's console password; not shown to other staff.
+  { href: '/admin/settings', label: 'Settings', icon: Settings, minRole: 'ADMIN' as const },
 ];
 
 export interface CommandItem {
@@ -56,7 +56,8 @@ export function AdminShell({
   const [mobileOpen, setMobileOpen] = React.useState(false);
   const [paletteOpen, setPaletteOpen] = React.useState(false);
 
-  const items = NAV;
+  const isAdmin = user.role === 'ADMIN' || user.role === 'SUPER_ADMIN';
+  const items = NAV.filter((item) => !('minRole' in item) || isAdmin);
 
   const isActive = (href: string, exact?: boolean) =>
     exact ? pathname === href : pathname === href || pathname.startsWith(`${href}/`);

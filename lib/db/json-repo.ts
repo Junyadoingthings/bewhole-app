@@ -17,6 +17,7 @@ import type {
   Location,
   NotificationLog,
   NotificationRecord,
+  PasswordResetCode,
   Payment,
   Practitioner,
   Profile,
@@ -735,5 +736,66 @@ export async function hydrateFollowUps(followUps: FollowUp[]): Promise<FollowUpV
           }
         : undefined,
     };
+  });
+}
+
+/* ---------------------------------------------------- password reset codes */
+
+/** Store a new code for the user. Any earlier unused code stops working. */
+export async function createPasswordResetCode(
+  userId: ID,
+  codeHash: string,
+  expiresAt: string,
+): Promise<PasswordResetCode> {
+  return transact((db) => {
+    db.passwordResetCodes ??= [];
+    const ts = nowISO();
+    for (const c of db.passwordResetCodes) if (c.userId === userId && !c.usedAt) c.usedAt = ts;
+    const code: PasswordResetCode = {
+      id: newId('prc'),
+      userId,
+      codeHash,
+      expiresAt,
+      attempts: 0,
+      usedAt: null,
+      createdAt: ts,
+    };
+    db.passwordResetCodes.push(code);
+    return code;
+  });
+}
+
+/** The user's newest code that is unused and unexpired, if any. */
+export async function getActivePasswordResetCode(userId: ID): Promise<PasswordResetCode | null> {
+  const db = await getDb();
+  const now = nowISO();
+  return (
+    (db.passwordResetCodes ?? [])
+      .filter((c) => c.userId === userId && !c.usedAt && c.expiresAt > now)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0] ?? null
+  );
+}
+
+/** How many codes were sent to the user since `sinceISO` (for rate limiting). */
+export async function countPasswordResetCodesSince(userId: ID, sinceISO: string): Promise<number> {
+  const db = await getDb();
+  return (db.passwordResetCodes ?? []).filter((c) => c.userId === userId && c.createdAt >= sinceISO)
+    .length;
+}
+
+/** Count a wrong guess; returns the new total. */
+export async function recordPasswordResetAttempt(id: ID): Promise<number> {
+  return transact((db) => {
+    const code = (db.passwordResetCodes ?? []).find((c) => c.id === id);
+    if (!code) return 0;
+    code.attempts += 1;
+    return code.attempts;
+  });
+}
+
+export async function markPasswordResetCodeUsed(id: ID): Promise<void> {
+  await transact((db) => {
+    const code = (db.passwordResetCodes ?? []).find((c) => c.id === id);
+    if (code) code.usedAt = nowISO();
   });
 }

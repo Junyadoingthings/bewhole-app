@@ -45,6 +45,13 @@ export const createSession = repo.createSession;
 export const findSession = repo.findSession;
 export const deleteSession = repo.deleteSession;
 export const deleteSessionsForUser = repo.deleteSessionsForUser;
+
+/* --------------------------------------------------- password reset codes */
+export const createPasswordResetCode = repo.createPasswordResetCode;
+export const getActivePasswordResetCode = repo.getActivePasswordResetCode;
+export const countPasswordResetCodesSince = repo.countPasswordResetCodesSince;
+export const recordPasswordResetAttempt = repo.recordPasswordResetAttempt;
+export const markPasswordResetCodeUsed = repo.markPasswordResetCodeUsed;
 export const pruneExpiredSessions = repo.pruneExpiredSessions;
 export const findSessionUser = repo.findSessionUser;
 

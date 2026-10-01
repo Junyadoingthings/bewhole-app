@@ -1,5 +1,7 @@
 'use server';
 
+import { randomInt } from 'node:crypto';
+
 import { cookies, headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 
@@ -16,18 +18,31 @@ import { getCurrentUser } from '@/lib/auth';
 import { withTimeout } from '@/lib/db/with-timeout';
 import {
   audit,
+  countPasswordResetCodesSince,
+  createPasswordResetCode,
   createSession,
   createUserWithProfile,
   deleteSession,
   deleteSessionsForUser,
   findUserByEmail,
+  getActivePasswordResetCode,
+  markPasswordResetCodeUsed,
   recordConsent,
+  recordPasswordResetAttempt,
   updateProfile,
   updateUser,
 } from '@/lib/db';
 import { LIMITS, clientKey, rateLimit } from '@/lib/rate-limit';
-import { fieldErrors, loginSchema, profileSchema, registerSchema, safeRedirect } from '@/lib/validation';
-import { notify } from '@/services/notifications';
+import {
+  fieldErrors,
+  loginSchema,
+  passwordSchema,
+  profileSchema,
+  registerSchema,
+  safeRedirect,
+} from '@/lib/validation';
+import { notify, sendSecurityEmail } from '@/services/notifications';
+import type { Role } from '@/types';
 
 export interface AuthState {
   status: 'idle' | 'error' | 'success';
@@ -340,37 +355,183 @@ export async function changeOwnPassword(_prev: AuthState, formData: FormData): P
 
   return { status: 'success', message: 'Password changed. Other devices have been signed out.' };
 }
-export async function updateAdminPassword(formData: FormData) {
-  const currentPassword = formData.get('currentPassword') as string;
-  const newPassword = formData.get('newPassword') as string;
 
-  if (!currentPassword || !newPassword) {
-    return { ok: false, error: 'Please fill in all fields.' };
-  }
+/* ------------------------------------------------ console password (admin) */
 
-  // 1. Get the currently logged-in admin
+type PasswordResult = { ok: boolean; error?: string };
+
+const CODE_TTL_MINUTES = 10;
+const CODE_MAX_ATTEMPTS = 5;
+const CODES_PER_15_MINUTES = 3;
+
+/** The practice's administrators — the only accounts that use console Settings. */
+function isPracticeAdmin(user: { role: string } | null) {
+  return user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN';
+}
+
+/** The same rules as everywhere else on the site (10+ characters, mixed case, a number). */
+function newPasswordProblem(next: string, confirm: string): string | null {
+  const parsed = passwordSchema.safeParse(next);
+  if (!parsed.success) return parsed.error.issues[0].message;
+  if (next !== confirm) return 'The new passwords do not match.';
+  return null;
+}
+
+/**
+ * Save the new password, sign every other device out (anyone who knew the
+ * old password loses access), keep this device signed in, record it, and tell
+ * the admin by email so an unexpected change does not go unnoticed.
+ */
+async function completePasswordChange(
+  user: { id: string; email: string; role: Role },
+  next: string,
+  via: 'current_password' | 'email_code',
+) {
+  await updateUser(user.id, { passwordHash: await hashPassword(next) });
+  await deleteSessionsForUser(user.id);
+  const { token, cookieValue } = createSessionToken();
+  await createSession(user.id, token, sessionExpiry());
+  setSessionCookie(cookieValue);
+
+  await audit({
+    actorUserId: user.id,
+    actorRole: user.role,
+    action: 'auth.password_changed',
+    entity: 'user',
+    entityId: user.id,
+    meta: { via },
+  });
+
+  await sendSecurityEmail({
+    type: 'auth.password_changed',
+    audience: 'staff',
+    to: { email: user.email },
+    subject: 'Your console password was changed',
+    heading: 'Your console password was changed',
+    body:
+      'The password for your Be Whole Care practice console was changed just now, and any other ' +
+      'devices that were signed in have been signed out.\n\n' +
+      'If you made this change, no action is needed. If you did not, contact your website ' +
+      'developer straight away.',
+  });
+}
+
+/** Change the console password, knowing the current one. */
+export async function updateAdminPassword(formData: FormData): Promise<PasswordResult> {
   const user = await getCurrentUser();
-  if (!user) {
-    return { ok: false, error: 'You must be logged in to change your password.' };
+  if (!user) return { ok: false, error: 'Please sign in again.' };
+  if (!isPracticeAdmin(user)) {
+    return { ok: false, error: 'Only the practice administrator can change the console password here.' };
   }
 
-  // 2. Fetch their full record to get their current hashed password
-  const fullUser = await findUserByEmail(user.email);
-  if (!fullUser || !fullUser.passwordHash) {
-    return { ok: false, error: 'Account not found or does not use a password.' };
+  const limit = rateLimit(`console-password:${user.id}`, LIMITS.passwordChange);
+  if (!limit.ok) {
+    return { ok: false, error: 'Too many attempts. Please wait 15 minutes and try again.' };
   }
 
-  // 3. Verify the old password is correct
-  const isValid = await verifyPassword(currentPassword, fullUser.passwordHash);
-  if (!isValid) {
-    return { ok: false, error: 'Incorrect current password.' };
+  const current = String(formData.get('currentPassword') ?? '');
+  const next = String(formData.get('newPassword') ?? '');
+  const confirm = String(formData.get('confirmPassword') ?? '');
+  if (!current || !next || !confirm) return { ok: false, error: 'Please fill in all three fields.' };
+
+  const record = await findUserByEmail(user.email);
+  if (!record?.passwordHash) return { ok: false, error: 'Please sign in again.' };
+  if (!(await verifyPassword(current, record.passwordHash))) {
+    return { ok: false, error: 'Your current password is not correct.' };
   }
 
-  // 4. Hash the new password and update the database
-  const newPasswordHash = await hashPassword(newPassword);
+  const problem = newPasswordProblem(next, confirm);
+  if (problem) return { ok: false, error: problem };
+  if (await verifyPassword(next, record.passwordHash)) {
+    return { ok: false, error: 'Choose a password different from your current one.' };
+  }
 
-  // Update the user record with the new hash
-  await updateUser(user.id, { passwordHash: newPasswordHash });
+  await completePasswordChange(user, next, 'current_password');
+  return { ok: true };
+}
 
+/**
+ * Forgot password, from Settings: email a 6-digit code to the admin's own
+ * address. The code proves they can read that inbox; only its hash is stored,
+ * it expires after 10 minutes, and asking again cancels the previous one.
+ */
+export async function sendAdminPasswordCode(): Promise<PasswordResult> {
+  const user = await getCurrentUser();
+  if (!user) return { ok: false, error: 'Please sign in again.' };
+  if (!isPracticeAdmin(user)) {
+    return { ok: false, error: 'Only the practice administrator can reset the console password.' };
+  }
+
+  // Counted in the database, so the limit holds across every server instance.
+  const since = new Date(Date.now() - 15 * 60_000).toISOString();
+  if ((await countPasswordResetCodesSince(user.id, since)) >= CODES_PER_15_MINUTES) {
+    return { ok: false, error: 'Several codes have been sent already. Please wait 15 minutes and try again.' };
+  }
+
+  const code = String(randomInt(0, 1_000_000)).padStart(6, '0');
+  const expiresAt = new Date(Date.now() + CODE_TTL_MINUTES * 60_000).toISOString();
+  const saved = await createPasswordResetCode(user.id, await hashPassword(code), expiresAt);
+
+  const sent = await sendSecurityEmail({
+    type: 'auth.password_code',
+    audience: 'staff',
+    to: { email: user.email },
+    // Not in the subject: subjects are kept in the email log, codes are not.
+    subject: 'Your Be Whole Care verification code',
+    heading: 'Your verification code',
+    body:
+      'Use this code to set a new password for your Be Whole Care practice console:\n\n' +
+      `## ${code}\n\n` +
+      `The code expires in ${CODE_TTL_MINUTES} minutes and can be used once.\n\n` +
+      'If you did not ask for this, you can ignore this email — your password stays the same.',
+  });
+  if (!sent.ok) {
+    await markPasswordResetCodeUsed(saved.id);
+    return { ok: false, error: 'The email could not be sent. Please try again in a moment.' };
+  }
+
+  await audit({
+    actorUserId: user.id,
+    actorRole: user.role,
+    action: 'auth.password_code_sent',
+    entity: 'user',
+    entityId: user.id,
+  });
+  return { ok: true };
+}
+
+/** Forgot password, step two: check the emailed code and set the new password. */
+export async function resetAdminPasswordWithCode(formData: FormData): Promise<PasswordResult> {
+  const user = await getCurrentUser();
+  if (!user) return { ok: false, error: 'Please sign in again.' };
+  if (!isPracticeAdmin(user)) {
+    return { ok: false, error: 'Only the practice administrator can reset the console password.' };
+  }
+
+  const entered = String(formData.get('code') ?? '').replace(/\D/g, '');
+  const next = String(formData.get('newPassword') ?? '');
+  const confirm = String(formData.get('confirmPassword') ?? '');
+  if (entered.length !== 6) return { ok: false, error: 'Enter the 6-digit code from the email.' };
+
+  const problem = newPasswordProblem(next, confirm);
+  if (problem) return { ok: false, error: problem };
+
+  const active = await getActivePasswordResetCode(user.id);
+  if (!active) {
+    return { ok: false, error: 'This code has expired or was already used. Please send a new one.' };
+  }
+  if (!(await verifyPassword(entered, active.codeHash))) {
+    const attempts = await recordPasswordResetAttempt(active.id);
+    if (attempts >= CODE_MAX_ATTEMPTS) {
+      await markPasswordResetCodeUsed(active.id);
+      return { ok: false, error: 'Too many incorrect codes. Please send a new one.' };
+    }
+    const left = CODE_MAX_ATTEMPTS - attempts;
+    return { ok: false, error: `That code is not correct. ${left} ${left === 1 ? 'try' : 'tries'} left.` };
+  }
+
+  // Used up before anything else happens, so it can never work twice.
+  await markPasswordResetCodeUsed(active.id);
+  await completePasswordChange(user, next, 'email_code');
   return { ok: true };
 }

@@ -31,8 +31,11 @@ export default async function AdminLayout({ children }: { children: React.ReactN
    * tab has been removed at the practice's request, so every page now gets
    * the connection pool to itself.
    */
+  const isAdmin = user.role === 'ADMIN' || user.role === 'SUPER_ADMIN';
+  const commands = isAdmin ? NAV_COMMANDS : NAV_COMMANDS.filter((c) => c.id !== 'nav-settings');
+
   return (
-    <AdminShell user={user} commands={NAV_COMMANDS}>
+    <AdminShell user={user} commands={commands}>
       {children}
     </AdminShell>
   );
