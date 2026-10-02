@@ -23,7 +23,7 @@ import { hashPassword } from '@/lib/auth/password';
 import { fromLocalParts, hoursUntil, parts } from '@/lib/date';
 import { money } from '@/lib/utils';
 import { emitAfterResponse } from '@/services/events';
-import { createCheckoutForAppointment } from '@/services/payment.service';
+import { createCheckoutForAppointment, openLedgerEntry } from '@/services/payment.service';
 import { resolveSlot } from '@/services/availability.service';
 import type { Appointment, AppointmentView, ID, SessionUser } from '@/types';
 import type { BookingInput } from '@/lib/validation';
@@ -333,6 +333,11 @@ export async function createBooking(
   }
 
   if (!pricing.requiresPayment) {
+    // A fee with no online checkout (no gateway connected) is still money the
+    // practice is owed: it gets an awaiting line on the Payments page.
+    if (appointment.paymentMethod === 'card' && appointment.amountCents > 0) {
+      await openLedgerEntry(appointment.id, 'card', appointment.amountCents);
+    }
     emitAfterResponse(created, { type: 'appointment.confirmed', appointmentId: appointment.id });
     return { ok: true, data: { appointment, requiresPayment: false, accountCreated } };
   }
@@ -598,6 +603,12 @@ export async function decideMedicalAid(
       meta: { reference, amountCents: previousAmountCents },
     });
 
+    // The claim the practice now submits to the scheme: an awaiting line on
+    // the Payments page at the session fee, ticked off with the amount the
+    // scheme actually pays.
+    const fee = await priceSession(appointment.serviceId, appointment.mode, 'card');
+    await openLedgerEntry(appointmentId, 'medical_aid', fee.amountCents);
+
     // After the response: the calendar sync and the emails can take longer
     // than the request is allowed to run, and the decision is already saved.
     emitAfterResponse({ type: 'appointment.confirmed', appointmentId });
@@ -629,6 +640,11 @@ export async function decideMedicalAid(
       reason: declineReason?.trim() || null,
     },
   });
+
+  // The client now pays the private fee (the Yoco link in their email): an
+  // awaiting line, ticked off when the money arrives — which confirms the
+  // session and sends their confirmation, as a card payment would.
+  await openLedgerEntry(appointmentId, 'card', priced.amountCents);
 
   emitAfterResponse({ type: 'appointment.medical_aid_declined', appointmentId });
   return { ok: true };

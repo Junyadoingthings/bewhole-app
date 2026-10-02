@@ -884,6 +884,10 @@ export async function updatePayment(id: ID, patch: Partial<Payment>) {
   const rows = await sql`
     update payments set
       status               = coalesce(${patch.status ?? null}, status),
+      -- The amount actually received can differ from the amount expected
+      -- (a medical aid scheme often pays its own rate), so it is updatable.
+      amount_cents         = coalesce(${patch.amountCents ?? null}, amount_cents),
+      method               = coalesce(${patch.method ?? null}, method),
       provider             = coalesce(${patch.provider ?? null}, provider),
       provider_checkout_id = ${patch.providerCheckoutId !== undefined ? patch.providerCheckoutId : sql`provider_checkout_id`},
       provider_payment_id  = ${patch.providerPaymentId !== undefined ? patch.providerPaymentId : sql`provider_payment_id`},

@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 
 import { requireAdmin, requireStaff } from '@/lib/auth';
+import { today } from '@/lib/date';
 import {
   audit,
   createAvailabilityBlock,
@@ -14,7 +15,14 @@ import {
 } from '@/lib/db';
 import { noteSchema, fieldErrors } from '@/lib/validation';
 import { cancelAppointment, decideMedicalAid, markAppointmentStatus } from '@/services/booking.service';
-import { markPaymentReceivedManually, refundPayment, verifyAndApplyPayment } from '@/services/payment.service';
+import {
+  recordDirectPayment,
+  recordPaymentNotReceived,
+  recordPaymentReceived,
+  refundPayment,
+  undoPaymentReceived,
+  verifyAndApplyPayment,
+} from '@/services/payment.service';
 import { emit, emitAfterResponse } from '@/services/events';
 import { getCalendarProvider } from '@/services/calendar';
 import { getCalendarEventForAppointment, upsertCalendarEvent, nowISO } from '@/lib/db';
@@ -135,12 +143,76 @@ export async function resendConfirmation(appointmentId: string): Promise<AdminRe
 
 /* ------------------------------------------------------------------ payments */
 
-export async function markPaymentPaid(paymentId: string): Promise<AdminResult> {
-  const actor = await requireAdmin();
-  const result = await markPaymentReceivedManually(paymentId, actor.id);
-  if (!result.ok) return { ok: false, error: result.error };
+/** Rands typed into the console → whole cents, or null if it is not a positive amount. */
+function toCents(rands: unknown): number | null {
+  const value = Number(String(rands ?? '').replace(/[^\d.]/g, ''));
+  if (!Number.isFinite(value) || value <= 0 || value > 1_000_000) return null;
+  return Math.round(value * 100);
+}
+
+/** A received date: a real day, not in the future. */
+function receivedOnOk(value: unknown): value is string {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  return !Number.isNaN(new Date(`${value}T00:00:00Z`).getTime()) && value <= today();
+}
+
+function refreshMoneyPages() {
   revalidatePath('/admin/payments');
+  revalidatePath('/admin/appointments');
   revalidatePath('/admin');
+  revalidatePath('/portal/payments');
+}
+
+/** Tick a payment off as received, with the amount that actually arrived and when. */
+export async function markPaymentReceived(
+  paymentId: string,
+  input: { amountRands: string; receivedOn: string },
+): Promise<AdminResult> {
+  const actor = await requireAdmin();
+  const amountCents = toCents(input.amountRands);
+  if (!amountCents) return { ok: false, error: 'Enter the amount received, in rand.' };
+  if (!receivedOnOk(input.receivedOn)) return { ok: false, error: 'Choose the day it was received (not in the future).' };
+  const result = await recordPaymentReceived(paymentId, { amountCents, receivedOn: input.receivedOn }, actor.id);
+  if (!result.ok) return { ok: false, error: result.error };
+  refreshMoneyPages();
+  return { ok: true };
+}
+
+/** The money is not coming — e.g. the medical aid scheme declined the claim. */
+export async function markPaymentNotReceived(paymentId: string, reason: string): Promise<AdminResult> {
+  const actor = await requireAdmin();
+  const result = await recordPaymentNotReceived(paymentId, reason.trim().slice(0, 300), actor.id);
+  if (!result.ok) return { ok: false, error: result.error };
+  refreshMoneyPages();
+  return { ok: true };
+}
+
+/** Undo a tick made by mistake: the line goes back to awaiting. */
+export async function undoPaymentTick(paymentId: string): Promise<AdminResult> {
+  const actor = await requireAdmin();
+  const result = await undoPaymentReceived(paymentId, actor.id);
+  if (!result.ok) return { ok: false, error: result.error };
+  refreshMoneyPages();
+  return { ok: true };
+}
+
+/** Money taken directly for a booking (EFT, cash, a quoted fee, a scheme payment). */
+export async function recordAppointmentPayment(
+  appointmentId: string,
+  input: { amountRands: string; method: 'card' | 'medical_aid'; receivedOn: string },
+): Promise<AdminResult> {
+  const actor = await requireAdmin();
+  const amountCents = toCents(input.amountRands);
+  if (!amountCents) return { ok: false, error: 'Enter the amount received, in rand.' };
+  if (!receivedOnOk(input.receivedOn)) return { ok: false, error: 'Choose the day it was received (not in the future).' };
+  if (input.method !== 'card' && input.method !== 'medical_aid') return { ok: false, error: 'Choose who paid.' };
+  const result = await recordDirectPayment(
+    appointmentId,
+    { amountCents, method: input.method, receivedOn: input.receivedOn },
+    actor.id,
+  );
+  if (!result.ok) return { ok: false, error: result.error };
+  refreshMoneyPages();
   return { ok: true };
 }
 
