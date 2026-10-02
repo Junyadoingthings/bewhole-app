@@ -52,6 +52,10 @@ export interface Profile {
     scheme: string;
     memberNumber: string;
     mainMember: string;
+    /** Saved with the rest of the booking form's medical aid details. */
+    mainMemberId?: string;
+    /** The patient's date of birth (YYYY-MM-DD); required at booking since 2026-10. */
+    dateOfBirth?: string;
   } | null;
   preferredContact: 'email' | 'whatsapp' | 'sms';
   notes?: string | null;

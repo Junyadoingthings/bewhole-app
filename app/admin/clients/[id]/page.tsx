@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ArrowLeft, Mail, MapPin, Phone, ShieldCheck, Video } from 'lucide-react';
+import { ArrowLeft, Mail, MapPin, Phone, Printer, ShieldCheck, Video } from 'lucide-react';
 
 import { ClientTabs } from '@/components/admin/client-tabs';
 import { FollowUpComposer } from '@/components/admin/follow-up-composer';
@@ -56,6 +56,16 @@ export default async function AdminClientPage({ params }: { params: { id: string
   );
   const followUpViews = await hydrateFollowUps(followUps);
   const audit = await listAuditLogs({ limit: 400 });
+
+  /**
+   * The booking an informed consent was given for: consent is recorded as
+   * the booking is saved, so it is the appointment created at (nearly) the
+   * same moment. Used to link each record to its printable consent form.
+   */
+  const bookingForConsent = (grantedAt: string) =>
+    views.find(
+      (a) => Math.abs(new Date(a.createdAt).getTime() - new Date(grantedAt).getTime()) < 5 * 60_000,
+    ) ?? null;
 
   const completed = views.filter((a) => a.status === 'completed');
   const lifetime = payments.filter((p) => p.status === 'paid').reduce((s, p) => s + p.amountCents, 0);
@@ -362,6 +372,17 @@ export default async function AdminClientPage({ params }: { params: { id: string
                               <Badge tone={c.granted ? 'success' : 'neutral'} size="sm">
                                 {c.granted ? 'Given' : 'Withdrawn'}
                               </Badge>
+                              {c.type === 'informed_consent' && bookingForConsent(c.grantedAt) && (
+                                <a
+                                  href={`/print/consent/${bookingForConsent(c.grantedAt)!.id}`}
+                                  target="_blank"
+                                  rel="noopener"
+                                  className="inline-flex items-center gap-1 text-xs font-medium text-forest-700 underline-offset-4 hover:underline dark:text-forest-300"
+                                >
+                                  <Printer className="h-3.5 w-3.5" />
+                                  Print
+                                </a>
+                              )}
                             </span>
                           </li>
                         ))}
