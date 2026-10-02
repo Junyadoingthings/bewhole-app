@@ -211,6 +211,23 @@
     -webkit-appearance: none;
     margin: 0;
   }
+
+  /*
+   * iPhone Safari draws date fields with its own width, height and centred
+   * text, so the date of birth stuck out past the card and stood taller than
+   * every other field. These make it the same box as the rest.
+   */
+  input[type='date'] {
+    -webkit-appearance: none;
+    appearance: none;
+    display: block;
+    min-width: 0;
+    max-width: 100%;
+  }
+  input[type='date']::-webkit-date-and-time-value {
+    text-align: left;
+    margin: 0;
+  }
 }
 
 @layer components {

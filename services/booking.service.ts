@@ -18,7 +18,7 @@ import {
   updateAppointment,
   updateProfile,
 } from '@/lib/db';
-import { COUNSELLING_CONSENT } from '@/config/business';
+import { COUNSELLING_CONSENT, GROUP_SESSIONS } from '@/config/business';
 import { hashPassword } from '@/lib/auth/password';
 import { fromLocalParts, hoursUntil, parts } from '@/lib/date';
 import { money } from '@/lib/utils';
@@ -150,6 +150,25 @@ export async function createBooking(
     locationId: input.mode === 'in_person' ? (input.locationId ?? null) : null,
   };
 
+  /**
+   * Couples, family and pre-marital sessions are for 2–6 people, and every
+   * one of them must have agreed to the informed consent (the schema checks
+   * each person's agreement; this checks the count). Other services take no
+   * extra people, whatever the form sent.
+   */
+  const isGroup = service.categoryId === GROUP_SESSIONS.categoryId;
+  const others = isGroup ? (input.participants ?? []) : [];
+  if (isGroup && others.length + 1 < GROUP_SESSIONS.minPeople) {
+    return {
+      ok: false,
+      error: 'Please add the details of everyone attending — this session is for at least 2 people.',
+      field: 'participants',
+    };
+  }
+  if (others.length + 1 > GROUP_SESSIONS.maxPeople) {
+    return { ok: false, error: 'A session can include up to 6 people.', field: 'participants' };
+  }
+
   // Availability is re-derived server-side; the client's view may be stale.
   const slot = await resolveSlot(input.date, input.time, query);
   if (!slot.ok) return { ok: false, error: slot.reason, field: 'time' };
@@ -225,6 +244,15 @@ export async function createBooking(
     isFirstSession: input.isFirstSession,
     sessionLink: null,
     calendarEventId: null,
+    participants: others.length
+      ? others.map((p) => ({
+          firstName: p.firstName.trim(),
+          lastName: p.lastName.trim(),
+          email: p.email ?? null,
+          phone: p.phone ?? null,
+          consentedAt: ts,
+        }))
+      : null,
     createdAt: ts,
     updatedAt: ts,
   };

@@ -101,12 +101,9 @@ export const medicalAidSchema = z.object({
   memberNumber: z.string().trim().min(3, 'Enter your membership number').max(40),
   mainMember: z.string().trim().min(2, 'Who is the main member?').max(80),
   /**
-   * Both optional at the schema level, deliberately.
-   *
-   * A scheme needs the main member's ID and the patient's date of birth to
-   * process a claim, so the form asks for them — but a booking must not be
-   * blocked because someone does not have a family member's ID number to hand
-   * at 11pm. The practice can complete them before submitting the claim.
+   * Optional, deliberately: a booking must not be blocked because someone
+   * does not have a family member's ID number to hand at 11pm. The practice
+   * can complete it before submitting the claim.
    */
   mainMemberId: z
     .string()
@@ -115,13 +112,27 @@ export const medicalAidSchema = z.object({
     .optional()
     .or(z.literal(''))
     .transform((v) => v || undefined),
+  /**
+   * Required (2026-10): the scheme needs the patient's date of birth to
+   * verify cover, and the practice asked that it always be captured. It must
+   * be a real past date — a phone's date picker opens on today, and that is
+   * not anyone's birthday here.
+   */
   dateOfBirth: z
-    .string()
-    .optional()
-    .or(z.literal(''))
-    .transform((v) => v || undefined)
-    .refine((v) => !v || /^\d{4}-\d{2}-\d{2}$/.test(v), 'Use the date picker'),
+    .string({ required_error: 'Enter your date of birth' })
+    .trim()
+    .min(1, 'Enter your date of birth')
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'Use the date picker')
+    .refine(isPlausibleBirthDate, 'Check the date of birth — it cannot be today or in the future'),
 });
+
+/** A date of birth in the past, and within the last 120 years. */
+function isPlausibleBirthDate(value: string) {
+  const born = new Date(`${value}T00:00:00Z`).getTime();
+  if (Number.isNaN(born)) return false;
+  const now = Date.now();
+  return born < now - 86_400_000 && born > now - 120 * 365.25 * 86_400_000;
+}
 
 /**
  * The booking wizard's "Your details" step, on its own.
@@ -138,9 +149,14 @@ export const bookingDetailsSchema = z.object({
   lastName: nameField,
   email: emailSchema,
   phone: phoneSchema,
-  address: z.string().trim().max(300, 'Please keep this under 300 characters').optional(),
+  /** Required (2026-10): the practice needs it for every client, for invoices and records. */
+  address: z
+    .string({ required_error: 'Please enter your address' })
+    .trim()
+    .min(5, 'Please enter your full address')
+    .max(300, 'Please keep this under 300 characters'),
   /**
-   * Required, unlike the address.
+   * Required.
    *
    * A counselling practice can encounter a client at risk during or after a
    * session. "Who do we call" is not a question to be asking for the first
@@ -155,6 +171,25 @@ export const bookingDetailsSchema = z.object({
   }),
   consentAge: z.literal(true, {
     errorMap: () => ({ message: 'Please confirm the age requirement' }),
+  }),
+});
+
+/**
+ * Another person attending a couples, family or pre-marital session. Name is
+ * required; contact details are optional because a family session can
+ * include children who have neither.
+ */
+export const participantDetailsSchema = z.object({
+  firstName: nameField,
+  lastName: nameField,
+  email: emailSchema.optional().or(z.literal('')).transform((v) => v || undefined),
+  phone: contactPhoneSchema.optional().or(z.literal('')).transform((v) => v || undefined),
+});
+
+/** The same person at submission: they must also have agreed to the informed consent. */
+export const participantSchema = participantDetailsSchema.extend({
+  consented: z.literal(true, {
+    errorMap: () => ({ message: 'Each person attending must agree to the informed consent' }),
   }),
 });
 
@@ -174,6 +209,12 @@ export const bookingSchema = bookingDetailsSchema
      * The public booking flow requires it before payment.
      */
     clinicalConsent: z.record(z.boolean()).optional(),
+    /**
+     * Everyone attending besides the person booking — couples, family and
+     * pre-marital sessions only (see GROUP_SESSIONS in config/business.ts).
+     * The service decides whether they are required; this only caps the list.
+     */
+    participants: z.array(participantSchema).max(5, 'A session can include up to 6 people').optional(),
   })
   .refine((v) => v.mode !== 'in_person' || Boolean(v.locationId), {
     message: 'Choose which practice you would like to visit',

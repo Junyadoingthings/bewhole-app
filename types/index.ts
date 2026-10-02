@@ -201,6 +201,16 @@ export type AppointmentStatus = (typeof APPOINTMENT_STATUSES)[number];
 export type AppointmentMode = 'online' | 'in_person';
 export type PaymentMethod = 'card' | 'medical_aid';
 
+/** Someone attending a couples, family or pre-marital session besides the person who booked. */
+export interface AppointmentParticipant {
+  firstName: string;
+  lastName: string;
+  email?: string | null;
+  phone?: string | null;
+  /** When they ticked "I have read and agree" to the informed consent while booking. */
+  consentedAt: ISODateTime;
+}
+
 export interface Appointment {
   id: ID;
   reference: string;
@@ -237,6 +247,8 @@ export interface Appointment {
   rescheduledFrom?: ID | null;
   completedAt?: ISODateTime | null;
   followUpId?: ID | null;
+  /** Everyone else attending (couples, family and pre-marital sessions). */
+  participants?: AppointmentParticipant[] | null;
   createdAt: ISODateTime;
   updatedAt: ISODateTime;
   isDemo?: boolean;

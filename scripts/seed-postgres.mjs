@@ -194,6 +194,10 @@ async function main() {
   await sql`create table if not exists counters (name text primary key, value bigint not null)`;
   console.log('  ✓ counters table');
 
+  // Everyone else attending a couples, family or pre-marital session.
+  await sql`alter table appointments add column if not exists participants jsonb`;
+  console.log('  ✓ appointments.participants column');
+
   // One-time codes for an administrator who forgot their console password.
   await sql`
     create table if not exists password_reset_codes (

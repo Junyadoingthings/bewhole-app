@@ -181,6 +181,7 @@ function mapAppointment(r: any): Appointment {
     rescheduledFrom: r.rescheduled_from,
     completedAt: iso(r.completed_at),
     followUpId: r.follow_up_id,
+    participants: Array.isArray(r.participants) && r.participants.length ? r.participants : null,
     isDemo: r.is_demo,
     createdAt: isoRequired(r.created_at),
     updatedAt: isoRequired(r.updated_at),
@@ -741,7 +742,7 @@ export async function createAppointmentIfFree(
         id, reference, client_user_id, service_id, practitioner_id, mode, location_id,
         start_at, end_at, duration_minutes, status, payment_method, amount_cents,
         reason, is_first_session, session_link, calendar_event_id, follow_up_id, is_demo,
-        created_at, updated_at
+        participants, created_at, updated_at
       ) values (
         ${appointment.id}, ${reference}, ${appointment.clientUserId},
         ${appointment.serviceId}, ${appointment.practitionerId ?? null}, ${appointment.mode},
@@ -750,6 +751,7 @@ export async function createAppointmentIfFree(
         ${appointment.amountCents}, ${appointment.reason ?? null}, ${appointment.isFirstSession},
         ${appointment.sessionLink ?? null}, ${appointment.calendarEventId ?? null},
         ${appointment.followUpId ?? null}, ${appointment.isDemo ?? false},
+        ${appointment.participants?.length ? sql.json(appointment.participants as never) : null},
         ${appointment.createdAt}, ${appointment.updatedAt}
       ) returning *`;
       return { ok: true as const, appointment: mapAppointment(row) };
@@ -767,8 +769,12 @@ export async function createAppointmentIfFree(
  */
 let countersReady: Promise<void> | null = null;
 function ensureCounters() {
-  countersReady ??= getSql()`
+  const sql = getSql();
+  // Also the participants column (couples, family and pre-marital sessions),
+  // so a database that missed the deploy step still takes bookings.
+  countersReady ??= sql`
     create table if not exists counters (name text primary key, value bigint not null)`
+    .then(() => sql`alter table appointments add column if not exists participants jsonb`)
     .then(() => undefined)
     .catch((error) => {
       countersReady = null;

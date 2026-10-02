@@ -154,6 +154,18 @@ export const LOCATIONS = [
  * confirmed — after payment, or once the practice has accepted the medical
  * aid — never in a "booking received" or "payment required" email.
  */
+/**
+ * Sessions for more than one person: couples, family and pre-marital
+ * counselling (every service in the Marriage & Family category). The person
+ * booking adds everyone else attending, and each of them consents too.
+ */
+export const GROUP_SESSIONS = {
+  categoryId: 'cat_family',
+  /** Including the person booking. */
+  minPeople: 2,
+  maxPeople: 6,
+} as const;
+
 export const CLIENT_EMAIL = {
   /** Every online session is held here. */
   onlineSessionLink: 'https://sessions.psychologytoday.com/bewholecare',

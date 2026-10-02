@@ -15,8 +15,7 @@ import type { SessionUser } from '@/types';
 const NAV = [
   { href: '/services', label: 'Services' },
   { href: '/about', label: 'About' },
-  { href: '/resources', label: 'Resources' },
-  { href: '/workshops', label: 'Workshops' },
+  // Resources and Workshops are no longer in the menu, at the practice's request (2026-10).
   { href: '/contact', label: 'Contact' },
 ];
 

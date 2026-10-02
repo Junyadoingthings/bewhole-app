@@ -532,3 +532,7 @@ update services set duration_minutes = 90 where slug in ('couples-counselling', 
 --
 -- Optional housekeeping if you prefer to run it in the database instead:
 --   delete from sessions where expires_at < now();
+
+-- Everyone else attending a couples, family or pre-marital session
+-- (AppointmentParticipant[] in types/index.ts), each with their consent time.
+alter table appointments add column if not exists participants jsonb;

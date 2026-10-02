@@ -12,7 +12,9 @@ import {
   Clock,
   CreditCard,
   MapPin,
+  Plus,
   ShieldCheck,
+  Trash2,
   Video,
 } from 'lucide-react';
 
@@ -27,9 +29,15 @@ import { OptionCard } from '@/components/ui/field';
 import { Badge, Skeleton } from '@/components/ui/primitives';
 import { useToast } from '@/components/ui/toast';
 import { startEmbeddedPayment, submitBooking } from '@/app/actions/booking';
-import { displayTime, formatFullDate, relativeDay } from '@/lib/date';
+import { displayTime, formatFullDate, relativeDay, today } from '@/lib/date';
 import { cn, money } from '@/lib/utils';
-import { bookingDetailsSchema, fieldErrors, medicalAidSchema } from '@/lib/validation';
+import { GROUP_SESSIONS } from '@/config/business';
+import {
+  bookingDetailsSchema,
+  fieldErrors,
+  medicalAidSchema,
+  participantDetailsSchema,
+} from '@/lib/validation';
 import type { Location, Service, ServiceCategory, SessionUser, TimeSlot } from '@/types';
 import type { PaymentMethodMark } from '@/services/payments/types';
 import type { ZodTypeAny } from 'zod';
@@ -95,9 +103,24 @@ const FIELD_ORDER: readonly (readonly [errorKey: string, elementId: string])[] =
   ['medicalAid.mainMemberId', 'mainMemberId'],
 ];
 
+/** Someone else attending a couples, family or pre-marital session. */
+interface Person {
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  /** Ticked by this person on the consent step. */
+  consented: boolean;
+}
+
+const blankPerson = (): Person => ({ firstName: '', lastName: '', email: '', phone: '', consented: false });
+
+const PERSON_FIELDS = ['firstName', 'lastName', 'email', 'phone'] as const;
+
 /** Which step owns a field, for routing a server-side rejection back to it. */
 function stepForErrorKey(key: string): StepId | null {
   if (key.startsWith('medicalAid')) return 'payment';
+  if (key.startsWith('participants')) return key.endsWith('.consented') ? 'consent' : 'details';
   switch (key) {
     case 'serviceId':
       return 'service';
@@ -226,6 +249,8 @@ export function BookingWizard({
   const [consentTerms, setConsentTerms] = React.useState(false);
   const [consentAge, setConsentAge] = React.useState(false);
   const [clinicalConsent, setClinicalConsent] = React.useState<Record<string, boolean>>({});
+  /** Everyone attending besides the person booking (group sessions only). */
+  const [people, setPeople] = React.useState<Person[]>([]);
 
   const [slots, setSlots] = React.useState<TimeSlot[] | null>(null);
   const [loadingSlots, setLoadingSlots] = React.useState(false);
@@ -259,6 +284,40 @@ export function BookingWizard({
   const service = services.find((s) => s.id === serviceId) ?? null;
   const location = locations.find((l) => l.id === locationId) ?? null;
   const category = service ? categories.find((c) => c.id === service.categoryId) ?? null : null;
+
+  /**
+   * Couples, family and pre-marital sessions are for 2–6 people. The person
+   * booking adds everyone else, and each of them agrees to the informed
+   * consent. The list starts with one person to fill in and never goes below it.
+   */
+  const isGroup = service?.categoryId === GROUP_SESSIONS.categoryId;
+  const maxOthers = GROUP_SESSIONS.maxPeople - 1;
+  React.useEffect(() => {
+    if (isGroup) setPeople((current) => (current.length ? current : [blankPerson()]));
+  }, [isGroup]);
+
+  function updatePerson(index: number, patch: Partial<Person>) {
+    setPeople((current) => current.map((p, i) => (i === index ? { ...p, ...patch } : p)));
+  }
+
+  function removePerson(index: number) {
+    setPeople((current) => (current.length > 1 ? current.filter((_, i) => i !== index) : current));
+    // Errors are keyed by position, which has just shifted.
+    setTouched((current) =>
+      Object.fromEntries(Object.entries(current).filter(([key]) => !key.startsWith('participants.'))),
+    );
+  }
+
+  /** On-screen order of every field that can be in error, including each extra person's. */
+  const fieldOrder = React.useMemo(() => {
+    const at = FIELD_ORDER.findIndex(([key]) => key === 'reason');
+    const extra: (readonly [string, string])[] = [['participants', 'participants-section']];
+    people.forEach((_, n) => {
+      for (const f of PERSON_FIELDS) extra.push([`participants.${n}.${f}`, `participant-${n}-${f}`]);
+    });
+    people.forEach((_, n) => extra.push([`participants.${n}.consented`, `participant-${n}-consent`]));
+    return [...FIELD_ORDER.slice(0, at), ...extra, ...FIELD_ORDER.slice(at)];
+  }, [people]);
 
   /**
    * The payment method that actually applies. A free or quoted service shows no
@@ -332,8 +391,16 @@ export function BookingWizard({
    * to surface only on the payment step, naming fields no longer on screen.
    */
   const detailsIssues = React.useMemo(
-    () => issuesOf(bookingDetailsSchema, { ...details, consentTerms, consentAge }),
-    [details, consentTerms, consentAge],
+    () => ({
+      ...issuesOf(bookingDetailsSchema, { ...details, consentTerms, consentAge }),
+      ...(isGroup
+        ? Object.assign(
+            {},
+            ...people.map((person, n) => issuesOf(participantDetailsSchema, person, `participants.${n}.`)),
+          )
+        : {}),
+    }),
+    [details, consentTerms, consentAge, isGroup, people],
   );
   const medicalAidIssues = React.useMemo(
     () => (usingMedicalAid ? issuesOf(medicalAidSchema, medicalAid, 'medicalAid.') : {}),
@@ -366,7 +433,7 @@ export function BookingWizard({
   React.useEffect(() => {
     setServerErrors((current) => (Object.keys(current).length ? {} : current));
     setFormError(null);
-  }, [details, medicalAid, consentTerms, consentAge, paymentMethod]);
+  }, [details, medicalAid, consentTerms, consentAge, paymentMethod, people]);
 
   React.useEffect(() => {
     if (!date || !service || !mode) return;
@@ -406,7 +473,8 @@ export function BookingWizard({
         // Always pressable: pressing it is what reveals the fields still to fix.
         return true;
       case 'consent':
-        return isConsentComplete(clinicalConsent);
+        // Everyone attending must agree, not only the person booking.
+        return isConsentComplete(clinicalConsent) && (!isGroup || people.every((p) => p.consented));
       case 'payment':
         // As with details: validated when pressed, so the reason is shown.
         return true;
@@ -415,7 +483,7 @@ export function BookingWizard({
       default:
         return false;
     }
-  }, [step, serviceId, mode, locationId, date, time, clinicalConsent]);
+  }, [step, serviceId, mode, locationId, date, time, clinicalConsent, isGroup, people]);
 
   /** Issues that must be fixed before leaving a step. */
   function blockingIssues(forStep: StepId): Record<string, string> {
@@ -426,7 +494,7 @@ export function BookingWizard({
 
   /** Focus the first field with an error, polling while its step animates in. */
   function focusFirstError(issues: Record<string, string>) {
-    const target = FIELD_ORDER.find(([key]) => issues[key]);
+    const target = fieldOrder.find(([key]) => issues[key]);
     if (!target) return;
     const elementId = target[1];
     const started = performance.now();
@@ -525,6 +593,15 @@ export function BookingWizard({
           consentTerms: consentTerms as true,
           consentAge: consentAge as true,
           clinicalConsent,
+          participants: isGroup
+            ? people.map((p) => ({
+                firstName: p.firstName,
+                lastName: p.lastName,
+                email: p.email,
+                phone: p.phone,
+                consented: p.consented as true,
+              }))
+            : undefined,
         }),
         SUBMIT_DEADLINE_MS,
       );
@@ -862,9 +939,7 @@ export function BookingWizard({
                   </div>
 
                   <div className="mt-5">
-                    <Label htmlFor="address" optional hint="Needed for in-person sessions and invoices">
-                      Address
-                    </Label>
+                    <Label htmlFor="address">Address</Label>
                     <Textarea
                       id="address"
                       onBlur={touch('address')}
@@ -916,6 +991,120 @@ export function BookingWizard({
                       </div>
                     </div>
                   </fieldset>
+
+                  {isGroup && (
+                    <fieldset
+                      id="participants-section"
+                      tabIndex={-1}
+                      className="mt-5 rounded-3xl border border-line bg-canvas-sunk p-5"
+                    >
+                      <legend className="px-1 text-sm font-medium text-ink">Also attending</legend>
+                      <p className="text-sm leading-relaxed text-ink-soft">
+                        This session is for 2 to {GROUP_SESSIONS.maxPeople} people. Add everyone else
+                        who will attend. Each person will also be asked to agree to the informed consent.
+                      </p>
+
+                      <div className="mt-4 space-y-4">
+                        {people.map((person, n) => (
+                          <div key={n} className="rounded-2xl border border-line bg-white p-4">
+                            <div className="flex items-center justify-between gap-3">
+                              <p className="text-sm font-medium text-ink">Person {n + 2}</p>
+                              {people.length > 1 && (
+                                <button
+                                  type="button"
+                                  onClick={() => removePerson(n)}
+                                  className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs text-ink-faint transition-colors hover:bg-state-dangerSoft hover:text-state-danger"
+                                  aria-label={`Remove person ${n + 2}`}
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                  Remove
+                                </button>
+                              )}
+                            </div>
+                            <div className="mt-3 grid gap-4 sm:grid-cols-2">
+                              <div>
+                                <Label htmlFor={`participant-${n}-firstName`}>First name</Label>
+                                <Input
+                                  id={`participant-${n}-firstName`}
+                                  onBlur={touch(`participants.${n}.firstName`)}
+                                  autoComplete="off"
+                                  value={person.firstName}
+                                  onChange={(e) => updatePerson(n, { firstName: e.target.value })}
+                                  error={errors[`participants.${n}.firstName`]}
+                                />
+                                <FieldError id={`participant-${n}-firstName-error`}>
+                                  {errors[`participants.${n}.firstName`]}
+                                </FieldError>
+                              </div>
+                              <div>
+                                <Label htmlFor={`participant-${n}-lastName`}>Last name</Label>
+                                <Input
+                                  id={`participant-${n}-lastName`}
+                                  onBlur={touch(`participants.${n}.lastName`)}
+                                  autoComplete="off"
+                                  value={person.lastName}
+                                  onChange={(e) => updatePerson(n, { lastName: e.target.value })}
+                                  error={errors[`participants.${n}.lastName`]}
+                                />
+                                <FieldError id={`participant-${n}-lastName-error`}>
+                                  {errors[`participants.${n}.lastName`]}
+                                </FieldError>
+                              </div>
+                              <div>
+                                <Label htmlFor={`participant-${n}-email`} optional>
+                                  Email
+                                </Label>
+                                <Input
+                                  id={`participant-${n}-email`}
+                                  onBlur={touch(`participants.${n}.email`)}
+                                  type="email"
+                                  autoComplete="off"
+                                  value={person.email}
+                                  onChange={(e) => updatePerson(n, { email: e.target.value })}
+                                  error={errors[`participants.${n}.email`]}
+                                />
+                                <FieldError id={`participant-${n}-email-error`}>
+                                  {errors[`participants.${n}.email`]}
+                                </FieldError>
+                              </div>
+                              <div>
+                                <Label htmlFor={`participant-${n}-phone`} optional>
+                                  Mobile number
+                                </Label>
+                                <Input
+                                  id={`participant-${n}-phone`}
+                                  onBlur={touch(`participants.${n}.phone`)}
+                                  type="tel"
+                                  autoComplete="off"
+                                  placeholder="083 000 0000"
+                                  value={person.phone}
+                                  onChange={(e) => updatePerson(n, { phone: e.target.value })}
+                                  error={errors[`participants.${n}.phone`]}
+                                />
+                                <FieldError id={`participant-${n}-phone-error`}>
+                                  {errors[`participants.${n}.phone`]}
+                                </FieldError>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      {people.length < maxOthers && (
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          size="sm"
+                          className="mt-4"
+                          onClick={() => setPeople((current) => [...current, blankPerson()])}
+                        >
+                          <Plus className="h-4 w-4" />
+                          Add another person
+                        </Button>
+                      )}
+                      <FieldError id="participants-error">{errors.participants}</FieldError>
+                    </fieldset>
+                  )}
 
                   <div className="mt-5">
                     <Label htmlFor="reason" optional>
@@ -979,6 +1168,31 @@ export function BookingWizard({
                     lead="Please complete this form to confirm your informed consent and agreement"
                 >
                     <ConsentForm value={clinicalConsent} onChange={setClinicalConsent} showPrint={false} />
+
+                    {isGroup && (
+                      <div className="mt-6 rounded-3xl border border-line bg-white p-5 sm:p-6">
+                        <p className="font-medium text-ink">Everyone attending must agree</p>
+                        <p className="mt-1 text-sm leading-relaxed text-ink-soft">
+                          {details.firstName.trim() || 'You'} agreed by ticking each point above. Each
+                          other person attending should read the points above and tick their own box.
+                        </p>
+                        <div className="mt-4 space-y-3">
+                          {people.map((person, n) => {
+                            const name = `${person.firstName} ${person.lastName}`.trim() || `Person ${n + 2}`;
+                            return (
+                              <CheckboxRow
+                                key={n}
+                                id={`participant-${n}-consent`}
+                                checked={person.consented}
+                                onChange={(v) => updatePerson(n, { consented: v })}
+                                title={`I, ${name}, have read and agree to the informed consent above`}
+                                error={errors[`participants.${n}.consented`]}
+                              />
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
                 </StepShell>
               )}
 
@@ -1064,7 +1278,7 @@ export function BookingWizard({
                                 </ul>
 
                                 <div className="mt-5 grid gap-4 sm:grid-cols-2">
-                                  {/* Date of birth and ID number are optional server-side (see medicalAidSchema). */}
+                                  {/* Date of birth is required; the main member's ID number is optional (see medicalAidSchema). */}
                                   <div className="sm:col-span-2">
                                     <Label htmlFor="scheme">Scheme</Label>
                                     <Input
@@ -1095,13 +1309,15 @@ export function BookingWizard({
                                     </FieldError>
                                   </div>
                                   <div>
-                                    <Label htmlFor="dateOfBirth" optional>
+                                    <Label htmlFor="dateOfBirth">
                                       Date of birth
                                     </Label>
                                     <Input
                                       id="dateOfBirth"
                                       onBlur={touch('medicalAid.dateOfBirth')}
                                       type="date"
+                                      max={today()}
+                                      autoComplete="bday"
                                       value={medicalAid.dateOfBirth}
                                       onChange={(e) =>
                                         setMedicalAid({ ...medicalAid, dateOfBirth: e.target.value })
