@@ -7,6 +7,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import {
   RefreshCw,
   Check,
+  FileText,
   Link2,
   MoreHorizontal,
   Send,
@@ -107,6 +108,13 @@ export function AppointmentRowActions({
           >
             <MenuLink href={`/admin/clients/${clientUserId}`} icon={<Check className="h-4 w-4" />}>
               Open client
+            </MenuLink>
+            <MenuLink
+              href={`/print/consent/${appointmentId}`}
+              icon={<FileText className="h-4 w-4" />}
+              newTab
+            >
+              Consent form
             </MenuLink>
 
             {canComplete && (
@@ -276,14 +284,19 @@ function MenuLink({
   children,
   icon,
   href,
+  newTab,
 }: {
   children: React.ReactNode;
   icon: React.ReactNode;
   href: string;
+  /** Opens in a new tab, e.g. a document to print. */
+  newTab?: boolean;
 }) {
   return (
     <Link
       href={href}
+      target={newTab ? '_blank' : undefined}
+      rel={newTab ? 'noopener' : undefined}
       role="menuitem"
       className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm text-ink transition-colors hover:bg-cream-100 dark:hover:bg-card"
     >
