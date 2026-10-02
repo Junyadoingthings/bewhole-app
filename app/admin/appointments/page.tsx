@@ -12,7 +12,7 @@ import { displayTime, formatDayShort, parts, today } from '@/lib/date';
 import { getProfile, hydrateAppointments, listAppointments } from '@/lib/db';
 import { withTimeout } from '@/lib/db/with-timeout';
 import { cn, money } from '@/lib/utils';
-import type { AppointmentStatus, AppointmentView } from '@/types';
+import type { AppointmentParticipant, AppointmentStatus, AppointmentView } from '@/types';
 
 export const metadata: Metadata = { title: 'Appointments', robots: { index: false } };
 export const dynamic = 'force-dynamic';
@@ -166,6 +166,7 @@ export default async function AdminAppointmentsPage({
                             {a.client?.name ?? '—'}
                           </Link>
                           <span className="block text-xs text-ink-faint">{a.reference}</span>
+                          <Attendees people={a.participants} />
                           {a.status === 'pending_medical_aid' && (
                             <MedicalAidActions
                               appointmentId={a.id}
@@ -225,6 +226,7 @@ export default async function AdminAppointmentsPage({
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <p className="font-medium text-ink">{a.client?.name ?? '—'}</p>
+                        <Attendees people={a.participants} />
                         <p className="mt-1 text-sm text-ink-soft">{a.service?.name ?? 'Session'}</p>
                         {a.status === 'pending_medical_aid' && (
                           <MedicalAidActions
@@ -274,5 +276,15 @@ export default async function AdminAppointmentsPage({
         )}
       </div>
     </div>
+  );
+}
+
+/** Everyone else attending a couples, family or pre-marital session. */
+function Attendees({ people }: { people?: AppointmentParticipant[] | null }) {
+  if (!people?.length) return null;
+  return (
+    <span className="mt-0.5 block text-xs text-ink-soft">
+      With {people.map((p) => `${p.firstName} ${p.lastName}`).join(', ')}
+    </span>
   );
 }

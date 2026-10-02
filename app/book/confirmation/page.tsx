@@ -15,7 +15,6 @@ import {
 import { ConfirmationActions } from '@/components/booking/confirmation-actions';
 import { Reveal, SuccessMark } from '@/components/motion';
 import { ButtonLink } from '@/components/ui/button';
-import { Badge } from '@/components/ui/primitives';
 import { BUSINESS } from '@/config/business';
 import { getCurrentUser } from '@/lib/auth';
 import { displayTime, formatFullDate, parts, relativeDay } from '@/lib/date';
@@ -66,9 +65,6 @@ export default async function ConfirmationPage({
    * said the opposite — the email is right, so the page now agrees with it.
    */
   const pendingMedicalAid = view.status === 'pending_medical_aid';
-  // Nothing due now is not the same as paid: a medical aid claim is still open.
-  const paid =
-    !pendingMedicalAid && (view.payment?.status === 'paid' || view.amountCents === 0);
   const joinLink = joinLinkFor(view);
 
   return (
@@ -86,9 +82,9 @@ export default async function ConfirmationPage({
           <h1 className="mt-7 font-display text-4xl text-ink text-balance sm:text-5xl">
             {pendingPayment
               ? 'Almost there'
-              : pendingMedicalAid
-                ? 'Provisional Confirmation'
-                : 'You’re booked.'}
+              : // Every booking that is not waiting on a payment is provisional
+                // until the counsellor has been in touch (the practice's wording, 2026-10).
+                'Provisional Confirmation'}
           </h1>
           {pendingMedicalAid ? (
             // The practice's own wording (2026-09).
@@ -112,9 +108,7 @@ export default async function ConfirmationPage({
             <p className="mt-4 max-w-md leading-relaxed text-ink-soft text-pretty">
               {pendingPayment
                 ? 'We’re holding this time for you. Your session is confirmed the moment payment clears.'
-                : view.mode === 'online'
-                  ? 'Your confirmation is on its way, along with your session link.'
-                  : 'Your confirmation is on its way. We look forward to seeing you.'}
+                : 'Please note that our Counsellor will get in touch with you shortly, to confirm the details of your booking.'}
             </p>
           )}
         </div>
@@ -123,17 +117,9 @@ export default async function ConfirmationPage({
       <Reveal delay={0.08}>
         <div className="mt-10 overflow-hidden rounded-4xl border border-line bg-white">
           <div className="border-b border-line bg-cream-50 dark:bg-canvas px-7 py-6">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <p className="text-2xs font-medium uppercase tracking-[0.16em] text-ink-faint">
-                  Reference
-                </p>
-                <p className="mt-1 font-display text-xl tabular text-ink">{view.reference}</p>
-              </div>
-              <Badge tone={paid ? 'success' : 'warning'}>
-                {paid ? 'Paid' : view.paymentMethod === 'medical_aid' ? 'Medical aid' : 'Payment pending'}
-              </Badge>
-            </div>
+            {/* The Paid / Medical aid / Payment pending badge was removed at the practice's request (2026-10). */}
+            <p className="text-2xs font-medium uppercase tracking-[0.16em] text-ink-faint">Reference</p>
+            <p className="mt-1 font-display text-xl tabular text-ink">{view.reference}</p>
           </div>
 
           <dl className="divide-y divide-line-soft px-7">
@@ -169,6 +155,20 @@ export default async function ConfirmationPage({
               }
             />
             {view.practitioner && <Row label="With" value={view.practitioner.displayName} />}
+            {view.participants && view.participants.length > 0 && (
+              <Row
+                label="Also attending"
+                value={
+                  <>
+                    {view.participants.map((p, i) => (
+                      <span key={i} className="block">
+                        {p.firstName} {p.lastName}
+                      </span>
+                    ))}
+                  </>
+                }
+              />
+            )}
             <Row
               label={view.amountCents > 0 ? 'Amount' : 'Cost'}
               value={view.amountCents > 0 ? money(view.amountCents) : 'No charge'}

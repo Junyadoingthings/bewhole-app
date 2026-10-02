@@ -256,6 +256,12 @@ function staffDetails(a: AppointmentView) {
     { label: 'Client', value: a.client?.name || 'Not captured' },
     { label: 'Email', value: a.client?.email || 'Not captured' },
     { label: 'Phone', value: a.client?.phone || 'Not captured' },
+    // Couples, family and pre-marital sessions: everyone else attending,
+    // each of whom agreed to the informed consent when booking.
+    ...(a.participants ?? []).map((p, i, all) => ({
+      label: all.length > 1 ? `Also attending (${i + 1})` : 'Also attending',
+      value: [`${p.firstName} ${p.lastName}`, p.phone, p.email].filter(Boolean).join(' · '),
+    })),
     { label: 'Service', value: a.service.name },
     { label: 'Date and time', value: appointmentWhen(a) },
     { label: 'Duration', value: `${a.durationMinutes} minutes` },
