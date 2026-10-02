@@ -612,19 +612,27 @@ async function scheduleReminders(a: AppointmentView) {
     withDetails: boolean;
   }[] = [];
 
+  /**
+   * Both reminders use the practice's own wording (2026-10): "Reminder:
+   * Counselling Session", opening "Good day," and closing "We look forward
+   * to seeing you." / "Kind regards,". The date, time, duration and the
+   * session link or practice address stay in, as the practice asked for them
+   * in every reminder.
+   */
+  const reminderBody = joinParagraphs(
+    'This is a friendly reminder of your upcoming counselling session.',
+    '## Appointment Details',
+    '{{details}}',
+    sessionLinkSection(a),
+    'We look forward to seeing you.',
+  );
   if (settings.reminders.firstReminderHours) {
     jobs.push({
       at: morningOf(addISODays(sessionDate, -1)),
       type: 'reminder.day_before',
-      subject: `Reminder: your appointment on ${emailDate(a)}`,
-      heading: 'Appointment reminder',
-      body: joinParagraphs(
-        'This is a courtesy reminder of your upcoming appointment with Be Whole Care.',
-        '## Appointment Details',
-        '{{details}}',
-        sessionLinkSection(a),
-        'Should you need to reschedule, please let us know at least 24 hours before your appointment.',
-      ),
+      subject: 'Reminder: Counselling Session',
+      heading: 'Reminder: Counselling Session',
+      body: reminderBody,
       withDetails: true,
     });
   }
@@ -632,15 +640,9 @@ async function scheduleReminders(a: AppointmentView) {
     jobs.push({
       at: morningOf(sessionDate),
       type: 'reminder.day_of',
-      subject: `Your appointment today at ${displayTime(parts(a.startAt).time)}`,
-      heading: 'Your appointment is today',
-      body: joinParagraphs(
-        'This is a reminder that your appointment with Be Whole Care is today.',
-        '## Appointment Details',
-        '{{details}}',
-        sessionLinkSection(a),
-        'I look forward to meeting with you.',
-      ),
+      subject: 'Reminder: Counselling Session',
+      heading: 'Reminder: Counselling Session',
+      body: reminderBody,
       withDetails: true,
     });
   }
@@ -656,13 +658,13 @@ async function scheduleReminders(a: AppointmentView) {
       to: clientRecipient(a),
       subject: job.subject,
       heading: job.heading,
-      greeting: firstNameOf(a),
+      salutation: 'Good day,',
       body: job.body,
       details: job.withDetails ? confirmedDetails(a) : undefined,
       links: job.withDetails
         ? calendarLinks(a)
         : [{ label: 'Book your next session', url: appUrl('/book') }],
-      signOff: job.withDetails ? practitionerSignOff('Warm regards,', 'Practice No') : undefined,
+      signOff: job.withDetails ? practitionerSignOff('Kind regards,', 'Practice No') : undefined,
       href: appointmentHref(a),
       scheduledFor: job.at,
     });

@@ -4,18 +4,14 @@ import { cookies } from 'next/headers';
 import { notFound } from 'next/navigation';
 import {
   AlertCircle,
-  CalendarPlus,
   CreditCard,
   MapPin,
-  MessageCircle,
-  Phone,
   Video,
 } from 'lucide-react';
 
 import { ConfirmationActions } from '@/components/booking/confirmation-actions';
 import { Reveal, SuccessMark } from '@/components/motion';
 import { ButtonLink } from '@/components/ui/button';
-import { BUSINESS } from '@/config/business';
 import { getCurrentUser } from '@/lib/auth';
 import { displayTime, formatFullDate, parts, relativeDay } from '@/lib/date';
 import { getAppointmentByReference, hydrateAppointments } from '@/lib/db';
@@ -239,55 +235,18 @@ export default async function ConfirmationPage({
         />
       </Reveal>
 
-      <Reveal delay={0.14}>
-        <div className="mt-10 rounded-3xl border border-line bg-cream-50 dark:bg-canvas p-7">
-          <h2 className="font-display text-lg text-ink">What happens next</h2>
-          <ol className="mt-5 space-y-4">
-            {[
-              {
-                icon: CalendarPlus,
-                text: pendingMedicalAid
-                  ? 'We check your medical aid and email you the outcome. Once it is accepted, your session goes onto our practice calendar.'
-                  : 'Your confirmation email arrives now, and your session goes onto our practice calendar.',
-              },
-              {
-                icon: MessageCircle,
-                text: 'We send a reminder the morning before your session, and again on the morning of it.',
-              },
-              {
-                icon: Phone,
-                text: `Need to change something? Manage it from your portal, or call or WhatsApp ${BUSINESS.phone}. Please give us at least 24 hours' notice.`,
-              },
-            ].map((item, i) => (
-              <li key={i} className="flex gap-4">
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white text-forest-700 dark:text-forest-300 shadow-subtle">
-                  <item.icon className="h-4 w-4" />
-                </span>
-                <p className="pt-1.5 text-sm leading-relaxed text-ink-muted">{item.text}</p>
-              </li>
-            ))}
-          </ol>
-
-          <div className="mt-7 flex flex-col gap-3 sm:flex-row">
-            <ButtonLink href="/portal/appointments" size="sm">
-              View my appointments
-            </ButtonLink>
-            <ButtonLink href="/" variant="secondary" size="sm">
-              Back to Be Whole Care
-            </ButtonLink>
-          </div>
-
-          {!user && (
-            <p className="mt-6 border-t border-line pt-5 text-sm leading-relaxed text-ink-soft">
-              We’ve created an account for {view.client?.email}.{' '}
-              <Link href="/forgot-password" className="text-forest-700 dark:text-forest-300 underline-offset-4 hover:underline">
-                Set a password
-              </Link>{' '}
-              to manage this appointment, see your session link and book again in one tap.
-            </p>
-          )}
-        </div>
-      </Reveal>
+      {/* "What happens next" and its two buttons were removed at the practice's request (2026-10). */}
+      {!user && (
+        <Reveal delay={0.14}>
+          <p className="mt-10 rounded-3xl border border-line bg-cream-50 p-6 text-sm leading-relaxed text-ink-soft dark:bg-canvas">
+            We’ve created an account for {view.client?.email}.{' '}
+            <Link href="/forgot-password" className="text-forest-700 dark:text-forest-300 underline-offset-4 hover:underline">
+              Set a password
+            </Link>{' '}
+            to manage this appointment, see your session link and book again in one tap.
+          </p>
+        </Reveal>
+      )}
     </div>
   );
 }

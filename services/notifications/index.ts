@@ -49,6 +49,11 @@ export interface SendInput {
   /** The client's first name, for "Dear …,". Omit for staff messages. */
   greeting?: string | null;
   /**
+   * The whole opening line, used as written in place of "Dear …," — for a
+   * message the practice has worded itself, e.g. "Good day,".
+   */
+  salutation?: string | null;
+  /**
    * Secondary links shown as short, tappable lines under the details — e.g.
    * "Add to Google Calendar". The label is what the reader sees; the URL
    * never appears in the text.
@@ -322,7 +327,8 @@ function plainText(input: SendInput): string {
   const hasCtaSlot = blocks.some((b) => b.trim() === CTA_SLOT);
 
   const parts: string[] = [];
-  if (input.greeting) parts.push(`Dear ${input.greeting},`);
+  if (input.salutation) parts.push(input.salutation);
+  else if (input.greeting) parts.push(`Dear ${input.greeting},`);
   for (const block of blocks) {
     const text = block.trim();
     if (text === DETAILS_SLOT) parts.push(details);
@@ -354,10 +360,23 @@ function isClientMessage(input: SendInput) {
 const QUEUED_PREFIX = 'bwc:v1:';
 
 function serializeQueued(input: SendInput): string {
-  const { subject, heading, body, greeting, details, cta, links, signOff, audience, type } = input;
+  const { subject, heading, body, greeting, salutation, details, cta, links, signOff, audience, type } =
+    input;
   return (
     QUEUED_PREFIX +
-    JSON.stringify({ subject, heading, body, greeting, details, cta, links, signOff, audience, type })
+    JSON.stringify({
+      subject,
+      heading,
+      body,
+      greeting,
+      salutation,
+      details,
+      cta,
+      links,
+      signOff,
+      audience,
+      type,
+    })
   );
 }
 
@@ -390,7 +409,7 @@ function parseQueued(stored: string): Partial<SendInput> | null {
  * email in every inbox, whatever the phone's appearance setting.
  */
 function emailShell(input: SendInput, hasLogo = false) {
-  const { subject, body, details, cta, links, greeting } = input;
+  const { subject, body, details, cta, links, greeting, salutation: openingLine } = input;
   const heading = input.heading ?? subject;
   const FOREST = '#14401A'; // forest-800 — the one accent colour, tailwind.config.ts
   const INK = '#1C231A';
@@ -442,7 +461,11 @@ function emailShell(input: SendInput, hasLogo = false) {
     `<p class="bwc-soft" style="margin:0 0 16px;font-size:16px;line-height:1.65;color:${INK_SOFT};${WRAP}${extra}">${escapeHtml(text).replace(/\n/g, '<br/>')}</p>`;
 
   const isClient = isClientMessage(input);
-  const salutation = greeting ? paragraph(`Dear ${greeting},`, `color:${INK};`) : '';
+  const salutation = openingLine
+    ? paragraph(openingLine, `color:${INK};`)
+    : greeting
+      ? paragraph(`Dear ${greeting},`, `color:${INK};`)
+      : '';
 
   const [closing, name, ...credentials] = input.signOff ?? SIGN_OFF;
   const signOff = isClient

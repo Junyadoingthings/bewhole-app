@@ -101,17 +101,15 @@ export const medicalAidSchema = z.object({
   memberNumber: z.string().trim().min(3, 'Enter your membership number').max(40),
   mainMember: z.string().trim().min(2, 'Who is the main member?').max(80),
   /**
-   * Optional, deliberately: a booking must not be blocked because someone
-   * does not have a family member's ID number to hand at 11pm. The practice
-   * can complete it before submitting the claim.
+   * Required (2026-10): the scheme needs the main member's ID number to
+   * verify cover, and the practice asked that it always be captured. Not
+   * checked as a 13-digit SA ID, because a main member may hold a passport.
    */
   mainMemberId: z
-    .string()
+    .string({ required_error: "Enter the main member's ID number" })
     .trim()
-    .max(20)
-    .optional()
-    .or(z.literal(''))
-    .transform((v) => v || undefined),
+    .min(6, "Enter the main member's ID number")
+    .max(20, 'That ID number looks too long'),
   /**
    * Required (2026-10): the scheme needs the patient's date of birth to
    * verify cover, and the practice asked that it always be captured. It must
@@ -175,15 +173,15 @@ export const bookingDetailsSchema = z.object({
 });
 
 /**
- * Another person attending a couples, family or pre-marital session. Name is
- * required; contact details are optional because a family session can
- * include children who have neither.
+ * Another person attending a couples, family or pre-marital session. Every
+ * field is required (2026-10): the practice asked for each person's email
+ * and mobile number as well as their name.
  */
 export const participantDetailsSchema = z.object({
   firstName: nameField,
   lastName: nameField,
-  email: emailSchema.optional().or(z.literal('')).transform((v) => v || undefined),
-  phone: contactPhoneSchema.optional().or(z.literal('')).transform((v) => v || undefined),
+  email: emailSchema,
+  phone: phoneSchema,
 });
 
 /** The same person at submission: they must also have agreed to the informed consent. */
