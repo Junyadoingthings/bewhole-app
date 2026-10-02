@@ -174,7 +174,7 @@ export default async function AppointmentDetailPage({
                     }
                     size="sm"
                   >
-                    {view.payment.status}
+                    {paymentStatusLabel(view.payment.status, view.payment.method === 'medical_aid')}
                   </Badge>
                 }
               />
@@ -214,7 +214,7 @@ export default async function AppointmentDetailPage({
                 <li key={event.id} className="flex items-start gap-3 text-sm">
                   <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-forest-400" />
                   <span className="text-ink-muted">
-                    {readableEvent(event.type)}
+                    {readableEvent(event.type, view.payment?.method === 'medical_aid')}
                     <span className="ml-2 text-xs text-ink-faint">
                       {formatFullDate(parts(event.createdAt).date)} ·{' '}
                       {displayTime(parts(event.createdAt).time)}
@@ -260,8 +260,21 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
   );
 }
 
-function readableEvent(type: string) {
+/** The payment status in the client's words; a medical aid claim is the scheme's to pay. */
+function paymentStatusLabel(status: string, claim: boolean) {
+  if (status === 'paid') return claim ? 'Paid by your scheme' : 'Paid';
+  if (status === 'failed') return claim ? 'Not covered by your scheme' : 'Not paid';
+  if (status === 'pending' || status === 'processing') return claim ? 'Claimed from your scheme' : 'Awaiting payment';
+  return status === 'refunded' ? 'Refunded' : 'Cancelled';
+}
+
+function readableEvent(type: string, claim = false) {
   const map: Record<string, string> = {
+    'ledger.opened': claim ? 'Claim submitted to your medical aid' : 'Payment due to the practice',
+    'ledger.recorded': 'Payment recorded by the practice',
+    'manual.received': claim ? 'Payment received from your medical aid' : 'Payment received by the practice',
+    'manual.not_received': claim ? 'Not covered by your medical aid' : 'Marked as not paid',
+    'manual.undone': 'Payment status corrected by the practice',
     'checkout.created': 'Secure checkout opened',
     'checkout.failed': 'Could not open checkout',
     'verify.paid': 'Payment received and verified',

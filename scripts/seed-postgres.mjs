@@ -297,6 +297,36 @@ async function main() {
   }
   console.log(`  \u2713 ${WORKSHOPS.length} workshops`);
 
+  // Payments ledger: bookings made before every amount had a line on the
+  // Payments page get theirs now. Only bookings with no payment line at all;
+  // fixed ids, so running this again changes nothing.
+  //   - accepted medical aid → a claim awaiting the scheme, at the session fee
+  //   - declined medical aid → the private fee, awaiting the client (Yoco)
+  //   - card sessions confirmed without an online checkout → awaiting payment
+  const ledger = await sql`
+    insert into payments (id, appointment_id, client_user_id, amount_cents, currency, method, status, provider)
+    select 'pay_ledger_' || a.id, a.id, a.client_user_id,
+           case when a.payment_method = 'medical_aid'
+                then (case when a.mode = 'online' then s.price_online_cents else s.price_in_person_cents end)
+                else a.amount_cents end,
+           'ZAR', a.payment_method, 'pending', 'manual'
+    from appointments a
+    join services s on s.id = a.service_id
+    where not exists (select 1 from payments p where p.appointment_id = a.id)
+      and (
+        (a.payment_method = 'medical_aid' and a.medical_aid_decision = 'accepted'
+          and a.status in ('confirmed', 'completed'))
+        or (a.payment_method = 'card' and a.medical_aid_decision = 'declined'
+          and a.status = 'pending_payment' and a.amount_cents > 0)
+        or (a.payment_method = 'card' and a.status in ('confirmed', 'completed') and a.amount_cents > 0)
+      )
+      and (case when a.payment_method = 'medical_aid'
+                then (case when a.mode = 'online' then s.price_online_cents else s.price_in_person_cents end)
+                else a.amount_cents end) > 0
+    on conflict (id) do nothing
+    returning id`;
+  console.log(`  ✓ payments ledger (${ledger.length} missing line${ledger.length === 1 ? '' : 's'} added)`);
+
   // Settings: insert once, then leave alone — the admin dashboard owns this row.
   await sql`
     insert into settings (id, data) values (1, ${sql.json(SETTINGS)})

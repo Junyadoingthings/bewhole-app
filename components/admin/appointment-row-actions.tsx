@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   RefreshCw,
+  Banknote,
   Check,
   FileText,
   Link2,
@@ -21,12 +22,14 @@ import { Input, Label, Textarea } from '@/components/ui/field';
 import { useToast } from '@/components/ui/toast';
 import { settle } from '@/lib/settle';
 import {
+  recordAppointmentPayment,
   resendConfirmation,
   retryCalendarSync,
   setAppointmentStatus,
   setSessionLink,
   staffCancelAppointment,
 } from '@/app/actions/admin';
+import { today } from '@/lib/date';
 import type { AppointmentStatus } from '@/types';
 
 export function AppointmentRowActions({
@@ -49,6 +52,10 @@ export function AppointmentRowActions({
   const [cancelOpen, setCancelOpen] = React.useState(false);
   const [link, setLink] = React.useState(sessionLink ?? '');
   const [reason, setReason] = React.useState('');
+  const [payOpen, setPayOpen] = React.useState(false);
+  const [payAmount, setPayAmount] = React.useState('');
+  const [payBy, setPayBy] = React.useState<'card' | 'medical_aid'>('card');
+  const [payOn, setPayOn] = React.useState(today());
   const [busy, setBusy] = React.useState(false);
   const menuRef = React.useRef<HTMLDivElement>(null);
 
@@ -144,6 +151,9 @@ export function AppointmentRowActions({
                 {sessionLink ? 'Edit session link' : 'Add session link'}
               </MenuButton>
             )}
+            <MenuButton icon={<Banknote className="h-4 w-4" />} onClick={() => setPayOpen(true)}>
+              Record a payment
+            </MenuButton>
             <MenuButton
               icon={<Send className="h-4 w-4" />}
               onClick={() => run(() => resendConfirmation(appointmentId), 'Confirmation resent')}
@@ -174,6 +184,91 @@ export function AppointmentRowActions({
           </motion.div>
         )}
       </AnimatePresence>
+
+      <Modal
+        open={payOpen}
+        onClose={() => !busy && setPayOpen(false)}
+        title="Record a payment"
+        description="Money received for this session outside an online card payment — EFT, cash, a quoted fee or a medical aid payment. It is added to the Payments page as received."
+        footer={
+          <div className="flex gap-3">
+            <Button type="button" variant="ghost" full onClick={() => setPayOpen(false)} disabled={busy}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              full
+              loading={busy}
+              onClick={async () => {
+                const ok = await run(
+                  () =>
+                    recordAppointmentPayment(appointmentId, {
+                      amountRands: payAmount,
+                      method: payBy,
+                      receivedOn: payOn,
+                    }),
+                  'Payment recorded',
+                );
+                if (ok) {
+                  setPayOpen(false);
+                  setPayAmount('');
+                }
+              }}
+            >
+              Record payment
+            </Button>
+          </div>
+        }
+      >
+        <div className="grid gap-5 sm:grid-cols-2">
+          <div>
+            <Label htmlFor={`pay-amount-${appointmentId}`}>Amount received (R)</Label>
+            <Input
+              id={`pay-amount-${appointmentId}`}
+              inputMode="decimal"
+              placeholder="700.00"
+              value={payAmount}
+              onChange={(e) => setPayAmount(e.target.value)}
+              data-autofocus
+            />
+          </div>
+          <div>
+            <Label htmlFor={`pay-on-${appointmentId}`}>Received on</Label>
+            <Input
+              id={`pay-on-${appointmentId}`}
+              type="date"
+              max={today()}
+              value={payOn}
+              onChange={(e) => setPayOn(e.target.value)}
+            />
+          </div>
+        </div>
+        <fieldset className="mt-5">
+          <legend className="mb-2 text-sm font-medium text-ink">Paid by</legend>
+          <div className="flex flex-wrap gap-2">
+            {(
+              [
+                ['card', 'The client'],
+                ['medical_aid', 'Their medical aid'],
+              ] as const
+            ).map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => setPayBy(value)}
+                aria-pressed={payBy === value}
+                className={
+                  payBy === value
+                    ? 'rounded-full border border-forest-700 bg-forest-700 px-4 py-2 text-sm text-cream-100'
+                    : 'rounded-full border border-line bg-white px-4 py-2 text-sm text-ink-soft hover:text-ink'
+                }
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </fieldset>
+      </Modal>
 
       <Modal
         open={linkOpen}

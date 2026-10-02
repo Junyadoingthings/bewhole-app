@@ -9,7 +9,7 @@ import { requireUser } from '@/lib/auth';
 import { formatFullDate, parts } from '@/lib/date';
 import { hydrateAppointments, listAppointments, listPayments } from '@/lib/db';
 import { money } from '@/lib/utils';
-import type { PaymentStatus } from '@/types';
+import type { Payment, PaymentStatus } from '@/types';
 
 export const metadata: Metadata = { title: 'Payments', robots: { index: false } };
 export const dynamic = 'force-dynamic';
@@ -31,10 +31,13 @@ export default async function PaymentsPage() {
   ]);
   const views = await hydrateAppointments(appointments);
 
-  const totalPaid = payments
+  // A medical aid claim is between the practice and the scheme: it is listed,
+  // but it is neither money the client paid nor money they owe.
+  const ownPayments = payments.filter((p) => p.method !== 'medical_aid');
+  const totalPaid = ownPayments
     .filter((p) => p.status === 'paid')
     .reduce((sum, p) => sum + p.amountCents, 0);
-  const outstanding = payments.filter((p) => p.status === 'pending' || p.status === 'processing');
+  const outstanding = ownPayments.filter((p) => p.status === 'pending' || p.status === 'processing');
 
   return (
     <div className="mx-auto max-w-3xl">
@@ -88,8 +91,7 @@ export default async function PaymentsPage() {
                     {appointment?.service.name ?? 'Follow-up session'}
                   </p>
                   <p className="mt-1 text-sm text-ink-soft">
-                    {formatFullDate(parts(payment.createdAt).date)} ·{' '}
-                    {payment.method === 'card' ? 'Card' : 'Medical aid'}
+                    {formatFullDate(parts(payment.createdAt).date)} · {sourceLabel(payment)}
                   </p>
                 </div>
                 <div className="flex items-center gap-4">
@@ -97,9 +99,9 @@ export default async function PaymentsPage() {
                     {money(payment.amountCents)}
                   </span>
                   <Badge tone={TONES[payment.status]} size="sm">
-                    {payment.status}
+                    {statusLabel(payment)}
                   </Badge>
-                  {payment.status === 'paid' && (
+                  {payment.status === 'paid' && payment.method !== 'medical_aid' && (
                     <Link
                       href={`/portal/receipts/${payment.id}`}
                       className="text-sm font-medium text-forest-700 dark:text-forest-300 underline-offset-4 hover:underline"
@@ -132,4 +134,26 @@ export default async function PaymentsPage() {
       </Reveal>
     </div>
   );
+}
+
+function sourceLabel(payment: Payment) {
+  if (payment.method === 'medical_aid') return 'Medical aid claim';
+  return payment.provider === 'manual' ? 'Paid to the practice' : 'Card';
+}
+
+function statusLabel(payment: Payment) {
+  const claim = payment.method === 'medical_aid';
+  switch (payment.status) {
+    case 'paid':
+      return claim ? 'Paid by your scheme' : 'Paid';
+    case 'pending':
+    case 'processing':
+      return claim ? 'Claimed from your scheme' : 'Awaiting payment';
+    case 'failed':
+      return claim ? 'Not covered by your scheme' : 'Not paid';
+    case 'refunded':
+      return 'Refunded';
+    default:
+      return 'Cancelled';
+  }
 }

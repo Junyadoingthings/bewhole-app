@@ -10,6 +10,7 @@ import {
   getPaymentForAppointment,
   getService,
   getProfile,
+  listPaymentEvents,
   findUserById,
   newId,
   nowISO,
@@ -442,11 +443,161 @@ export async function refundPayment(paymentId: ID, actorUserId: ID) {
 }
 
 /** Staff marking a medical-aid co-payment or EFT as received. */
-export async function markPaymentReceivedManually(paymentId: ID, actorUserId: ID) {
+/* ------------------------------------------------------------------ ledger */
+/**
+ * Every rand that reaches the practice has a line on the Payments page.
+ *
+ * Card checkouts make their own line (createCheckoutForAppointment). The
+ * money that does not pass through a checkout gets one here:
+ *   - an accepted medical aid claim, awaiting the scheme's payment;
+ *   - a declined medical aid session, now payable by the client (Yoco link);
+ *   - a card session booked while no gateway is connected, payable directly;
+ *   - anything the practice takes directly (EFT, cash, a quoted fee).
+ * These are 'manual' lines: the practice ticks them off when the money
+ * arrives, entering the amount actually received.
+ */
+
+/** Opens an awaiting line for a booking, unless it already has one. */
+export async function openLedgerEntry(
+  appointmentId: ID,
+  method: Payment['method'],
+  expectedCents: number,
+): Promise<Payment | null> {
+  if (expectedCents <= 0) return null;
+  const appointment = await getAppointment(appointmentId);
+  if (!appointment) return null;
+  const existing = await getPaymentForAppointment(appointmentId);
+  // A live or settled line already covers this booking; a failed or
+  // cancelled checkout does not, so a new line is opened after one.
+  if (existing && ['pending', 'processing', 'paid'].includes(existing.status)) return existing;
+
+  const ts = nowISO();
+  const payment: Payment = {
+    id: newId('pay'),
+    appointmentId,
+    clientUserId: appointment.clientUserId,
+    amountCents: expectedCents,
+    currency: 'ZAR',
+    method,
+    status: 'pending',
+    provider: 'manual',
+    providerCheckoutId: null,
+    checkoutUrl: null,
+    createdAt: ts,
+    updatedAt: ts,
+  };
+  await createPayment(payment);
+  await recordPaymentEvent(payment.id, 'ledger.opened', { method, expectedCents });
+  return payment;
+}
+
+/**
+ * The practice has the money: record the amount actually received and the
+ * day it arrived. A booking still waiting on this payment is confirmed (and
+ * the client emailed) exactly as a card payment would.
+ */
+export async function recordPaymentReceived(
+  paymentId: ID,
+  input: { amountCents: number; receivedOn: string },
+  actorUserId: ID,
+) {
   const payment = await getPayment(paymentId);
   if (!payment) return { ok: false, error: 'Payment not found' };
-  await updatePayment(paymentId, { provider: 'manual' });
-  await recordPaymentEvent(paymentId, 'manual.marked_paid', { by: actorUserId });
+  if (payment.status === 'paid') return { ok: false, error: 'This payment is already marked as received.' };
+  if (payment.status === 'refunded') return { ok: false, error: 'This payment was refunded.' };
+  if (!Number.isInteger(input.amountCents) || input.amountCents <= 0) {
+    return { ok: false, error: 'Enter the amount received.' };
+  }
+  // Copied before the update: a data layer may hand back the live record,
+  // which the update would change underneath us.
+  const expectedCents = payment.amountCents;
+  const method = payment.method;
+
+  await updatePayment(paymentId, { amountCents: input.amountCents, provider: 'manual', failureReason: null });
+  await recordPaymentEvent(paymentId, 'manual.received', {
+    by: actorUserId,
+    expectedCents,
+    receivedCents: input.amountCents,
+    receivedOn: input.receivedOn,
+  });
   await applyPaymentSuccess(paymentId);
+  // The day the money arrived, not the moment it was ticked off.
+  await updatePayment(paymentId, { paidAt: new Date(`${input.receivedOn}T10:00:00+02:00`).toISOString() });
+  await audit({
+    actorUserId,
+    action: 'payment.received',
+    entity: 'payment',
+    entityId: paymentId,
+    meta: { method, receivedCents: input.amountCents, receivedOn: input.receivedOn },
+  });
   return { ok: true };
+}
+
+/** The money is not coming, e.g. the scheme declined the claim. */
+export async function recordPaymentNotReceived(paymentId: ID, reason: string, actorUserId: ID) {
+  const payment = await getPayment(paymentId);
+  if (!payment) return { ok: false, error: 'Payment not found' };
+  if (payment.status === 'paid') return { ok: false, error: 'Undo the received payment first.' };
+  await updatePayment(paymentId, { status: 'failed', failureReason: reason || 'Not received' });
+  await recordPaymentEvent(paymentId, 'manual.not_received', { by: actorUserId, reason });
+  await audit({ actorUserId, action: 'payment.not_received', entity: 'payment', entityId: paymentId, meta: { reason } });
+  return { ok: true };
+}
+
+/** A mistaken tick: back to awaiting. Only for lines ticked off by hand. */
+export async function undoPaymentReceived(paymentId: ID, actorUserId: ID) {
+  const payment = await getPayment(paymentId);
+  if (!payment) return { ok: false, error: 'Payment not found' };
+  if (payment.provider !== 'manual') {
+    return { ok: false, error: 'Card payments are confirmed by the provider; use Refund instead.' };
+  }
+  // Copied before the update (see recordPaymentReceived).
+  const previous = payment.status;
+  if (previous !== 'paid' && previous !== 'failed') {
+    return { ok: false, error: 'This payment is not marked as received or not paid.' };
+  }
+  // Back to the amount that was expected before the received amount replaced it.
+  const events = await listPaymentEvents(paymentId);
+  const lastReceived = [...events].reverse().find((e) => e.type === 'manual.received');
+  const expected = Number(lastReceived?.payload?.expectedCents);
+  await updatePayment(paymentId, {
+    status: 'pending',
+    paidAt: null,
+    failureReason: null,
+    ...(previous === 'paid' && Number.isInteger(expected) && expected > 0 ? { amountCents: expected } : {}),
+  });
+  await recordPaymentEvent(paymentId, 'manual.undone', { by: actorUserId, previous });
+  await audit({ actorUserId, action: 'payment.undone', entity: 'payment', entityId: paymentId });
+  return { ok: true };
+}
+
+/** Money taken directly for a booking (EFT, cash, a quoted fee), recorded as received. */
+export async function recordDirectPayment(
+  appointmentId: ID,
+  input: { amountCents: number; method: Payment['method']; receivedOn: string },
+  actorUserId: ID,
+) {
+  const appointment = await getAppointment(appointmentId);
+  if (!appointment) return { ok: false, error: 'Appointment not found' };
+  if (!Number.isInteger(input.amountCents) || input.amountCents <= 0) {
+    return { ok: false, error: 'Enter the amount received.' };
+  }
+  const ts = nowISO();
+  const payment: Payment = {
+    id: newId('pay'),
+    appointmentId,
+    clientUserId: appointment.clientUserId,
+    amountCents: input.amountCents,
+    currency: 'ZAR',
+    method: input.method,
+    status: 'pending',
+    provider: 'manual',
+    providerCheckoutId: null,
+    checkoutUrl: null,
+    createdAt: ts,
+    updatedAt: ts,
+  };
+  await createPayment(payment);
+  await recordPaymentEvent(payment.id, 'ledger.recorded', { by: actorUserId });
+  return recordPaymentReceived(payment.id, input, actorUserId);
 }
