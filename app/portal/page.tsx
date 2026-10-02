@@ -2,7 +2,6 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import {
   ArrowUpRight,
-  BookOpen,
   CalendarDays,
   CalendarPlus,
   CreditCard,
@@ -25,7 +24,6 @@ import {
   listFollowUps,
   listNotifications,
   listPayments,
-  listResources,
 } from '@/lib/db';
 import { joinLinkFor } from '@/lib/session-link';
 import { money } from '@/lib/utils';
@@ -36,11 +34,10 @@ export const dynamic = 'force-dynamic';
 export default async function PortalOverview() {
   const user = await requireUser();
 
-  const [appointments, followUps, payments, resources, notifications] = await Promise.all([
+  const [appointments, followUps, payments, notifications] = await Promise.all([
     listAppointments({ clientUserId: user.id }),
     listFollowUps({ clientUserId: user.id }),
     listPayments({ clientUserId: user.id }),
-    listResources(),
     listNotifications({ audience: 'client', userId: user.id }),
   ]);
 
@@ -162,26 +159,8 @@ export default async function PortalOverview() {
         </section>
 
         <section>
-          <h2 className="font-display text-xl text-ink">For you</h2>
-          <div className="mt-5 space-y-3">
-            {resources.slice(0, 3).map((resource) => (
-              <Link
-                key={resource.id}
-                href={`/portal/resources`}
-                className="group block rounded-2xl border border-line bg-white p-5 transition-all duration-300 hover:-translate-y-0.5 hover:border-forest-200 hover:shadow-card"
-              >
-                <div className="flex items-center gap-2.5">
-                  <BookOpen className="h-3.5 w-3.5 text-forest-600 dark:text-forest-300" />
-                  <span className="text-xs text-ink-faint">
-                    {resource.topic} · {resource.readMinutes} min
-                  </span>
-                </div>
-                <p className="mt-2.5 font-medium leading-snug text-ink">{resource.title}</p>
-              </Link>
-            ))}
-          </div>
-
-          <div className="mt-6 rounded-3xl border border-line bg-cream-100/70 dark:bg-card/70 p-6">
+          {/* Resources and workshops are no longer offered in the portal (2026-10). */}
+          <div className="rounded-3xl border border-line bg-cream-100/70 dark:bg-card/70 p-6">
             <p className="font-medium text-ink">Need to change something?</p>
             <p className="mt-2 text-sm leading-relaxed text-ink-soft">
               You can reschedule or cancel from any appointment. Please give us at least 24 hours’

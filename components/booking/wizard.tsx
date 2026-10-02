@@ -1051,9 +1051,7 @@ export function BookingWizard({
                                 </FieldError>
                               </div>
                               <div>
-                                <Label htmlFor={`participant-${n}-email`} optional>
-                                  Email
-                                </Label>
+                                <Label htmlFor={`participant-${n}-email`}>Email</Label>
                                 <Input
                                   id={`participant-${n}-email`}
                                   onBlur={touch(`participants.${n}.email`)}
@@ -1068,9 +1066,7 @@ export function BookingWizard({
                                 </FieldError>
                               </div>
                               <div>
-                                <Label htmlFor={`participant-${n}-phone`} optional>
-                                  Mobile number
-                                </Label>
+                                <Label htmlFor={`participant-${n}-phone`}>Mobile number</Label>
                                 <Input
                                   id={`participant-${n}-phone`}
                                   onBlur={touch(`participants.${n}.phone`)}
@@ -1278,7 +1274,7 @@ export function BookingWizard({
                                 </ul>
 
                                 <div className="mt-5 grid gap-4 sm:grid-cols-2">
-                                  {/* Date of birth is required; the main member's ID number is optional (see medicalAidSchema). */}
+                                  {/* Date of birth and the main member's ID number are both required (see medicalAidSchema). */}
                                   <div className="sm:col-span-2">
                                     <Label htmlFor="scheme">Scheme</Label>
                                     <Input
@@ -1345,9 +1341,7 @@ export function BookingWizard({
                                     </FieldError>
                                   </div>
                                   <div>
-                                    <Label htmlFor="mainMemberId" optional>
-                                      Main member ID number
-                                    </Label>
+                                    <Label htmlFor="mainMemberId">Main member ID number</Label>
                                     <Input
                                       id="mainMemberId"
                                       onBlur={touch('medicalAid.mainMemberId')}

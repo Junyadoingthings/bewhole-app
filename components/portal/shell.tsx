@@ -5,7 +5,6 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { motion } from 'framer-motion';
 import {
-  BookOpen,
   CalendarDays,
   CalendarPlus,
   CreditCard,
@@ -27,7 +26,7 @@ const NAV = [
   { href: '/portal/appointments', label: 'Appointments', icon: CalendarDays },
   { href: '/portal/follow-ups', label: 'Follow-ups', icon: Repeat },
   { href: '/portal/payments', label: 'Payments', icon: CreditCard },
-  { href: '/portal/resources', label: 'Resources', icon: BookOpen },
+  // Resources (and the workshops it showed) removed at the practice's request (2026-10).
   { href: '/portal/profile', label: 'Profile', icon: User },
   { href: '/portal/settings', label: 'Settings', icon: Settings },
 ];
@@ -36,7 +35,7 @@ const NAV = [
 const MOBILE_NAV = [
   { href: '/portal', label: 'Home', icon: Home, exact: true },
   { href: '/portal/appointments', label: 'Sessions', icon: CalendarDays },
-  { href: '/portal/resources', label: 'Resources', icon: BookOpen },
+  { href: '/portal/payments', label: 'Payments', icon: CreditCard },
   { href: '/portal/profile', label: 'Profile', icon: User },
 ];
 
