@@ -11,3 +11,6 @@ next-env.d.ts
 .data/
 .vercel
 .env*
+
+# The example lists variable NAMES only and is meant to be committed.
+!.env.example

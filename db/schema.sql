@@ -487,7 +487,7 @@ begin
     'practitioners','availability_rules','availability_blocks','appointments',
     'payments','payment_events','follow_ups','calendar_events','notifications',
     'notification_logs','resources','workshops','client_notes','consents',
-    'audit_logs','settings'
+    'audit_logs','settings','counters','password_reset_codes'
   ] loop
     execute format('alter table %I enable row level security', t);
     execute format('alter table %I force row level security', t);
