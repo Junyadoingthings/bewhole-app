@@ -254,7 +254,12 @@ export async function requestPasswordReset(_prev: AuthState, formData: FormData)
   }
 
   const user = await findUserByEmail(email);
-  if (user) {
+  if (user && isPracticeAdmin(user)) {
+    // The practice administrator resets with an emailed code (entered on the
+    // same page). A failure is not shown: the reply must read the same for
+    // every address, so this form never reveals which one is the console's.
+    await sendPasswordCode(user, 'sign_in').catch(() => undefined);
+  } else if (user) {
     await notify({
       type: 'auth.password_reset',
       audience: 'client',
@@ -281,6 +286,53 @@ export async function requestPasswordReset(_prev: AuthState, formData: FormData)
     message:
       'If there is an account with that email, we have sent instructions for setting a password.',
   };
+}
+
+let decoy: Promise<string> | null = null;
+function decoyHash() {
+  decoy ??= hashPassword(String(randomInt(0, 1_000_000)));
+  return decoy;
+}
+
+/**
+ * Forgot password, signed out: the practice administrator enters the emailed
+ * code and a new password, and is signed in to the console.
+ *
+ * Every failure for a reason other than the password rules gives the same
+ * answer — no account, not the administrator, no code, wrong code — so the
+ * form cannot be used to find the console's address or to probe codes. Each
+ * code allows 5 tries and then stops working; requests are also rate-limited.
+ */
+export async function resetPasswordWithEmailCode(_prev: AuthState, formData: FormData): Promise<AuthState> {
+  const email = String(formData.get('email') ?? '').trim().toLowerCase();
+  const entered = String(formData.get('code') ?? '').replace(/\D/g, '');
+  const next = String(formData.get('newPassword') ?? '');
+  const confirm = String(formData.get('confirmPassword') ?? '');
+
+  const limit = rateLimit(`${clientKey(headers(), 'reset-code')}:${email}`, LIMITS.login);
+  if (!limit.ok) return { status: 'error', message: 'Too many attempts. Please wait 15 minutes and try again.' };
+
+  if (!email) return { status: 'error', message: 'Enter the email address the code was sent to.' };
+  if (entered.length !== 6) return { status: 'error', message: 'Enter the 6-digit code from the email.' };
+  const problem = newPasswordProblem(next, confirm);
+  if (problem) return { status: 'error', message: problem };
+
+  const invalid: AuthState = {
+    status: 'error',
+    message: 'That code is not correct or has expired. Check it, or send a new one.',
+  };
+  const user = await findUserByEmail(email);
+  if (!user || !isPracticeAdmin(user)) {
+    // Spend the same time as checking a real code, so timing gives nothing away.
+    await verifyPassword(entered, await decoyHash());
+    return invalid;
+  }
+
+  const checked = await checkPasswordCode(user.id, entered);
+  if (!checked.ok) return invalid;
+
+  await completePasswordChange(user, next, 'email_code');
+  redirect('/admin');
 }
 
 /* ----------------------------------------------------------------- profile */
@@ -451,18 +503,15 @@ export async function updateAdminPassword(formData: FormData): Promise<PasswordR
 }
 
 /**
- * Forgot password, from Settings: email a 6-digit code to the admin's own
- * address. The code proves they can read that inbox; only its hash is stored,
- * it expires after 10 minutes, and asking again cancels the previous one.
+ * Email a 6-digit code to an administrator's own address. The code proves they
+ * can read that inbox; only its hash is stored, it expires after 10 minutes,
+ * asking again cancels the previous one, and at most 3 are sent per 15 minutes
+ * (counted in the database, so the limit holds across every server instance).
  */
-export async function sendAdminPasswordCode(): Promise<PasswordResult> {
-  const user = await getCurrentUser();
-  if (!user) return { ok: false, error: 'Please sign in again.' };
-  if (!isPracticeAdmin(user)) {
-    return { ok: false, error: 'Only the practice administrator can reset the console password.' };
-  }
-
-  // Counted in the database, so the limit holds across every server instance.
+async function sendPasswordCode(
+  user: { id: string; email: string; role: Role },
+  via: 'settings' | 'sign_in',
+): Promise<PasswordResult> {
   const since = new Date(Date.now() - 15 * 60_000).toISOString();
   if ((await countPasswordResetCodesSince(user.id, since)) >= CODES_PER_15_MINUTES) {
     return { ok: false, error: 'Several codes have been sent already. Please wait 15 minutes and try again.' };
@@ -496,8 +545,41 @@ export async function sendAdminPasswordCode(): Promise<PasswordResult> {
     action: 'auth.password_code_sent',
     entity: 'user',
     entityId: user.id,
+    meta: { via },
   });
   return { ok: true };
+}
+
+/**
+ * Check an emailed code. A code is used up when it is accepted and after 5
+ * wrong tries, so it can never work twice or be guessed.
+ */
+async function checkPasswordCode(
+  userId: string,
+  entered: string,
+): Promise<{ ok: true } | { ok: false; reason: 'none' | 'locked' | 'wrong'; left?: number }> {
+  const active = await getActivePasswordResetCode(userId);
+  if (!active) return { ok: false, reason: 'none' };
+  if (!(await verifyPassword(entered, active.codeHash))) {
+    const attempts = await recordPasswordResetAttempt(active.id);
+    if (attempts >= CODE_MAX_ATTEMPTS) {
+      await markPasswordResetCodeUsed(active.id);
+      return { ok: false, reason: 'locked' };
+    }
+    return { ok: false, reason: 'wrong', left: CODE_MAX_ATTEMPTS - attempts };
+  }
+  await markPasswordResetCodeUsed(active.id);
+  return { ok: true };
+}
+
+/** Forgot password, from Settings: email a code to the signed-in admin. */
+export async function sendAdminPasswordCode(): Promise<PasswordResult> {
+  const user = await getCurrentUser();
+  if (!user) return { ok: false, error: 'Please sign in again.' };
+  if (!isPracticeAdmin(user)) {
+    return { ok: false, error: 'Only the practice administrator can reset the console password.' };
+  }
+  return sendPasswordCode(user, 'settings');
 }
 
 /** Forgot password, step two: check the emailed code and set the new password. */
@@ -516,22 +598,16 @@ export async function resetAdminPasswordWithCode(formData: FormData): Promise<Pa
   const problem = newPasswordProblem(next, confirm);
   if (problem) return { ok: false, error: problem };
 
-  const active = await getActivePasswordResetCode(user.id);
-  if (!active) {
-    return { ok: false, error: 'This code has expired or was already used. Please send a new one.' };
-  }
-  if (!(await verifyPassword(entered, active.codeHash))) {
-    const attempts = await recordPasswordResetAttempt(active.id);
-    if (attempts >= CODE_MAX_ATTEMPTS) {
-      await markPasswordResetCodeUsed(active.id);
-      return { ok: false, error: 'Too many incorrect codes. Please send a new one.' };
+  const checked = await checkPasswordCode(user.id, entered);
+  if (!checked.ok) {
+    if (checked.reason === 'none') {
+      return { ok: false, error: 'This code has expired or was already used. Please send a new one.' };
     }
-    const left = CODE_MAX_ATTEMPTS - attempts;
+    if (checked.reason === 'locked') return { ok: false, error: 'Too many incorrect codes. Please send a new one.' };
+    const left = checked.left ?? 0;
     return { ok: false, error: `That code is not correct. ${left} ${left === 1 ? 'try' : 'tries'} left.` };
   }
 
-  // Used up before anything else happens, so it can never work twice.
-  await markPasswordResetCodeUsed(active.id);
   await completePasswordChange(user, next, 'email_code');
   return { ok: true };
 }

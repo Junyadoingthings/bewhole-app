@@ -787,6 +787,25 @@ function ensureCounters() {
   return countersReady;
 }
 
+/** A named counter's current value (0 if it has never been raised). */
+export async function getCounter(name: string): Promise<number> {
+  await ensureCounters();
+  const sql = getSql();
+  const rows = await sql`select value from counters where name = ${name} limit 1`;
+  return rows[0] ? Number(rows[0].value) : 0;
+}
+
+/** Raise a named counter by one and return the new value. */
+export async function bumpCounter(name: string): Promise<number> {
+  await ensureCounters();
+  const sql = getSql();
+  const [row] = await sql`
+    insert into counters (name, value) values (${name}, 1)
+    on conflict (name) do update set value = counters.value + 1
+    returning value`;
+  return Number(row.value);
+}
+
 export async function updateAppointment(id: ID, patch: Partial<Appointment>) {
   const sql = getSql();
   const rows = await sql`

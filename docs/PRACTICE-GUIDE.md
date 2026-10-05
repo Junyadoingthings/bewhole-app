@@ -70,6 +70,18 @@ name in **Appointments** ("With …"), in your booking emails and on the consent
 - If a booking was made without online consent (for example, one you made yourself), the form says
   so — take consent in person and sign it.
 
+## Your bookings in Outlook, Apple or Google Calendar
+
+**Calendar** → **Add to my calendar** → choose where you keep your calendar (Outlook on your
+computer or phone, Outlook.com, Microsoft 365, iPhone/iPad/Mac, or Google Calendar). Your sessions
+and blocked time then appear there and update by themselves — Apple within minutes, Outlook and
+Google within a few hours. Each session shows the service, the client's name, the reference and
+where it takes place; medical aid holds and unpaid bookings are marked.
+
+The link is private: anyone who has it can see your bookings. If it is ever shared by mistake,
+open the same window and click **Reset link** — the old one stops working everywhere, and you add
+the calendar again.
+
 ## Days off and holidays
 
 **Calendar** → **Block time** → choose the date, the whole day or part of it, and a reason →
@@ -98,11 +110,16 @@ request; the session is confirmed once they pay.
   email address. Enter it with your new password and click **Set new password**. The code works
   once and expires after 10 minutes.
 
-If you are signed out and have forgotten your password, contact your website developer.
+**Signed out and forgotten your password?** On the sign-in page, click **Forgot your password?**,
+enter the console's email address and click **Send instructions**. Enter the 6-digit code from the
+email with a new password and click **Set new password and sign in** — you go straight to the
+console. The same rules apply: the code works once, expires after 10 minutes and stops working
+after 5 wrong tries.
 
 ## What clients see
 
-1. Choose a service, online or in person (Centurion or Tembisa), a date and a time.
+1. Choose a service, online or in person (Centurion or Tembisa), a date and a time — Monday to
+   Friday 09:00–17:00 and Saturday 09:00–13:00, the hours shown on the website.
 2. Enter their details — name, email, mobile, address and an emergency contact (all required) —
    and, for couples/family/pre-marital sessions, everyone else attending.
 3. Agree to the informed consent (each person, for group sessions).

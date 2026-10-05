@@ -1,10 +1,10 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { ChevronLeft, ChevronRight, ExternalLink, Lock, MapPin, Video } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Lock, MapPin, Video } from 'lucide-react';
 
 import { BlockTimeControl } from '@/components/admin/block-time';
+import { CalendarSubscribe } from '@/components/admin/calendar-subscribe';
 import { Reveal } from '@/components/motion';
-import { ButtonLink } from '@/components/ui/button';
 import { Badge } from '@/components/ui/primitives';
 import { requireStaff } from '@/lib/auth';
 import {
@@ -20,8 +20,9 @@ import {
   timeToMinutes,
   today,
 } from '@/lib/date';
-import { hydrateAppointments, listAppointments, listAvailabilityBlocks } from '@/lib/db';
+import { getCounter, hydrateAppointments, listAppointments, listAvailabilityBlocks } from '@/lib/db';
 import { withTimeout } from '@/lib/db/with-timeout';
+import { calendarFeedUrls } from '@/lib/links';
 import { cn } from '@/lib/utils';
 import type { AppointmentStatus, AppointmentView, AvailabilityBlock } from '@/types';
 
@@ -67,7 +68,16 @@ export default async function AdminCalendarPage({
 }: {
   searchParams: { view?: string; date?: string };
 }) {
-  await requireStaff();
+  const user = await requireStaff();
+  // The subscription link shows client names, so only the administrator sees it.
+  const feed =
+    user.role === 'ADMIN' || user.role === 'SUPER_ADMIN'
+      ? await withTimeout(
+          getCounter('calendar_feed').then((version) => calendarFeedUrls(version)),
+          null,
+          9000,
+        )
+      : null;
 
   const view = (searchParams.view ?? 'week') as 'day' | 'week' | 'month';
   const anchor = /^\d{4}-\d{2}-\d{2}$/.test(searchParams.date ?? '')
@@ -146,18 +156,7 @@ export default async function AdminCalendarPage({
                 reason: b.reason,
               }))}
             />
-            {/*
-              Using the webcal:// protocol forces the operating system to open the
-              native calendar application (Outlook / Apple Calendar) and subscribe to the feed.
-            */}
-            <ButtonLink
-              href="webcal://bewholecare.co.za/api/calendar/feed"
-              variant="secondary"
-              size="sm"
-            >
-              <ExternalLink className="h-4 w-4" />
-              Sync to Outlook
-            </ButtonLink>
+            {feed && <CalendarSubscribe https={feed.https} webcal={feed.webcal} />}
           </div>
         </div>
       </Reveal>

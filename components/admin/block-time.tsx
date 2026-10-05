@@ -31,8 +31,8 @@ export function BlockTimeControl({ blocks }: { blocks: Block[] }) {
   const [open, setOpen] = React.useState(false);
   const [wholeDay, setWholeDay] = React.useState(true);
   const [date, setDate] = React.useState(today());
-  const [start, setStart] = React.useState('08:00');
-  const [end, setEnd] = React.useState('12:00');
+  const [start, setStart] = React.useState('09:00');
+  const [end, setEnd] = React.useState('13:00');
   const [reason, setReason] = React.useState('');
   const [busy, setBusy] = React.useState(false);
 
@@ -68,26 +68,12 @@ export function BlockTimeControl({ blocks }: { blocks: Block[] }) {
     toast({ tone: 'success', title: 'Block removed' });
     router.refresh();
   }
-const handleSyncOutlook = () => {
-       window.location.href = '/api/calendar/feed';
-     };
-
-
   return (
     <>
-      <div className="inline-flex items-center gap-2">
-        <Button variant="secondary" size="sm" onClick={() => setOpen(true)}>
-          <CalendarOff className="h-4 w-4" />
-          Block time
-        </Button>
-        <button
-          type="button"
-          onClick={handleSyncOutlook}
-          className="inline-flex items-center gap-1.5 rounded-full border border-line px-3 py-1.5 text-xs font-medium text-ink transition-colors hover:bg-surface-muted cursor-pointer"
-        >
-          Sync Outlook
-        </button>
-      </div>
+      <Button variant="secondary" size="sm" onClick={() => setOpen(true)}>
+        <CalendarOff className="h-4 w-4" />
+        Block time
+      </Button>
 
       <Modal
         open={open}

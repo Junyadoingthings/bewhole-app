@@ -4,6 +4,22 @@ What changed, newest first. Each entry links to the pull request on GitHub.
 
 ## October 2026
 
+### 6 October — launch fixes
+- **Bookable hours match the website:** Monday–Friday 09:00–17:00 and Saturday 09:00–13:00.
+  The deploy now takes the hours from `config/business.ts`, so they cannot drift apart again.
+- **Add to my calendar:** a private subscription link puts sessions and blocked time in
+  Outlook, Apple or Google Calendar, with a reset button. It replaces the broken
+  "Sync Outlook" buttons.
+- **Signed-out password reset** for the console administrator from the sign-in page, using the
+  emailed 6-digit code.
+- Domain move checklist in [DEPLOY.md](../DEPLOY.md#9-domain).
+
+### 5 October — pre-launch diagnostic
+- **Medical aid holds block their time** ([#18](https://github.com/Junyadoingthings/bewhole-app/pull/18))
+  — a booking awaiting medical aid verification could previously be double-booked.
+- Reminders can no longer be left queued, or sent, for a cancelled or past session.
+- `robots.txt` and `sitemap.xml`.
+
 ### 5 October — documentation and security clean-up
 - Rewrote the README; added this changelog, a [practice guide](PRACTICE-GUIDE.md), an
   [emails reference](EMAILS.md), [SECURITY.md](../SECURITY.md) and `.env.example` (names only).

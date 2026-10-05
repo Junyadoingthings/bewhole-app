@@ -107,14 +107,9 @@ const LOCATIONS = [
   },
 ];
 
-const HOURS = [
-  { day: 1, open: '08:00', close: '17:00' },
-  { day: 2, open: '08:00', close: '17:00' },
-  { day: 3, open: '08:00', close: '17:00' },
-  { day: 4, open: '08:00', close: '17:00' },
-  { day: 5, open: '08:00', close: '17:00' },
-  { day: 6, open: '08:00', close: '12:00' },
-];
+// The published opening hours (config/business.ts) are the bookable hours, so
+// the website, emails and booking page can never disagree. Sunday is closed.
+const HOURS = extract('config/business.ts', 'BUSINESS_HOURS').filter((h) => h.open && h.close);
 
 const SETTINGS = {
   business: {
@@ -296,7 +291,9 @@ async function main() {
       on conflict (id) do update set
         weekday = excluded.weekday, start_time = excluded.start_time, end_time = excluded.end_time`;
   }
-  console.log(`  ✓ ${HOURS.length} availability rules (Mon–Fri 08:00–17:00, Sat 08:00–12:00)`);
+  console.log(
+    `  ✓ ${HOURS.length} availability rules (${HOURS.map((h) => `${h.label.slice(0, 3)} ${h.open}–${h.close}`).join(', ')})`,
+  );
 
   // Wellness content. Published state is owned by the admin dashboard after
   // the first insert, so re-running never silently republishes something the

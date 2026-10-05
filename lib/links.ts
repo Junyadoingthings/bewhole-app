@@ -109,3 +109,30 @@ export function appUrl(path: string): string {
 export function appointmentPaymentUrl(appointmentId: string): string {
   return appUrl(`/pay/appointment/${createLinkToken('appointment-payment', appointmentId)}`);
 }
+
+/* ------------------------------------------------------ calendar subscription */
+
+/**
+ * The practice's private calendar subscription link
+ * (`/api/calendar/feed/<token>.ics`).
+ *
+ * Calendar apps cannot sign in, so the link itself is the key. The token is an
+ * HMAC of the link's version (a counter in the database), so nothing secret is
+ * stored and the link stays the same until it is reset; resetting raises the
+ * version and every copy of the old link stops working at once.
+ */
+export function calendarFeedToken(version: number): string {
+  return sign(`calendar-feed:v${version}`);
+}
+
+export function isCalendarFeedToken(token: string, version: number): boolean {
+  const a = Buffer.from(token);
+  const b = Buffer.from(calendarFeedToken(version));
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+
+/** The subscription link, in the https form and the webcal form calendar apps open. */
+export function calendarFeedUrls(version: number): { https: string; webcal: string } {
+  const https = appUrl(`/api/calendar/feed/${calendarFeedToken(version)}.ics`);
+  return { https, webcal: https.replace(/^https?:\/\//, 'webcal://') };
+}

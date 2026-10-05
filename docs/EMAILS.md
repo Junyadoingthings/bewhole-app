@@ -28,7 +28,7 @@ delivered).
 | **Your payment was unsuccessful** | A card payment fails | How to try again. |
 | **Follow-up session emails** | The practice creates a follow-up | A reminder, a payment request if one is needed, and a confirmation once paid. |
 | **Thank you for contacting Be Whole Care** | The contact form is sent | An acknowledgement and the practice's hours. |
-| **Your password request** | Someone uses "Forgot your password?" on the sign-in page | Tells them the practice will verify them and send a link. |
+| **Your password request** | A client uses "Forgot your password?" on the sign-in page | Tells them the practice will verify them and send a link. (The console administrator gets a verification code instead.) |
 
 **Never sent:** anything after a session. The "thank you for your session" and next-day check-in
 emails were removed at the practice's request.
@@ -58,7 +58,7 @@ attending**, with their contact details.
 
 | Email | Sent when |
 |---|---|
-| **Your Be Whole Care verification code** | The administrator uses "Forgot your current password?" in console Settings. |
+| **Your Be Whole Care verification code** | The administrator uses "Forgot your current password?" in console Settings, or "Forgot your password?" on the sign-in page with the console's email address. |
 | **Your console password was changed** | The console password is changed, either way. |
 
 The content of these two is **never stored**: the email log records only that they were sent.

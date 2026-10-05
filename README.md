@@ -141,19 +141,20 @@ JSON implementations are type-checked against each other, so they cannot drift.
 - **Slow work happens after the response.** Calendar sync and emails run in the background
   (`waitUntil`), so buttons in the console answer immediately.
 - **The deploy seeds the database.** `npm run build` runs [`scripts/seed-postgres.mjs`](scripts/seed-postgres.mjs)
-  first: it keeps the catalogue, locations, hours and settings in step with `config/business.ts`
+  first: it keeps the catalogue, locations, bookable hours (the published `BUSINESS_HOURS`) and
+  settings in step with the code
   and applies small, idempotent schema additions. It never creates demo data.
 - **Reminders** go out at 06:00 (South African time) the day before and the morning of a confirmed
   session. Vercel's Hobby plan runs the reminder job once a day (05:00 UTC); see [DEPLOY.md](DEPLOY.md).
 
 ### Known limitations
 
-- The **"Sync Outlook"** button in the console Calendar downloads a placeholder event, not the
-  practice's appointments. A real feed needs a private, secret-protected link (a calendar feed of
-  appointments would otherwise expose client names).
-- The **"Forgot your password?"** link on the public sign-in page asks the practice to verify the
-  person and send a link; it does not reset a password by itself. The console administrator resets
-  their own password from **Settings** with an emailed code.
+- **"Forgot your password?"** on the sign-in page resets the **console administrator's** password
+  with an emailed code. For client accounts it still asks the practice to verify the person and
+  send a link.
+- Calendar apps refresh a subscribed calendar on their own schedule (Apple: minutes; Outlook and
+  Google: hours), so a new booking can take a while to appear there. The console calendar is
+  always current.
 - Same-day reminders depend on how often the reminder job runs (see above).
 
 ---

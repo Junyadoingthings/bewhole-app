@@ -6,6 +6,7 @@ import { requireAdmin, requireStaff } from '@/lib/auth';
 import { today } from '@/lib/date';
 import {
   audit,
+  bumpCounter,
   createAvailabilityBlock,
   createClientNote,
   deleteAvailabilityBlock,
@@ -13,6 +14,7 @@ import {
   getPayment,
   updateAppointment,
 } from '@/lib/db';
+import { calendarFeedUrls } from '@/lib/links';
 import { noteSchema, fieldErrors } from '@/lib/validation';
 import { cancelAppointment, decideMedicalAid, markAppointmentStatus } from '@/services/booking.service';
 import {
@@ -304,4 +306,23 @@ export async function unblockTime(blockId: string): Promise<AdminResult> {
   revalidatePath('/admin/calendar');
   revalidatePath('/book');
   return { ok: true };
+}
+
+/* ------------------------------------------------------ calendar subscription */
+
+/**
+ * Issue a new calendar subscription link. The old link stops working at once
+ * — for when it may have been shared by mistake.
+ */
+export async function resetCalendarFeedLink(): Promise<AdminResult & { https?: string; webcal?: string }> {
+  const actor = await requireAdmin();
+  const version = await bumpCounter('calendar_feed');
+  await audit({
+    actorUserId: actor.id,
+    actorRole: actor.role,
+    action: 'calendar_feed.reset',
+    entity: 'calendar_feed',
+  });
+  revalidatePath('/admin/calendar');
+  return { ok: true, ...calendarFeedUrls(version) };
 }
