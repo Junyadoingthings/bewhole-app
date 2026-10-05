@@ -211,6 +211,15 @@ async function main() {
     )`;
   console.log('  ✓ password reset codes table');
 
+  // Deny-by-default, like every other table (db/schema.sql): Supabase exposes
+  // tables through its public API, and row-level security with no policies
+  // is what keeps these two out of it. The app's own connection bypasses it.
+  for (const table of ['counters', 'password_reset_codes']) {
+    await sql.unsafe(`alter table ${table} enable row level security`);
+    await sql.unsafe(`alter table ${table} force row level security`);
+  }
+  console.log('  ✓ row-level security on counters and password_reset_codes');
+
   for (const c of CATEGORIES) {
     await sql`
       insert into service_categories (id, slug, name, summary, description, areas, concerns, icon, accent, sort_order, active)

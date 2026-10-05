@@ -66,11 +66,24 @@ practitioner record, business hours, the settings row, and the wellness
 resources — all of it the practice's real published information. It creates no
 demo clients or fake bookings.
 
-It is safe to re-run. Prices already changed in the admin dashboard are
-**kept**, unless you pass `--reset-prices`.
+It is safe to re-run — and it **runs automatically on every deploy**:
+`npm run build` is `node scripts/seed-postgres.mjs && next build`. Each run:
+
+- keeps the services, practices, opening hours and settings in step with
+  [`config/business.ts`](config/business.ts) and the script (edit those and
+  redeploy to change them — the console no longer edits them);
+- applies small, idempotent schema additions: the `counters` table (invoice
+  numbers), the `password_reset_codes` table, the `appointments.participants`
+  column (couples/family/pre-marital attendees), with row-level security on the
+  new tables;
+- adds any missing **Payments** lines for bookings made before the payments
+  ledger existed (fixed ids, so a second run adds nothing).
+
+It never creates demo clients or bookings, and prices already changed in the
+database are kept unless you pass `--reset-prices`.
 
 > Give the client their password directly, not over email, and ask them to
-> change it under **Settings → Password** on first sign-in.
+> change it under **Settings → Change password** on first sign-in.
 
 ---
 
@@ -97,7 +110,7 @@ Set these under **Settings → Environment Variables** (Production + Preview):
 |---|---|---|
 | `DATABASE_URL` | Transaction pooler string from step 1 | **Yes** |
 | `SESSION_SECRET` | From step 3 | **Yes** |
-| `NEXT_PUBLIC_APP_URL` | `https://bewholecare.co.za` | **Yes** |
+| `NEXT_PUBLIC_APP_URL` | The public URL — currently `https://bewholecare.vercel.app` | **Yes** |
 | `CRON_SECRET` | From step 3 | **Yes** |
 | `PAYMENT_PROVIDER` | `peach` (or `payfast`) | For payments |
 | `PEACH_ENTITY_ID` / `PEACH_SECRET_TOKEN` | Peach dashboard → Checkout → API keys | For payments |
@@ -107,7 +120,11 @@ Set these under **Settings → Environment Variables** (Production + Preview):
 | `GOOGLE_CALENDAR_ID` | `bewholecare@gmail.com` | For calendar |
 | `RESEND_API_KEY` | From step 8 | For email |
 | `EMAIL_FROM` | `Be Whole Care <bookings@bewholecare.co.za>` | For email |
+| `YOCO_SECRET_KEY` / `YOCO_WEBHOOK_SECRET` | Yoco dashboard, if `PAYMENT_PROVIDER=yoco` | For payments |
+| `GOOGLE_OAUTH_CLIENT_ID` / `GOOGLE_OAUTH_CLIENT_SECRET` | Google Cloud → OAuth client, for "Continue with Google" | Optional |
 | `WHATSAPP_API_URL` / `WHATSAPP_API_TOKEN` | Meta Cloud API | Optional |
+
+Every variable is listed, without values, in [`.env.example`](.env.example).
 
 Deploy. `vercel.json` registers the reminder cron once a day, at 05:00 UTC.
 
@@ -138,14 +155,16 @@ cannot leave a comment in it, which is why this explanation lives here.
 deploy carrying a more frequent schedule is rejected outright at build time —
 "Hobby accounts are limited to daily cron jobs."
 
-Once a day is fine for follow-up payment requests. It is **not** enough for the
-2-hour appointment reminder, which needs a worker running every few minutes to
-be meaningful — on a daily schedule a client booked for 15:00 gets their
-"starting in 2 hours" message at 05:00, which is worse than not sending it.
+Reminders are designed around that limit. Both are scheduled for **06:00
+South African time** — the day before and the morning of the session — so the
+daily run at 05:00 UTC (07:00 SAST) delivers each one on the right morning.
+The only cost is that the same-day reminder for a very early session (before
+about 08:00) arrives shortly before it.
 
-Two ways to get the real cadence back:
+For an exact 06:00 delivery, either:
 
-1. **Upgrade to Vercel Pro**, then restore `*/10 * * * *` in `vercel.json`.
+1. **Upgrade to Vercel Pro**, then set a more frequent schedule (e.g.
+   `*/10 * * * *`) in `vercel.json`; or
 2. **Point an external scheduler at the same endpoint** — free, and the route
    was written for this. On [cron-job.org](https://cron-job.org) (or GitHub
    Actions, or Supabase's `pg_cron`), create a job every 10 minutes:
@@ -158,9 +177,6 @@ Two ways to get the real cadence back:
    The endpoint is idempotent and authorises on that header in constant time,
    so it is safe to call often and useless to anyone without the secret.
 
-Until one of those is in place, tell the client that same-day reminders are not
-yet live. Do not let them discover it from a client who missed a session.
-
 **Important:** `NEXT_PUBLIC_APP_URL` must be the real public URL. Payment
 redirects and the links inside reminder emails are built from it — if it is
 wrong, clients get sent to the wrong place after paying.
@@ -169,14 +185,15 @@ wrong, clients get sent to the wrong place after paying.
 
 ## 5. First smoke test
 
-1. Open the site. The homepage should show six services and six resources — if
-   they're missing, the seed in step 2 didn't run against this database.
+1. Open the site and go to **Services** — if the services are missing, the seed
+   in step 2 didn't run against this database.
 2. Sign in at `/sign-in` with the admin account. `/admin` should load.
 3. Book a session as a client (use a private window). With no gateway keys
    yet, you'll get the payment simulator — approve it and check the booking
    turns **Confirmed** in `/admin/appointments`.
-4. Check **Admin → Notifications**: channels without credentials show
-   *"Logged only"*, and the message log shows exactly what would have been sent.
+4. Check the practice inbox and the test client's inbox for the booking emails
+   ([docs/EMAILS.md](docs/EMAILS.md) lists them). Without `RESEND_API_KEY`,
+   emails are not sent; each one is recorded in the `notification_logs` table.
 
 ---
 
@@ -247,8 +264,8 @@ admin menu.
 2. Create an API key → `RESEND_API_KEY`.
 3. Set `EMAIL_FROM` to an address on the verified domain.
 
-Until the domain is verified, mail will not send — it will be recorded in
-**Admin → Notifications** as failed, with the reason.
+Until the domain is verified, mail will not send — each attempt is recorded
+in the `notification_logs` table as failed, with the reason.
 
 ---
 
@@ -270,8 +287,8 @@ Client books
              └─ appointment CONFIRMED
                   ├─ Google Calendar event created on bewholecare@gmail.com
                   ├─ confirmation sent to client
-                  └─ reminders queued: 24h before, 2h before, follow-up after
-                       └─ /api/cron/reminders (every 10 min) sends them
+                  └─ reminders queued: 06:00 the day before, 06:00 the morning of
+                       └─ /api/cron/reminders (daily on Hobby) sends them
 ```
 
 ---
@@ -287,8 +304,8 @@ tested directly against Postgres.
 hosted page. We store an amount, a status and a reference.
 
 **The bank account is not in this repository.** Settlement is configured in the
-gateway dashboard. The practice's banking details for receipts are entered in
-Admin → Settings.
+gateway dashboard. Receipts show no banking details (the settings row ships with
+them empty), so an account number never needs to go near the code.
 
 **The browser never talks to the database.** The Next.js server is the only
 client. Every table has row-level security enabled with no permissive policies,
@@ -297,9 +314,10 @@ so even a leaked Supabase anon key returns nothing.
 **Payment status is never taken from the browser.** Returning from checkout
 triggers a server-to-server verification; the redirect itself proves nothing.
 
-**Prices are not hardcoded.** They ship as the published rates and are edited in
-**Admin → Services**. Same for hours, cancellation window, reminder timing and
-the medical aid co-payment.
+**The practice's facts live in one place.** Services, rates, locations, hours,
+the consent wording and the email details (session link, addresses, Yoco link)
+are in [`config/business.ts`](config/business.ts) and the deploy seed. Change
+them there and redeploy — the deploy writes them to the database.
 
 **The build needs internet access to Google Fonts.** Vercel has it. If you build
 somewhere air-gapped, the fonts fall back silently — the layout still works.
@@ -316,8 +334,9 @@ npm run dev            # http://localhost:5600
 ```
 
 With no `DATABASE_URL`, the app uses a JSON file store in `.data/` seeded with
-demo clients and appointments so the dashboards have something to show. Demo
-sign-in: `admin@bewholecare.co.za` / `Wholeness2026!`.
+demo clients and appointments so the dashboards have something to show. The
+demo sign-ins are defined in [`lib/db/seed.ts`](lib/db/seed.ts) and exist only
+in this local store.
 
 To develop against Postgres instead, put `DATABASE_URL` in `.env.local` — the
 app switches automatically, and `lib/db/index.ts` type-checks the two

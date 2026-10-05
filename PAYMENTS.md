@@ -20,9 +20,10 @@ variable, not in the database. Three reasons:
    out to whatever it has on file.
 
 There is one legitimate place for the practice's banking details: printed on a
-receipt, for a client who wants to pay by direct EFT. Those are entered by an
-administrator under **Admin → Settings → Banking details**, stored in the
-settings row, and only shown if "Print these details on receipts" is ticked.
+receipt, for a client who wants to pay by direct EFT. The settings row has room
+for them, but they ship **empty and switched off**, and the console no longer
+edits them — so receipts carry no banking details unless that is deliberately
+changed.
 
 ---
 
@@ -172,6 +173,32 @@ genuinely isn't verified and Apple Pay won't appear.
 
 Apple Pay also requires HTTPS, so it will never show on `localhost`. Test it on
 the deployed preview URL, on a real iPhone or a Mac with a card in Wallet.
+
+## The payments ledger — money that doesn't go through a checkout
+
+Card checkouts confirm themselves (above). Everything else is a **manual line**
+on the console's **Payments** page, which the practice ticks off when the money
+arrives (`provider: 'manual'`). A line is opened automatically when:
+
+| Event | Line opened | Ticked off when |
+|---|---|---|
+| Medical aid **accepted** | Medical aid claim at the session fee, *Awaiting scheme* | The scheme pays — with the amount actually paid |
+| Medical aid **declined** | The private fee, *Awaiting payment* | The client pays through the Yoco link — this confirms the booking and sends the confirmation, exactly as a card payment would |
+| Card booking while **no gateway is connected** | The session fee, *Awaiting payment* | The client pays the practice |
+
+The practice can also **Record a payment** against any booking (EFT, cash, a
+quoted fee, a scheme payment), which adds a line already marked received.
+
+On a line: **Mark received** (amount and date), **Not paid** (with a note),
+**Undo** (back to awaiting, at the expected amount). Every step is written to
+`payment_events` and the audit log. The code is in
+[`services/payment.service.ts`](services/payment.service.ts) (the *ledger*
+section); bookings made before the ledger existed get their lines from the
+deploy seed.
+
+The Yoco link sent with a declined medical aid is a fixed payment page, so Yoco
+cannot tell the app which booking was paid — that is why it is ticked off by
+hand.
 
 ## Receipts
 
