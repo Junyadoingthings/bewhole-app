@@ -1,7 +1,12 @@
 import { NextResponse } from 'next/server';
 import crypto from 'node:crypto';
 
-import { listDueNotificationLogs, markNotificationLogResult, pruneExpiredSessions } from '@/lib/db';
+import {
+  getAppointment,
+  listDueNotificationLogs,
+  markNotificationLogResult,
+  pruneExpiredSessions,
+} from '@/lib/db';
 import { sendQueued } from '@/services/notifications';
 import { dispatchFollowUp, pendingReminders } from '@/services/followup.service';
 
@@ -88,6 +93,20 @@ export async function GET(request: Request) {
 
   for (const log of due) {
     try {
+      // Last check before a reminder goes out: its session must still be
+      // confirmed and still ahead. A reminder for a cancelled, missed or past
+      // session is withdrawn, never sent.
+      const appointmentId = /\/appointments\/([^/?#]+)/.exec(log.href ?? '')?.[1];
+      if (appointmentId) {
+        const appointment = await getAppointment(appointmentId);
+        if (!appointment || appointment.status !== 'confirmed' || appointment.startAt <= new Date().toISOString()) {
+          await markNotificationLogResult(log.id, {
+            ok: false,
+            error: 'Not sent: the session is no longer confirmed and upcoming',
+          });
+          continue;
+        }
+      }
       const result = await sendQueued({
         channel: log.channel,
         to: log.to,

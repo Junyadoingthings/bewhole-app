@@ -194,6 +194,26 @@ async function main() {
   await sql`create table if not exists counters (name text primary key, value bigint not null)`;
   console.log('  ✓ counters table');
 
+  // A medical aid booking holds its time while cover is verified. The status
+  // value is added on its own (Postgres will not use a new enum value in the
+  // transaction that added it), then the double-booking constraint is widened
+  // to include it. If existing bookings already overlap a held time, the new
+  // constraint cannot be added: the transaction rolls back, the previous
+  // constraint stays, and the deploy carries on with a warning.
+  await sql`alter type appointment_status add value if not exists 'pending_medical_aid' after 'pending_payment'`;
+  try {
+    await sql.begin(async (tx) => {
+      await tx`alter table appointments drop constraint if exists appointments_no_overlap`;
+      await tx`
+        alter table appointments add constraint appointments_no_overlap
+          exclude using gist (practitioner_id with =, tstzrange(start_at, end_at) with &&)
+          where (status in ('pending_payment','pending_medical_aid','confirmed','completed'))`;
+    });
+    console.log('  ✓ double-booking constraint covers medical aid holds');
+  } catch (error) {
+    console.warn(`  ⚠ double-booking constraint not widened (${error.message}); previous constraint kept`);
+  }
+
   // Everyone else attending a couples, family or pre-marital session.
   await sql`alter table appointments add column if not exists participants jsonb`;
   console.log('  ✓ appointments.participants column');
