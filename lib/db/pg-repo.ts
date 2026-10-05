@@ -665,7 +665,11 @@ export async function deleteAvailabilityBlock(id: ID) {
 
 /* ------------------------------------------------------------ appointments */
 
-const BLOCKING: Appointment['status'][] = ['pending_payment', 'confirmed', 'completed'];
+/**
+ * Statuses that hold a time — the same list as the appointments_no_overlap
+ * constraint. A medical aid booking holds its time while cover is verified.
+ */
+const BLOCKING: Appointment['status'][] = ['pending_payment', 'pending_medical_aid', 'confirmed', 'completed'];
 
 export async function listAppointments(filter?: {
   clientUserId?: ID;

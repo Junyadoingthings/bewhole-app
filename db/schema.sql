@@ -30,7 +30,7 @@ create extension if not exists "btree_gist";
 do $$ begin
   create type user_role as enum ('CLIENT', 'STAFF', 'ADMIN', 'SUPER_ADMIN');
   create type appointment_mode as enum ('online', 'in_person');
-  create type appointment_status as enum ('pending_payment', 'confirmed', 'completed', 'cancelled', 'no_show');
+  create type appointment_status as enum ('pending_payment', 'pending_medical_aid', 'confirmed', 'completed', 'cancelled', 'no_show');
   create type payment_method as enum ('card', 'medical_aid');
   create type payment_status as enum ('pending', 'processing', 'paid', 'failed', 'refunded', 'cancelled');
   create type follow_up_status as enum ('scheduled', 'awaiting_payment', 'paid', 'confirmed', 'completed', 'cancelled');
@@ -38,6 +38,13 @@ do $$ begin
   create type calendar_sync_status as enum ('synced', 'pending', 'failed', 'cancelled');
 exception when duplicate_object then null;
 end $$;
+
+-- A booking held while the practice verifies the client's medical aid. Added
+-- after the first release, so databases created before it need the value too.
+-- (Run on its own if your SQL editor wraps the whole script in one
+-- transaction: Postgres will not use a new enum value in the same transaction
+-- that added it.)
+alter type appointment_status add value if not exists 'pending_medical_aid' after 'pending_payment';
 
 -- --------------------------------------------------------------- helpers ---
 create or replace function set_updated_at() returns trigger language plpgsql as $$
@@ -254,7 +261,7 @@ alter table appointments add constraint appointments_no_overlap
   exclude using gist (
     practitioner_id with =,
     tstzrange(start_at, end_at) with &&
-  ) where (status in ('pending_payment','confirmed','completed'));
+  ) where (status in ('pending_payment','pending_medical_aid','confirmed','completed'));
 
 create index if not exists appointments_client_idx on appointments(client_user_id, start_at desc);
 create index if not exists appointments_start_idx on appointments(start_at);

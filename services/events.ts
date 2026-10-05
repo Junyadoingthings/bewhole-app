@@ -597,6 +597,13 @@ async function onSessionLinkAdded(appointmentId: ID) {
 async function scheduleReminders(a: AppointmentView) {
   await withdrawQueuedNotificationLogs(appointmentHref(a), 'Superseded by updated reminders');
 
+  // Read the status now, not from the copy the caller loaded: these handlers
+  // run after the response, and the session may have been cancelled in the
+  // seconds since (a reschedule followed quickly by a cancel did exactly this
+  // in testing, leaving reminders queued for a cancelled session).
+  const current = await getAppointment(a.id);
+  if (!current || current.status !== 'confirmed') return;
+
   const settings = await getSettings();
   const sessionDate = parts(a.startAt).date;
   const morningOf = (isoDate: string) => fromLocalParts(isoDate, '06:00').toISOString();

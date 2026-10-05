@@ -275,7 +275,11 @@ export async function deleteAvailabilityBlock(id: ID) {
 /* ------------------------------------------------------------ appointments */
 
 /** Statuses that occupy a slot. Cancelled/no-show free the time up again. */
-const BLOCKING_STATUSES: Appointment['status'][] = ['pending_payment', 'confirmed', 'completed'];
+/**
+ * Statuses that hold a time. A medical aid booking holds its time while the
+ * practice verifies cover, so nobody else can take it in the meantime.
+ */
+const BLOCKING_STATUSES: Appointment['status'][] = ['pending_payment', 'pending_medical_aid', 'confirmed', 'completed'];
 
 export async function listAppointments(filter?: {
   clientUserId?: ID;
