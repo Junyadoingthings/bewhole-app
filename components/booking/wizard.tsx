@@ -90,6 +90,7 @@ const FIELD_ORDER: readonly (readonly [errorKey: string, elementId: string])[] =
   ['lastName', 'lastName'],
   ['email', 'email'],
   ['phone', 'phone'],
+  ['identity.number', 'idNumber'],
   ['address', 'address'],
   ['emergencyName', 'emergencyName'],
   ['emergencyPhone', 'emergencyPhone'],
@@ -120,6 +121,7 @@ const PERSON_FIELDS = ['firstName', 'lastName', 'email', 'phone'] as const;
 /** Which step owns a field, for routing a server-side rejection back to it. */
 function stepForErrorKey(key: string): StepId | null {
   if (key.startsWith('medicalAid')) return 'payment';
+  if (key.startsWith('identity')) return 'details';
   if (key.startsWith('participants')) return key.endsWith('.consented') ? 'consent' : 'details';
   switch (key) {
     case 'serviceId':
@@ -233,6 +235,8 @@ export function BookingWizard({
     lastName: user?.lastName ?? '',
     email: user?.email ?? '',
     phone: profile?.phone ?? '',
+    /** An SA ID number, or a passport number for anyone without one. */
+    identity: { type: 'sa_id' as 'sa_id' | 'passport', number: '' },
     address: '',
     emergencyName: '',
     emergencyPhone: '',
@@ -583,6 +587,7 @@ export function BookingWizard({
           lastName: details.lastName,
           email: details.email,
           phone: details.phone,
+          identity: details.identity,
           address: details.address || undefined,
           emergencyName: details.emergencyName,
           emergencyPhone: details.emergencyPhone,
@@ -936,6 +941,61 @@ export function BookingWizard({
                       />
                       <FieldError id="phone-error">{errors.phone}</FieldError>
                     </div>
+                  </div>
+
+                  <div className="mt-5">
+                    <div className="flex items-end justify-between gap-3">
+                      <Label htmlFor="idNumber">
+                        {details.identity.type === 'sa_id' ? 'ID number' : 'Passport number'}
+                      </Label>
+                      <div
+                        role="radiogroup"
+                        aria-label="Identity document"
+                        className="mb-2 inline-flex shrink-0 rounded-full border border-line bg-white p-1 text-xs"
+                      >
+                        {(
+                          [
+                            ['sa_id', 'SA ID'],
+                            ['passport', 'Passport'],
+                          ] as const
+                        ).map(([value, label]) => {
+                          const on = details.identity.type === value;
+                          return (
+                            <button
+                              key={value}
+                              type="button"
+                              role="radio"
+                              aria-checked={on}
+                              onClick={() =>
+                                on ||
+                                setDetails({ ...details, identity: { type: value, number: '' } })
+                              }
+                              className={cn(
+                                'rounded-full px-3 py-1.5 font-medium transition-colors duration-200',
+                                on ? 'bg-forest-800 text-pure' : 'text-ink-muted hover:text-ink',
+                              )}
+                            >
+                              {label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                    <Input
+                      id="idNumber"
+                      onBlur={touch('identity.number')}
+                      inputMode={details.identity.type === 'sa_id' ? 'numeric' : 'text'}
+                      autoCapitalize={details.identity.type === 'sa_id' ? 'off' : 'characters'}
+                      autoComplete="off"
+                      maxLength={details.identity.type === 'sa_id' ? 16 : 24}
+                      placeholder={details.identity.type === 'sa_id' ? '13-digit ID number' : 'As shown in your passport'}
+                      value={details.identity.number}
+                      onChange={(e) =>
+                        setDetails({ ...details, identity: { ...details.identity, number: e.target.value } })
+                      }
+                      error={errors['identity.number']}
+                    />
+                    <FieldError id="idNumber-error">{errors['identity.number']}</FieldError>
                   </div>
 
                   <div className="mt-5">

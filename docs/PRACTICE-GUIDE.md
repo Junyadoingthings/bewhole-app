@@ -120,12 +120,17 @@ after 5 wrong tries.
 
 **Practice addresses are private.** The website names the practices ("Centurion Practice",
 "Tembisa Practice") but never shows a street address or map. A client gets the address only once
-their booking is confirmed — in the confirmation email, the reminders and their portal.
+their booking is confirmed, meaning paid, or medical aid accepted — in the confirmation email, the
+reminders and their portal. Emails sent before that (payment requests, follow-up payment
+requests, "medical aid verification in progress") name the practice only.
+
+**ID and passport numbers** appear on the client's page in **Clients** and on the printable consent
+form. They are never put in emails.
 
 1. Choose a service, online or in person (**Centurion Practice** or **Tembisa Practice**), a date and a time — Monday to
    Friday 09:00–17:00 and Saturday 09:00–13:00, the hours shown on the website.
-2. Enter their details — name, email, mobile, address, an emergency contact and what brings them
-   to counselling (all required) — and, for couples/family/pre-marital sessions, everyone else
+2. Enter their details — name, email, mobile, **SA ID number (or passport number)**, address, an
+   emergency contact and what brings them to counselling (all required) — and, for couples/family/pre-marital sessions, everyone else
    attending.
 3. Agree to the informed consent (each person, for group sessions).
 4. Pay by card, or choose medical aid (scheme, membership number, date of birth, main member and

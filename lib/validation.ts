@@ -96,6 +96,55 @@ export const profileSchema = z.object({
   preferredContact: z.enum(['email', 'whatsapp', 'sms']),
 });
 
+/**
+ * A South African ID number: 13 digits, starting with a real date of birth
+ * (YYMMDD), with a valid citizenship digit and Luhn check digit — the checks
+ * Home Affairs numbers satisfy, so a mistyped digit is caught on the form.
+ */
+export function isValidSaIdNumber(raw: string): boolean {
+  const id = raw.replace(/\s+/g, '');
+  if (!/^\d{13}$/.test(id)) return false;
+  const mm = Number(id.slice(2, 4)), dd = Number(id.slice(4, 6));
+  if (mm < 1 || mm > 12 || dd < 1 || dd > 31) return false;
+  const yy = Number(id.slice(0, 2));
+  const candidates = [1900 + yy, 2000 + yy];
+  if (!candidates.some((y) => new Date(Date.UTC(y, mm - 1, dd)).getUTCDate() === dd)) return false;
+  if (!['0', '1', '2'].includes(id[10])) return false;
+  let sum = 0;
+  for (let i = 0; i < 13; i++) {
+    let d = Number(id[12 - i]);
+    if (i % 2 === 1) {
+      d *= 2;
+      if (d > 9) d -= 9;
+    }
+    sum += d;
+  }
+  return sum % 10 === 0;
+}
+
+/**
+ * The client's identity document (required, 2026-10): an SA ID number, or a
+ * passport number for anyone without one. Spaces are ignored; a passport is
+ * kept in capitals.
+ */
+export const identitySchema = z
+  .object({
+    type: z.enum(['sa_id', 'passport']),
+    number: z.string({ required_error: 'Enter your ID number' }).trim(),
+  })
+  .transform((v) => ({ type: v.type, number: v.number.replace(/\s+/g, '').toUpperCase() }))
+  .superRefine((v, ctx) => {
+    if (v.type === 'sa_id') {
+      if (!v.number) ctx.addIssue({ code: 'custom', path: ['number'], message: 'Enter your ID number' });
+      else if (!isValidSaIdNumber(v.number))
+        ctx.addIssue({ code: 'custom', path: ['number'], message: 'Enter a valid 13-digit South African ID number' });
+    } else if (!v.number) {
+      ctx.addIssue({ code: 'custom', path: ['number'], message: 'Enter your passport number' });
+    } else if (!/^[A-Z0-9]{6,20}$/.test(v.number)) {
+      ctx.addIssue({ code: 'custom', path: ['number'], message: 'Enter a valid passport number (letters and numbers only)' });
+    }
+  });
+
 export const medicalAidSchema = z.object({
   scheme: z.string().trim().min(2, 'Which scheme are you with?').max(80),
   memberNumber: z.string().trim().min(3, 'Enter your membership number').max(40),
@@ -162,6 +211,8 @@ export const bookingDetailsSchema = z.object({
    */
   emergencyName: nameField,
   emergencyPhone: contactPhoneSchema,
+  /** Required (2026-10): an SA ID number, or a passport number. */
+  identity: identitySchema,
   /** Required (2026-10): the practice asked to know what brings each client before the first session. */
   reason: z
     .string({ required_error: 'Please tell us briefly what brings you here' })

@@ -125,7 +125,7 @@ export default async function AdminClientPage({ params }: { params: { id: string
                 Both are rendered only when present, so records created before
                 these fields existed do not show empty rows.
               */}
-              {(profile.emergencyContactName || profile.address) && (
+              {(profile.emergencyContactName || profile.address || profile.idNumber) && (
                 <dl className="mt-4 grid gap-3 rounded-2xl border border-line bg-canvas-sunk p-4 sm:grid-cols-2">
                   {profile.emergencyContactName && (
                     <div>
@@ -146,6 +146,14 @@ export default async function AdminClientPage({ params }: { params: { id: string
                           </>
                         )}
                       </dd>
+                    </div>
+                  )}
+                  {profile.idNumber && (
+                    <div>
+                      <dt className="text-2xs uppercase tracking-[0.14em] text-ink-faint">
+                        {profile.idType === 'passport' ? 'Passport number' : 'ID number'}
+                      </dt>
+                      <dd className="mt-1 font-mono text-sm text-ink">{profile.idNumber}</dd>
                     </div>
                   )}
                   {profile.address && (

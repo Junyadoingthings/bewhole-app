@@ -47,6 +47,12 @@ export interface Profile {
    */
   emergencyContactName?: string | null;
   emergencyContactPhone?: string | null;
+  /**
+   * The client's identity document, required at booking since 2026-10: a South
+   * African ID number, or a passport number for anyone without one.
+   */
+  idType?: 'sa_id' | 'passport' | null;
+  idNumber?: string | null;
   /** Only captured when the client chooses to pay by medical aid. */
   medicalAid?: {
     scheme: string;

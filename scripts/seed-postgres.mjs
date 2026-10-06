@@ -211,6 +211,9 @@ async function main() {
 
   // Everyone else attending a couples, family or pre-marital session.
   await sql`alter table appointments add column if not exists participants jsonb`;
+  await sql`alter table profiles add column if not exists id_type text check (id_type in ('sa_id','passport'))`;
+  await sql`alter table profiles add column if not exists id_number text`;
+  console.log('  ✓ profiles.id_type and id_number columns');
   console.log('  ✓ appointments.participants column');
 
   // One-time codes for an administrator who forgot their console password.

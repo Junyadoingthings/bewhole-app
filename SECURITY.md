@@ -58,6 +58,11 @@ to reproduce it.
 - The production database is in the EU (Ireland), next to the app's server functions.
 - Data minimisation: medical aid details are collected only when the client chooses medical aid;
   consent IP addresses are stored as a salted hash.
+- Clients' SA ID or passport numbers (required at booking) are kept on the client record behind
+  row-level security, shown only in the console and on the staff-only consent form, and never
+  sent by email.
+- The practices' street addresses are not published on the website; a client receives the
+  address only once their booking is confirmed.
 - An append-only audit log records administrative actions on client records — including
   medical aid decisions, payments ticked off and every view of a printable consent record.
 

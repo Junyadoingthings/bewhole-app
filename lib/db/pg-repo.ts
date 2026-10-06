@@ -80,6 +80,8 @@ function mapProfile(r: any): Profile {
     address: r.address ?? null,
     emergencyContactName: r.emergency_contact_name ?? null,
     emergencyContactPhone: r.emergency_contact_phone ?? null,
+    idType: r.id_type ?? null,
+    idNumber: r.id_number ?? null,
     medicalAid: r.medical_aid ?? null,
     preferredContact: r.preferred_contact,
     notes: r.notes,
@@ -387,6 +389,8 @@ export async function updateProfile(userId: ID, patch: Partial<Profile>): Promis
       address           = ${patch.address !== undefined ? patch.address : sql`address`},
       emergency_contact_name  = ${patch.emergencyContactName !== undefined ? patch.emergencyContactName : sql`emergency_contact_name`},
       emergency_contact_phone = ${patch.emergencyContactPhone !== undefined ? patch.emergencyContactPhone : sql`emergency_contact_phone`},
+      id_type           = ${patch.idType !== undefined ? patch.idType : sql`id_type`},
+      id_number         = ${patch.idNumber !== undefined ? patch.idNumber : sql`id_number`},
       medical_aid       = ${patch.medicalAid !== undefined ? sql.json(patch.medicalAid as never) : sql`medical_aid`},
       preferred_contact = coalesce(${patch.preferredContact ?? null}, preferred_contact),
       notes             = ${patch.notes !== undefined ? patch.notes : sql`notes`}
@@ -779,6 +783,8 @@ function ensureCounters() {
   countersReady ??= sql`
     create table if not exists counters (name text primary key, value bigint not null)`
     .then(() => sql`alter table appointments add column if not exists participants jsonb`)
+    .then(() => sql`alter table profiles add column if not exists id_type text check (id_type in ('sa_id','passport'))`)
+    .then(() => sql`alter table profiles add column if not exists id_number text`)
     .then(() => undefined)
     .catch((error) => {
       countersReady = null;

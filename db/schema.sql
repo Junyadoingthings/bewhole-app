@@ -98,6 +98,10 @@ create table if not exists profiles (
   emergency_contact_phone text,
   -- Only populated when the client chooses to claim from a medical aid.
   medical_aid       jsonb,
+  -- The client's own identity document, required at booking (2026-10):
+  -- a South African ID number, or a passport number for anyone without one.
+  id_type           text check (id_type in ('sa_id','passport')),
+  id_number         text,
   preferred_contact text not null default 'email'
                     check (preferred_contact in ('email','whatsapp','sms')),
   notes             text,
@@ -515,6 +519,9 @@ end $$;
 alter table profiles add column if not exists address text;
 alter table profiles add column if not exists emergency_contact_name text;
 alter table profiles add column if not exists emergency_contact_phone text;
+-- Identity document on the client record (2026-10), for databases created before it existed.
+alter table profiles add column if not exists id_type text check (id_type in ('sa_id','passport'));
+alter table profiles add column if not exists id_number text;
 
 -- 2026-08: Trauma, Grief & Healing withdrawn from the public site.
 --
