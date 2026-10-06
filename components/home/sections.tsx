@@ -19,7 +19,7 @@ import { Photo, ParallaxPhoto, PhotoReveal, PhotoScrim } from '@/components/site
 import { Reveal, Stagger, StaggerItem } from '@/components/motion';
 import { ButtonLink } from '@/components/ui/button';
 import { Badge, SectionHeading } from '@/components/ui/primitives';
-import { BUSINESS, LOCATIONS, POLICY, RATES } from '@/config/business';
+import { ADDRESS_PRIVACY_NOTE, BUSINESS, LOCATIONS, POLICY, RATES } from '@/config/business';
 import { PHOTOS } from '@/config/photos';
 import { money } from '@/lib/utils';
 import type { Resource } from '@/types';
@@ -221,13 +221,14 @@ export function MeetingModes() {
               <ul className="mt-5 space-y-4">
                 {LOCATIONS.map((location) => (
                   <li key={location.slug} className="rounded-2xl border border-cream-100/10 bg-cream-100/5 p-4">
-                    <p className="text-sm font-medium text-cream-100">{location.name}</p>
+                    <p className="text-sm font-medium text-cream-100">{location.name} Practice</p>
                     <p className="mt-1 text-sm text-cream-100/65">
-                      {location.addressLine}, {location.city}, {location.postalCode}
+                      {location.city}, {location.region}
                     </p>
                   </li>
                 ))}
               </ul>
+              <p className="mt-4 text-xs leading-relaxed text-cream-100/55">{ADDRESS_PRIVACY_NOTE}</p>
               <dl className="mt-6 grid gap-4 sm:grid-cols-2">
                 <div className="rounded-2xl border border-cream-100/10 bg-cream-100/5 p-4">
                   <dt className="text-xs uppercase tracking-[0.1em] text-cream-100/50">Individual</dt>

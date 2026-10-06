@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 
-import { BUSINESS, CRISIS_SUPPORT, HOURS_SUMMARY, LOCATIONS, POLICY, RATES } from '@/config/business';
+import { ADDRESS_PRIVACY_NOTE, BUSINESS, CRISIS_SUPPORT, HOURS_SUMMARY, LOCATIONS, POLICY, RATES } from '@/config/business';
 import { LIMITS, clientKey, rateLimit } from '@/lib/rate-limit';
 import { listCategories } from '@/lib/db';
 import { money } from '@/lib/utils';
@@ -116,7 +116,7 @@ async function answer(message: string): Promise<Answer> {
 
   if (/(where|location|address|centurion|tembisa|directions|parking)/.test(text)) {
     return {
-      reply: `We see clients in person at two practices:\n\n• ${LOCATIONS[0].name} — ${LOCATIONS[0].full}\n• ${LOCATIONS[1].name} — ${LOCATIONS[1].full}\n\nOnline sessions are available anywhere in South Africa.`,
+      reply: `We see clients in person at two practices:\n\n• ${LOCATIONS[0].name} Practice (${LOCATIONS[0].city})\n• ${LOCATIONS[1].name} Practice (${LOCATIONS[1].city})\n\n${ADDRESS_PRIVACY_NOTE} Online sessions are available anywhere in South Africa.`,
       links: [{ href: '/book', label: 'Choose a practice' }],
     };
   }

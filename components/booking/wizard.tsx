@@ -788,8 +788,8 @@ export function BookingWizard({
                           setTime(null);
                         }}
                         icon={<MapPin className="h-5 w-5" />}
-                        title={l.name}
-                        description={`${l.addressLine}, ${l.city}, ${l.postalCode}`}
+                        title={`${l.name} Practice`}
+                        description="Address shared once your booking is confirmed."
                       />
                     ))}
                   </div>
@@ -1103,7 +1103,7 @@ export function BookingWizard({
                   )}
 
                   <div className="mt-5">
-                    <Label htmlFor="reason" optional>
+                    <Label htmlFor="reason">
                       What brings you here?
                     </Label>
                     <Textarea

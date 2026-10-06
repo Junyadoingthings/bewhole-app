@@ -4,6 +4,13 @@ What changed, newest first. Each entry links to the pull request on GitHub.
 
 ## October 2026
 
+### 6 October — practice addresses kept private
+- The website no longer shows the practices' street addresses or the map: they appear as
+  **Centurion Practice** and **Tembisa Practice**, with a note that the address is shared once a
+  booking is confirmed. The booking confirmation page and the client portal show the address only
+  for a confirmed booking (as the emails already did).
+- **"What brings you here?"** is now required on the booking form.
+
 ### 6 October — launch fixes
 - **Bookable hours match the website:** Monday–Friday 09:00–17:00 and Saturday 09:00–13:00.
   The deploy now takes the hours from `config/business.ts`, so they cannot drift apart again.

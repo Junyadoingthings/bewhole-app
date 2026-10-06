@@ -15,7 +15,7 @@ import { ButtonLink } from '@/components/ui/button';
 import { getCurrentUser } from '@/lib/auth';
 import { displayTime, formatFullDate, parts, relativeDay } from '@/lib/date';
 import { getAppointmentByReference, hydrateAppointments } from '@/lib/db';
-import { joinLinkFor } from '@/lib/session-link';
+import { addressVisibleFor, joinLinkFor } from '@/lib/session-link';
 import { money } from '@/lib/utils';
 import { verifyAndApplyPayment } from '@/services/payment.service';
 
@@ -62,6 +62,7 @@ export default async function ConfirmationPage({
    */
   const pendingMedicalAid = view.status === 'pending_medical_aid';
   const joinLink = joinLinkFor(view);
+  const addressConfirmed = addressVisibleFor(view);
 
   return (
     <div className="mx-auto max-w-2xl py-6">
@@ -141,9 +142,11 @@ export default async function ConfirmationPage({
                   <span className="flex items-start justify-end gap-2 text-right">
                     <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-forest-600 dark:text-forest-300" />
                     <span>
-                      {view.location?.name}
+                      {view.location?.name} Practice
                       <span className="block text-sm text-ink-soft">
-                        {view.location?.addressLine}, {view.location?.city}
+                        {addressConfirmed
+                          ? `${view.location?.addressLine}, ${view.location?.city}`
+                          : 'Address shared once your booking is confirmed'}
                       </span>
                     </span>
                   </span>
@@ -226,7 +229,9 @@ export default async function ConfirmationPage({
             location:
               view.mode === 'online'
                 ? (joinLink ?? 'Online session')
-                : `${view.location?.addressLine}, ${view.location?.city}, ${view.location?.postalCode}`,
+                : addressConfirmed
+                  ? `${view.location?.addressLine}, ${view.location?.city}, ${view.location?.postalCode}`
+                  : `Be Whole Care — ${view.location?.name} Practice`,
             details: `Reference ${view.reference}. ${view.durationMinutes}-minute session with Be Whole Care.${
               joinLink ? ` Link: ${joinLink}` : ''
             }`,

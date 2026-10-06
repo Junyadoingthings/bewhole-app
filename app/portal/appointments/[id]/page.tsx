@@ -12,7 +12,7 @@ import { BUSINESS } from '@/config/business';
 import { requireUser } from '@/lib/auth';
 import { displayTime, formatFullDate, parts, relativeDay } from '@/lib/date';
 import { getAppointment, hydrateAppointments, listPaymentEvents } from '@/lib/db';
-import { joinLinkFor } from '@/lib/session-link';
+import { addressVisibleFor, joinLinkFor } from '@/lib/session-link';
 import { money } from '@/lib/utils';
 import { checkCancellationPolicy } from '@/services/booking.service';
 
@@ -34,6 +34,7 @@ export default async function AppointmentDetailPage({
 
   const [view] = await hydrateAppointments([appointment]);
   const joinLink = joinLinkFor(view);
+  const addressConfirmed = addressVisibleFor(view);
   const policy = await checkCancellationPolicy(appointment.id);
   const events = view.payment ? await listPaymentEvents(view.payment.id) : [];
 
@@ -141,10 +142,11 @@ export default async function AppointmentDetailPage({
                   <span className="flex items-start justify-end gap-2 text-right">
                     <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-forest-600 dark:text-forest-300" />
                     <span>
-                      {view.location?.name}
+                      {view.location?.name} Practice
                       <span className="block text-sm font-normal text-ink-soft">
-                        {view.location?.addressLine}, {view.location?.city},{' '}
-                        {view.location?.postalCode}
+                        {addressConfirmed
+                          ? `${view.location?.addressLine}, ${view.location?.city}, ${view.location?.postalCode}`
+                          : 'Address shared once your booking is confirmed'}
                       </span>
                     </span>
                   </span>
@@ -195,7 +197,9 @@ export default async function AppointmentDetailPage({
               location:
                 view.mode === 'online'
                   ? (joinLink ?? 'Online session')
-                  : `${view.location?.addressLine}, ${view.location?.city}`,
+                  : addressConfirmed
+                    ? `${view.location?.addressLine}, ${view.location?.city}`
+                    : `Be Whole Care — ${view.location?.name} Practice`,
               details: `Reference ${view.reference}.`,
               reference: view.reference,
             }}

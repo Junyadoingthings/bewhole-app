@@ -162,7 +162,12 @@ export const bookingDetailsSchema = z.object({
    */
   emergencyName: nameField,
   emergencyPhone: contactPhoneSchema,
-  reason: z.string().trim().max(1000, 'Please keep this under 1000 characters').optional(),
+  /** Required (2026-10): the practice asked to know what brings each client before the first session. */
+  reason: z
+    .string({ required_error: 'Please tell us briefly what brings you here' })
+    .trim()
+    .min(3, 'Please tell us briefly what brings you here')
+    .max(1000, 'Please keep this under 1000 characters'),
   isFirstSession: z.boolean().default(true),
   consentTerms: z.literal(true, {
     errorMap: () => ({ message: 'Please confirm you accept the terms' }),
