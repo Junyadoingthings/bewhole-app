@@ -34,7 +34,9 @@ delivered).
 emails were removed at the practice's request.
 
 The session link and practice address are only ever sent once a booking is **confirmed** — after
-payment or after the medical aid is accepted — never while it is still pending.
+payment or after the medical aid is accepted — never while it is still pending. Emails sent before
+then name the practice only ("In person — Centurion Practice"); this includes follow-up payment
+requests and follow-up reminders. Clients' ID and passport numbers are never put in any email.
 
 Reminders are prepared when the session is confirmed and sent by the reminder job (see
 [DEPLOY.md](../DEPLOY.md)). Rescheduling or cancelling replaces or withdraws them, and turning a

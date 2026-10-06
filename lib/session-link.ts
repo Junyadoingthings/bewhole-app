@@ -15,3 +15,11 @@ export function joinLinkFor(appointment: {
   if (appointment.mode !== 'online' || appointment.status !== 'confirmed') return null;
   return appointment.sessionLink || CLIENT_EMAIL.onlineSessionLink;
 }
+
+/**
+ * The practice's street address follows the same rule as the session link: a
+ * client sees it once their booking is confirmed, never while it is pending.
+ */
+export function addressVisibleFor(appointment: { status: string }): boolean {
+  return appointment.status === 'confirmed' || appointment.status === 'completed';
+}

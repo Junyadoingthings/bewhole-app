@@ -202,6 +202,10 @@ export async function createBooking(
     profilePatch.medicalAid = input.medicalAid;
   }
   if (input.address?.trim()) profilePatch.address = input.address.trim();
+  if (input.identity?.number) {
+    profilePatch.idType = input.identity.type;
+    profilePatch.idNumber = input.identity.number;
+  }
   if (input.emergencyName?.trim()) {
     profilePatch.emergencyContactName = input.emergencyName.trim();
     profilePatch.emergencyContactPhone = input.emergencyPhone.trim();

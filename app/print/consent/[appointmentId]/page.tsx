@@ -126,6 +126,7 @@ export default async function ConsentRecordPage({ params }: { params: { appointm
               ['Name', clientName],
               ['Email', view.client?.email],
               ['Mobile', profile?.phone ?? view.client?.phone],
+              [profile?.idType === 'passport' ? 'Passport number' : 'ID number', profile?.idNumber],
               ['Address', profile?.address],
               ['Date of birth', birthDate(profile?.medicalAid?.dateOfBirth)],
             ]}

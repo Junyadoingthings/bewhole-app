@@ -3,7 +3,7 @@ import Image from 'next/image';
 import { ArrowRight, Clock, MapPin, ShieldCheck, Video } from 'lucide-react';
 
 import { ButtonLink } from '@/components/ui/button';
-import { BUSINESS, HOURS_SUMMARY, LOCATIONS } from '@/config/business';
+import { ADDRESS_PRIVACY_NOTE, BUSINESS, HOURS_SUMMARY, LOCATIONS } from '@/config/business';
 import { PHOTOS } from '@/config/photos';
 
 export const metadata: Metadata = {
@@ -85,11 +85,14 @@ export default function AboutPage() {
             <ul className="mt-5 space-y-4">
               {LOCATIONS.map((location) => (
                 <li key={location.slug} className="text-sm">
-                  <p className="font-medium text-ink">{location.name}</p>
-                  <p className="mt-0.5 leading-relaxed text-ink-muted">{location.full}</p>
+                  <p className="font-medium text-ink">{location.name} Practice</p>
+                  <p className="mt-0.5 leading-relaxed text-ink-muted">
+                    {location.city}, {location.region}
+                  </p>
                 </li>
               ))}
             </ul>
+            <p className="mt-5 text-xs leading-relaxed text-ink-muted">{ADDRESS_PRIVACY_NOTE}</p>
           </div>
 
           <div className="rounded-3xl border border-line bg-canvas-sunk p-7 sm:p-8">

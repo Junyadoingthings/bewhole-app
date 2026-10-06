@@ -6,7 +6,7 @@ import { ContactForm } from '@/components/site/contact-form';
 import { Photo, PhotoReveal, PhotoScrim } from '@/components/site/photo';
 import { Reveal } from '@/components/motion';
 import { ButtonLink } from '@/components/ui/button';
-import { BUSINESS, CRISIS_SUPPORT, HOURS_SUMMARY, LOCATIONS } from '@/config/business';
+import { ADDRESS_PRIVACY_NOTE, BUSINESS, CRISIS_SUPPORT, HOURS_SUMMARY, LOCATIONS } from '@/config/business';
 import { PHOTOS } from '@/config/photos';
 import { formatPhone } from '@/lib/utils';
 
@@ -131,13 +131,14 @@ export default function ContactPage({
                 <ul className="mt-4 space-y-4 text-sm">
                   {LOCATIONS.map((location) => (
                     <li key={location.slug}>
-                      <p className="font-medium text-ink">{location.name}</p>
+                      <p className="font-medium text-ink">{location.name} Practice</p>
                       <p className="mt-1 leading-relaxed text-ink-soft">
-                        {location.addressLine}, {location.city}, {location.postalCode}
+                        {location.city}, {location.region}
                       </p>
                     </li>
                   ))}
                 </ul>
+                <p className="mt-4 text-xs leading-relaxed text-ink-muted">{ADDRESS_PRIVACY_NOTE}</p>
               </div>
 
               <div className="rounded-3xl border border-state-warning/25 bg-state-warningSoft p-6">

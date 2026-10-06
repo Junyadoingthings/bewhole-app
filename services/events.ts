@@ -206,7 +206,7 @@ function appointmentDetails(a: AppointmentView) {
     { label: 'Duration', value: `${a.durationMinutes} minutes` },
     {
       label: 'Location',
-      value: a.mode === 'online' ? 'Online session' : `In person — ${a.location?.name ?? 'practice'}`,
+      value: a.mode === 'online' ? 'Online session' : `In person — ${a.location ? `${a.location.name} Practice` : 'practice'}`,
     },
     { label: 'Reference', value: a.reference },
   ];
@@ -842,12 +842,19 @@ async function followUpView(followUpId: ID): Promise<FollowUpView | null> {
   return hydrated ?? null;
 }
 
-function followUpDetails(f: FollowUpView) {
+/**
+ * The street address goes out only once the session is paid for (the
+ * practice's rule): a payment request or reminder names the practice, and the
+ * confirmation sent after payment carries the address.
+ */
+function followUpDetails(f: FollowUpView, { withAddress = false } = {}) {
   const where =
     f.mode === 'online'
       ? 'Online session'
       : f.location
-        ? `${f.location.name} — ${f.location.addressLine}, ${f.location.city}, ${f.location.postalCode}`
+        ? withAddress
+          ? `${f.location.name} — ${f.location.addressLine}, ${f.location.city}, ${f.location.postalCode}`
+          : `In person — ${f.location.name} Practice`
         : 'In person';
   return [
     { label: 'Service', value: f.service.name },
@@ -903,7 +910,7 @@ export async function sendFollowUpConfirmed(followUpId: ID): Promise<void> {
     body:
       'Thank you. Your payment has been received and your follow-up session is confirmed. ' +
       'Our team will be in contact to finalise the time if it has not yet been set.',
-    details: followUpDetails(f),
+    details: followUpDetails(f, { withAddress: true }),
     href: '/portal/follow-ups',
   });
 }

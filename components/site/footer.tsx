@@ -4,7 +4,7 @@ import { Instagram, Mail, MapPin, Phone, ShieldCheck } from 'lucide-react';
 import { Logo } from '@/components/brand/logo';
 import { PaymentMethods } from '@/components/booking/payment-methods';
 import { displayMethods } from '@/services/payments';
-import { BUSINESS, HOURS_SUMMARY, LOCATIONS } from '@/config/business';
+import { ADDRESS_PRIVACY_NOTE, BUSINESS, HOURS_SUMMARY, LOCATIONS } from '@/config/business';
 import { cn } from '@/lib/utils';
 
 /**
@@ -121,36 +121,14 @@ export function SiteFooter({ className }: { className?: string }) {
                 <li key={location.slug} className="flex gap-3 text-sm text-cream-100/70">
                   <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-forest-300" />
                   <span>
-                    <span className="block text-cream-100">{location.name}</span>
-                    {location.addressLine}, {location.city}, {location.postalCode}
+                    <span className="block text-cream-100">{location.name} Practice</span>
+                    {location.city}, {location.region}
                   </span>
                 </li>
               ))}
             </ul>
 
-            <a
-              href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-                `${LOCATIONS[0].full}, South Africa`,
-              )}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="group relative mt-5 block overflow-hidden rounded-2xl border border-cream-100/10"
-              aria-label={`Open ${LOCATIONS[0].name} in Google Maps`}
-            >
-              <iframe
-                title={`Map showing ${LOCATIONS[0].name}`}
-                src={`https://www.google.com/maps?q=${encodeURIComponent(
-                  `${LOCATIONS[0].full}, South Africa`,
-                )}&output=embed`}
-                loading="lazy"
-                referrerPolicy="no-referrer-when-downgrade"
-                className="h-40 w-full border-0 grayscale-[0.35]"
-              />
-              <span
-                aria-hidden
-                className="pointer-events-none absolute inset-0 bg-forest-950/25 transition-colors duration-300 group-hover:bg-forest-950/10"
-              />
-            </a>
+            <p className="mt-4 text-xs leading-relaxed text-cream-100/50">{ADDRESS_PRIVACY_NOTE}</p>
           </div>
 
           <div>
