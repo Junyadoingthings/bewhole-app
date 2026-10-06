@@ -6,7 +6,7 @@ The website, online booking and practice console for **Be Whole Care**, the coun
 Ntombi Mothoagae (BPSYCH), Registered Counsellor (HPCSA), with practices in Centurion and Tembisa
 and online sessions.
 
-**Live:** [bewholecare.vercel.app](https://bewholecare.vercel.app)
+**Live:** [www.bewholecare.co.za](https://www.bewholecare.co.za) (also [bewholecare.vercel.app](https://bewholecare.vercel.app))
 
 ![The Be Whole Care home page and booking checkout on iPhone](docs/images/marketing-iphones.jpg)
 

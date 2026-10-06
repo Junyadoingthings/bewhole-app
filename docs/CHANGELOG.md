@@ -13,6 +13,8 @@ What changed, newest first. Each entry links to the pull request on GitHub.
 - **Signed-out password reset** for the console administrator from the sign-in page, using the
   emailed 6-digit code.
 - Domain move checklist in [DEPLOY.md](../DEPLOY.md#9-domain).
+- **Live on www.bewholecare.co.za**; `bewholecare.co.za` redirects to it. The old website on the
+  Register Domain cPanel server is no longer shown.
 
 ### 5 October — pre-launch diagnostic
 - **Medical aid holds block their time** ([#18](https://github.com/Junyadoingthings/bewhole-app/pull/18))
