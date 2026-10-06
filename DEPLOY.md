@@ -110,7 +110,7 @@ Set these under **Settings → Environment Variables** (Production + Preview):
 |---|---|---|
 | `DATABASE_URL` | Transaction pooler string from step 1 | **Yes** |
 | `SESSION_SECRET` | From step 3 | **Yes** |
-| `NEXT_PUBLIC_APP_URL` | The public URL — currently `https://bewholecare.vercel.app` | **Yes** |
+| `NEXT_PUBLIC_APP_URL` | The public URL — `https://www.bewholecare.co.za` | **Yes** |
 | `CRON_SECRET` | From step 3 | **Yes** |
 | `PAYMENT_PROVIDER` | `peach` (or `payfast`) | For payments |
 | `PEACH_ENTITY_ID` / `PEACH_SECRET_TOKEN` | Peach dashboard → Checkout → API keys | For payments |
@@ -271,7 +271,13 @@ in the `notification_logs` table as failed, with the reason.
 
 ## 9. Domain
 
-Moving from `bewholecare.vercel.app` to `bewholecare.co.za`. Every link the app
+Moving from `bewholecare.vercel.app` to `bewholecare.co.za`.
+
+**Current setup (October 2026):** the domain is registered with Register Domain and its DNS is
+managed in their cPanel (**Domains → Zone Editor**). `www.bewholecare.co.za` is the primary address
+(CNAME to Vercel); `bewholecare.co.za` has A records to Vercel (`216.198.79.1`, `64.29.17.1`) and
+redirects to www. Email (MX, `mail`, `webmail`) stays on Register Domain, and the Resend records
+(`resend._domainkey`, `send`) stay as they are — only the web records point at Vercel. Every link the app
 makes (emails, payment returns, the calendar subscription, the sitemap) comes
 from `NEXT_PUBLIC_APP_URL`, so nothing in the code changes. Work through the list
 in order:

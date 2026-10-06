@@ -1,6 +1,6 @@
 # Practice guide — using the console
 
-A plain-English guide for the practice. Sign in at **bewholecare.vercel.app/sign-in**; the console
+A plain-English guide for the practice. Sign in at **www.bewholecare.co.za/sign-in**; the console
 opens at **/admin**.
 
 The menu: **Dashboard · Appointments · Calendar · Clients · Follow-ups · Payments · Settings**.
@@ -66,7 +66,7 @@ name in **Appointments** ("With …"), in your booking emails and on the consent
   **Consent & comms** → **Print** next to "Informed Consent". It opens a ready-to-print A4 form
   showing every point agreed, the exact date and time it was agreed online, everyone else attending
   and lines for your signature. Click **Print or save as PDF**.
-- **Blank form** for in-person clients: open **bewholecare.vercel.app/consent** and print it.
+- **Blank form** for in-person clients: open **www.bewholecare.co.za/consent** and print it.
 - If a booking was made without online consent (for example, one you made yourself), the form says
   so — take consent in person and sign it.
 
