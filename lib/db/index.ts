@@ -80,6 +80,8 @@ export const getAppointmentByReference = repo.getAppointmentByReference;
 export const listBookedIntervals = repo.listBookedIntervals;
 export const createAppointmentIfFree = repo.createAppointmentIfFree;
 export const updateAppointment = repo.updateAppointment;
+export const getCounter = repo.getCounter;
+export const bumpCounter = repo.bumpCounter;
 export const rescheduleAppointment = repo.rescheduleAppointment;
 
 /* ---------------------------------------------------------------- payments */

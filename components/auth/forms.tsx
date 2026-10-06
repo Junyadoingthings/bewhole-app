@@ -5,7 +5,14 @@ import Link from 'next/link';
 import { useFormState, useFormStatus } from 'react-dom';
 import { AlertCircle, Check, Eye, EyeOff, Mail, Lock } from 'lucide-react';
 
-import { changeOwnPassword, login, register, requestPasswordReset, type AuthState } from '@/app/actions/auth';
+import {
+  changeOwnPassword,
+  login,
+  register,
+  requestPasswordReset,
+  resetPasswordWithEmailCode,
+  type AuthState,
+} from '@/app/actions/auth';
 import { Button } from '@/components/ui/button';
 import { CheckboxRow, FieldError, Input, Label } from '@/components/ui/field';
 import { passwordProblems } from '@/lib/auth/password-rules';
@@ -248,22 +255,84 @@ export function RegisterForm({ next }: { next?: string }) {
 
 export function ForgotPasswordForm() {
   const [state, action] = useFormState(requestPasswordReset, initial);
+  const [email, setEmail] = React.useState('');
 
   return (
-    <form action={action} className="mt-8">
-      <div>
-        <Label htmlFor="email">Email</Label>
-        <Input
-          id="email"
-          name="email"
-          type="email"
-          autoComplete="email"
-          icon={<Mail className="h-4 w-4" />}
-          required
+    <>
+      <form action={action} className="mt-8">
+        <div>
+          <Label htmlFor="email">Email</Label>
+          <Input
+            id="email"
+            name="email"
+            type="email"
+            autoComplete="email"
+            icon={<Mail className="h-4 w-4" />}
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+          />
+        </div>
+        <Alert state={state} />
+        <Submit loadingText="Sending…">{state.status === 'success' ? 'Send again' : 'Send instructions'}</Submit>
+      </form>
+
+      {state.status === 'success' && <ConsoleCodeForm email={email} />}
+    </>
+  );
+}
+
+/**
+ * The practice administrator's step two: the emailed 6-digit code and a new
+ * password. Shown to everyone after step one, so the page never reveals which
+ * address belongs to the console.
+ */
+function ConsoleCodeForm({ email }: { email: string }) {
+  const [state, action] = useFormState(resetPasswordWithEmailCode, initial);
+  const [password, setPassword] = React.useState('');
+  const problems = passwordProblems(password);
+
+  return (
+    <form action={action} className="mt-10 border-t border-line pt-8">
+      <h2 className="font-display text-xl text-ink">Practice administrator?</h2>
+      <p className="mt-2 text-sm leading-relaxed text-ink-soft">
+        If this is the practice console&rsquo;s email address, we have emailed you a 6-digit code. Enter
+        it with a new password. The code expires after 10 minutes.
+      </p>
+      <input type="hidden" name="email" value={email} />
+      <div className="mt-6 space-y-5">
+        <div>
+          <Label htmlFor="code">6-digit code</Label>
+          <Input
+            id="code"
+            name="code"
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            pattern="[0-9 ]*"
+            maxLength={7}
+            required
+          />
+        </div>
+        <PasswordInput
+          id="newPassword"
+          name="newPassword"
+          label="New password"
+          autoComplete="new-password"
+          onChange={setPassword}
+          hint={password && problems.length === 0 ? 'Looks good' : undefined}
         />
+        <PasswordInput
+          id="confirmPassword"
+          name="confirmPassword"
+          label="Confirm new password"
+          autoComplete="new-password"
+        />
+        <p className="text-xs leading-relaxed text-ink-muted">
+          At least 10 characters, with upper and lower case letters and a number.
+        </p>
       </div>
       <Alert state={state} />
-      <Submit loadingText="Sending…">Send instructions</Submit>
+      <Submit loadingText="Saving…">Set new password and sign in</Submit>
     </form>
   );
 }

@@ -348,6 +348,20 @@ export async function createAppointmentIfFree(
   });
 }
 
+/** A named counter's current value (0 if it has never been raised). */
+export async function getCounter(name: string): Promise<number> {
+  return (await getDb()).counters?.[name] ?? 0;
+}
+
+/** Raise a named counter by one and return the new value. */
+export async function bumpCounter(name: string): Promise<number> {
+  return transact((db) => {
+    const next = (db.counters?.[name] ?? 0) + 1;
+    db.counters = { ...db.counters, [name]: next };
+    return next;
+  });
+}
+
 export async function updateAppointment(id: ID, patch: Partial<Appointment>) {
   return transact((db) => {
     const appointment = db.appointments.find((a) => a.id === id);

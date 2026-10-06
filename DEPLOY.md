@@ -158,8 +158,8 @@ deploy carrying a more frequent schedule is rejected outright at build time —
 Reminders are designed around that limit. Both are scheduled for **06:00
 South African time** — the day before and the morning of the session — so the
 daily run at 05:00 UTC (07:00 SAST) delivers each one on the right morning.
-The only cost is that the same-day reminder for a very early session (before
-about 08:00) arrives shortly before it.
+Sessions start from 09:00, so the morning-of reminder arrives at least two
+hours before the first session of the day.
 
 For an exact 06:00 delivery, either:
 
@@ -271,8 +271,42 @@ in the `notification_logs` table as failed, with the reason.
 
 ## 9. Domain
 
-Vercel → **Settings → Domains** → add `bewholecare.co.za`, follow the DNS
-instructions. Then update `NEXT_PUBLIC_APP_URL` and redeploy.
+Moving from `bewholecare.vercel.app` to `bewholecare.co.za`. Every link the app
+makes (emails, payment returns, the calendar subscription, the sitemap) comes
+from `NEXT_PUBLIC_APP_URL`, so nothing in the code changes. Work through the list
+in order:
+
+1. **Vercel → Settings → Domains** → add `bewholecare.co.za` and
+   `www.bewholecare.co.za`, set the DNS records Vercel shows at the registrar,
+   and choose one as primary (the other redirects to it). Wait for both to show
+   **Valid**.
+2. **Keep `bewholecare.vercel.app` serving the site — do not redirect it** for
+   at least a month. Emails already sent (payment links, session details) and
+   any calendar already subscribed point at it.
+3. **Vercel → Settings → Environment Variables** → set `NEXT_PUBLIC_APP_URL` to
+   the primary address (e.g. `https://bewholecare.co.za`) for Production, then
+   **redeploy**. It is built into the site, so it only takes effect after a
+   deploy.
+4. **Payment webhook:** in the payment provider's dashboard (Yoco, or Peach),
+   change the webhook URL to `https://bewholecare.co.za/api/payments/webhook`.
+   If a new signing secret is issued, update `YOCO_WEBHOOK_SECRET` /
+   `PEACH_WEBHOOK_SECRET` and redeploy.
+5. **Email (optional, recommended):** to send from `@bewholecare.co.za`, add the
+   domain in Resend, set its DNS records, wait for **Verified**, then set
+   `EMAIL_FROM` (e.g. `Be Whole Care <bookings@bewholecare.co.za>`) and redeploy.
+   Until then, keep the current `EMAIL_FROM`.
+6. **"Continue with Google" sign-in**, if enabled: add
+   `https://bewholecare.co.za/api/auth/google/callback` as an authorised
+   redirect URI on the OAuth client in Google Cloud Console.
+7. **Calendar subscription:** after the redeploy, the console's **Add to my
+   calendar** gives a link on the new domain. A calendar added before the move
+   keeps working while `bewholecare.vercel.app` serves; to move it, remove it
+   from the calendar app and add it again.
+8. **Check:** open the new address, make a test booking, open a link from the
+   confirmation email, and visit `/robots.txt` — the sitemap line should show
+   the new domain.
+
+The reminder job (`vercel.json`) uses a relative path and needs no change.
 
 ---
 

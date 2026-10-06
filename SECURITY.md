@@ -44,6 +44,10 @@ to reproduce it.
   the code is stored; it expires after 10 minutes, works once, allows 5 wrong attempts, and at most
   3 codes can be sent per 15 minutes (counted in the database). The code is never written to the
   email log or the subject line.
+- The same code also resets the console password from the public sign-in page. That page gives the
+  same answer for every address, and the same error for a wrong code, an expired code or an
+  account that is not the console's (checked in the same time), so it cannot be used to find the
+  console's email address or to test codes.
 - Login, registration, booking, contact and password actions are rate-limited.
 
 ### Data
@@ -70,6 +74,18 @@ to reproduce it.
 - `/portal`, `/admin` and the sign-in pages are sent `no-store` and `noindex`; the service worker
   never caches them.
 - The printable consent page (`/print/consent/…`) is staff-only and not indexed.
+- `robots.txt` keeps search engines out of `/admin`, `/portal`, `/print`, `/api` and `/pay`
+  (a courtesy — access control is on the server).
+
+### Calendar subscription
+
+- `/api/calendar/feed/<token>.ics` serves the practice's sessions to Outlook, Apple or Google
+  Calendar, which cannot sign in, so the link itself is the key: a 256-bit HMAC (with
+  `SESSION_SECRET`) of a version number kept in the database. Any other token gets a plain 404.
+- Only an administrator sees the link (console Calendar) or can reset it; resetting raises the
+  version and every old copy stops working. Resets are audited.
+- Events carry only what a diary needs — service, client name, reference and where. Never email,
+  phone, medical aid or notes. Responses are `no-store` and `noindex`.
 
 ## Security changes in October 2026
 
@@ -81,3 +97,5 @@ to reproduce it.
 - Removed the leftover `fix-db.js` script.
 - Enabled row-level security on the `counters` and `password_reset_codes` tables.
 - Added `.env.example` (names only) and allowed it past `.gitignore`.
+- Replaced the unauthenticated demo `/api/calendar/feed` with the private subscription above, and
+  removed a stray `services/events.ts.save` file.
