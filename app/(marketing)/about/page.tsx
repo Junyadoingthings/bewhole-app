@@ -29,7 +29,7 @@ const FACTS = [
   { icon: Clock, label: '60 minutes', detail: 'Every session, by appointment.' },
   { icon: Video, label: 'Online or in person', detail: 'Whichever suits you.' },
   { icon: MapPin, label: 'Two practices', detail: 'Centurion and Tembisa.' },
-  { icon: ShieldCheck, label: 'Confidential', detail: 'Handled ethically and lawfully.' },
+  { icon: ShieldCheck, label: 'Confidential', detail: 'Handled ethically.' },
 ];
 
 export default function AboutPage() {
@@ -38,13 +38,8 @@ export default function AboutPage() {
       <section className="bg-canvas-sunk">
         <div className="shell grid items-center gap-10 py-14 sm:py-16 lg:grid-cols-2 lg:gap-16 lg:py-20">
           <div>
-            <p className="text-2xs font-medium uppercase tracking-[0.16em] text-forest-700">
+            <h1 className="text-2xs font-medium uppercase tracking-[0.16em] text-forest-700">
               About us
-            </p>
-            <h1 className="mt-4 font-display text-[clamp(2rem,5vw,3.25rem)] font-bold leading-[1.06] tracking-[-0.02em] text-ink">
-              Counselling you can
-              <br />
-              <span className="text-forest-800">actually get to.</span>
             </h1>
             <p className="mt-6 max-w-md text-base leading-relaxed text-ink-muted">
               {BUSINESS.promise}

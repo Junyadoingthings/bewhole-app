@@ -70,9 +70,8 @@ export function ContactForm({ defaultTopic }: { defaultTopic?: string }) {
           </Label>
           <Input id="phone" name="phone" type="tel" autoComplete="tel" placeholder="083 000 0000" />
         </div>
-        <div>
-          <Label htmlFor="topic">What is this about?</Label>
-          <Select id="topic" name="topic" defaultValue={defaultTopic ?? TOPICS[0]}>
+        <div className="sm:self-end">
+          <Select id="topic" name="topic" aria-label="Enquiry type" defaultValue={defaultTopic ?? TOPICS[0]}>
             {TOPICS.map((topic) => (
               <option key={topic} value={topic}>
                 {topic}
@@ -83,14 +82,11 @@ export function ContactForm({ defaultTopic }: { defaultTopic?: string }) {
       </div>
 
       <div className="mt-5">
-        <Label htmlFor="message" hint="Please don’t include sensitive health details here">
-          Your message
-        </Label>
+        <Label htmlFor="message">Your message</Label>
         <Textarea
           id="message"
           name="message"
           rows={5}
-          placeholder="A sentence or two is plenty."
           error={state.errors?.message}
           required
         />
@@ -104,7 +100,6 @@ export function ContactForm({ defaultTopic }: { defaultTopic?: string }) {
           checked={consent}
           onChange={setConsent}
           title="You may contact me about this enquiry"
-          description="We use your details only to reply. Nothing is added to a mailing list."
           error={state.errors?.consent}
         />
       </div>
