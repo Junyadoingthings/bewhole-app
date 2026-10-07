@@ -31,24 +31,10 @@ export const revalidate = 300;
 const HIDDEN_SERVICE_TAGS = new Set(['svc_coaching', 'svc_support_group']);
 
 const APPOINTMENT_STEPS = [
-  {
-    title: 'Choose a service',
-    detail: 'Pick what fits, or start with the free mental health screening if you are unsure.',
-  },
-  {
-    title: 'Pick a time',
-    detail: 'Online or in person, from real availability — you only ever see slots that are open.',
-  },
-  {
-    title: 'Confirm and pay',
-    detail:
-      'The fee for your session is shown before you pay. Medical aid details can be entered instead.',
-  },
-  {
-    title: 'Meet your practitioner',
-    detail:
-      'A confirmation and a reminder are emailed to you. Online sessions get a private link beforehand.',
-  },
+  { title: 'Choose a service' },
+  { title: 'Pick a time' },
+  { title: 'Confirm and pay' },
+  { title: 'Meet your practitioner' },
 ];
 
 export const metadata: Metadata = {
@@ -192,10 +178,6 @@ export default async function ServicesPage() {
         <Reveal delay={0.08}>
           <div className="mt-10 rounded-4xl border border-line bg-canvas-sunk p-8 sm:p-10">
             <h2 className="font-display text-2xl text-ink">How an appointment works</h2>
-            <p className="mt-3 max-w-2xl leading-relaxed text-ink-soft text-pretty">
-              Sessions run 60 minutes — 90 minutes for couples — by appointment, online or at one
-              of our two practices. Booking takes about two minutes.
-            </p>
 
             <ol className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
               {APPOINTMENT_STEPS.map((step, index) => (
@@ -204,7 +186,6 @@ export default async function ServicesPage() {
                     {String(index + 1).padStart(2, '0')}
                   </span>
                   <h3 className="mt-3 text-sm font-medium text-ink">{step.title}</h3>
-                  <p className="mt-2 text-sm leading-relaxed text-ink-muted">{step.detail}</p>
                 </li>
               ))}
             </ol>

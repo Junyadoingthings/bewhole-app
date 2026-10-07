@@ -4,6 +4,15 @@ What changed, newest first. Each entry links to the pull request on GitHub.
 
 ## October 2026
 
+### 7 October — wording removed at the practice's request
+- **Contact:** the heading and "Someone replies during business hours…" removed (now "Call,
+  WhatsApp, email or send a message below."), as well as the photo caption, the "What is this
+  about?" label, the message hint and placeholder, and the consent line's small print.
+- **About:** the "Counselling you can actually get to." heading removed; "Confidential" now reads
+  "Handled ethically."
+- **Services:** the "How an appointment works" introduction and the description under each of the
+  four steps removed — the step titles remain.
+
 ### 6 October — practice addresses kept private
 - The website no longer shows the practices' street addresses or the map: they appear as
   **Centurion Practice** and **Tembisa Practice**, with a note that the address is shared once a

@@ -3,7 +3,7 @@ import { Clock, Instagram, Mail, MapPin, MessageCircle, Phone } from 'lucide-rea
 
 import { ArcMotif } from '@/components/site/decor';
 import { ContactForm } from '@/components/site/contact-form';
-import { Photo, PhotoReveal, PhotoScrim } from '@/components/site/photo';
+import { Photo, PhotoReveal } from '@/components/site/photo';
 import { Reveal } from '@/components/motion';
 import { ButtonLink } from '@/components/ui/button';
 import { ADDRESS_PRIVACY_NOTE, BUSINESS, CRISIS_SUPPORT, HOURS_SUMMARY, LOCATIONS } from '@/config/business';
@@ -30,13 +30,9 @@ export default function ContactPage({
         <ArcMotif className="-left-32 -top-24 h-[30rem] w-[30rem] text-forest-300/25" />
         <div className="shell relative py-16 sm:py-20">
           <Reveal>
-            <p className="eyebrow">Contact</p>
-            <h1 className="mt-6 max-w-2xl text-headline text-ink text-balance">
-              Talk to us before you book, if that’s easier.
-            </h1>
+            <h1 className="eyebrow">Contact</h1>
             <p className="mt-6 max-w-xl text-lg leading-relaxed text-ink-muted text-pretty">
-              Call, WhatsApp, email or send a message below. Someone replies during business hours —
-              and you never have to explain the whole thing up front.
+              Call, WhatsApp, email or send a message below.
             </p>
           </Reveal>
         </div>
@@ -166,10 +162,6 @@ export default function ContactPage({
                 sizes="(min-width: 1024px) 38rem, 92vw"
                 className="aspect-[16/9] w-full rounded-4xl shadow-card"
               >
-                <PhotoScrim className="from-forest-950/80 via-transparent" />
-                <p className="absolute inset-x-0 bottom-0 p-6 font-display text-xl text-cream-100 text-balance sm:text-2xl">
-                  You don’t have to explain the whole thing up front.
-                </p>
               </Photo>
             </PhotoReveal>
 
