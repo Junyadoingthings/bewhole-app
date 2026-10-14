@@ -14,6 +14,12 @@ The menu: **Dashboard · Appointments · Calendar · Clients · Follow-ups · Pa
 Every booking gets a running number — **BWC0001, BWC0002, BWC0003…** — with no gaps. It appears in
 every email and in the console, so you can use it as the invoice number.
 
+## What brings each client
+
+Every booking shows whether it is the client's **first session** or a **follow-up**, and their
+answer to **"What brings you here?"** — on the Dashboard, in **Appointments** and on the client's
+page in **Clients**.
+
 ## Medical aid bookings
 
 When a client books with medical aid, their time is held and they see **Provisional

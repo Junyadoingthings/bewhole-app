@@ -70,7 +70,7 @@ export default async function PortalOverview() {
 
       {/* The next session is the single dominant element on this screen. */}
       <Reveal delay={0.05} className="mt-8">
-        {next ? <NextSessionCard appointment={next} /> : <NoSessionCard />}
+        {next && <NextSessionCard appointment={next} />}
       </Reveal>
 
       {(outstanding.length > 0 || openFollowUps.length > 0 || unread.length > 0) && (
@@ -131,12 +131,7 @@ export default async function PortalOverview() {
               <EmptyState
                 compact
                 icon={<CalendarPlus className="h-5 w-5" />}
-                title={next ? 'Nothing else booked yet' : 'Ready when you are'}
-                description={
-                  next
-                    ? 'You can book your next session whenever you’re ready — there’s no obligation to book ahead.'
-                    : 'Booking takes about two minutes and you’ll see real availability.'
-                }
+                title={next ? 'Nothing else booked yet' : undefined}
                 action={
                   <ButtonLink href="/book" size="sm">
                     Book a session
@@ -256,27 +251,6 @@ function NextSessionCard({ appointment }: { appointment: Awaited<ReturnType<type
             Your session link will appear here before we meet — we send it with your reminder too.
           </p>
         )}
-      </div>
-    </div>
-  );
-}
-
-function NoSessionCard() {
-  return (
-    <div className="relative overflow-hidden rounded-4xl border border-line bg-white p-8 sm:p-12">
-      <ArcMotif className="-right-16 -top-16 h-72 w-72 text-forest-300/25" />
-      <div className="relative max-w-md">
-        <p className="text-2xs font-medium uppercase tracking-[0.18em] text-forest-600 dark:text-forest-300">
-          No upcoming sessions
-        </p>
-        <h2 className="mt-5 font-display text-3xl text-ink text-balance">Ready when you are.</h2>
-        <p className="mt-4 leading-relaxed text-ink-soft text-pretty">
-          There is no obligation to book ahead. When you want a session, it takes about two minutes
-          and you’ll see exactly what’s open.
-        </p>
-        <ButtonLink href="/book" size="lg" className="mt-7">
-          Book an appointment
-        </ButtonLink>
       </div>
     </div>
   );

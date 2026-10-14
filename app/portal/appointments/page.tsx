@@ -49,7 +49,6 @@ export default async function AppointmentsPage() {
               compact
               icon={<CalendarPlus className="h-5 w-5" />}
               title="No upcoming appointments"
-              description="Ready when you are — booking takes about two minutes."
               action={
                 <ButtonLink href="/book" size="sm">
                   Book an appointment

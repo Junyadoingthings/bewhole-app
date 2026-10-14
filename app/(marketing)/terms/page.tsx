@@ -66,6 +66,17 @@ const SECTIONS = [
     list: POLICY.confidentialityLimits,
     note: 'These limits will be explained during the informed consent process.',
   },
+  {
+    // Formerly a separate "Privacy & POPIA" page; folded in at the practice's request.
+    id: 'privacy',
+    title: 'Your personal information',
+    paragraphs: [
+      'When you book, we collect your name, contact details, ID or passport number, address, emergency contact and what brings you to counselling, and — if you use medical aid — your scheme details. We use this only to arrange and confirm your sessions, send reminders, process payments and claims, and contact you about your care.',
+      'Card details are entered only on our payment provider’s secure checkout and never reach our systems. We do not sell your information or share it for advertising.',
+      'Only the practice can see your information, and you can see only your own in the client portal. Clinical session notes are not kept in this booking system.',
+      `Under the Protection of Personal Information Act (POPIA) you may ask what we hold about you, ask for a copy or a correction, or ask us to delete what we no longer need to keep. Some records must be kept for a period to meet professional and legal obligations. To ask, email ${BUSINESS.email} or call ${BUSINESS.phone}.`,
+    ],
+  },
 ];
 
 export default function TermsPage() {
@@ -143,9 +154,6 @@ export default function TermsPage() {
           </p>
           <div className="mt-6 flex flex-col gap-3 sm:flex-row">
             <ButtonLink href="/contact">Contact us</ButtonLink>
-            <ButtonLink href="/privacy" variant="secondary">
-              Privacy notice
-            </ButtonLink>
           </div>
         </div>
       </Reveal>

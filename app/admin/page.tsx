@@ -18,6 +18,7 @@ import { STATUS_META } from '@/components/portal/appointment-card';
 import { Reveal, Stagger, StaggerItem } from '@/components/motion';
 import { ButtonLink } from '@/components/ui/button';
 import { Badge, EmptyState, StatTile } from '@/components/ui/primitives';
+import { IntakeNote } from '@/components/admin/intake-note';
 import { requireStaff } from '@/lib/auth';
 import { displayTime, formatFullDate, greeting, parts, today } from '@/lib/date';
 import { EMPTY_DASHBOARD_METRICS, getDashboardMetrics } from '@/services/analytics.service';
@@ -161,6 +162,7 @@ export default async function AdminDashboard() {
                         )}
                         {a.service?.name ?? 'Session'}
                       </span>
+                      <IntakeNote reason={a.reason} isFirstSession={a.isFirstSession} />
                     </span>
                     <Badge tone={STATUS_META[a.status]?.tone ?? 'neutral'} size="sm">
                       {STATUS_META[a.status]?.label ?? a.status}
@@ -248,6 +250,7 @@ export default async function AdminDashboard() {
                       {formatFullDate(parts(a.startAt).date).split(',')[0]} ·{' '}
                       {displayTime(parts(a.startAt).time)} · {a.service?.name ?? 'Session'}
                     </p>
+                    <IntakeNote reason={a.reason} isFirstSession={a.isFirstSession} />
                   </div>
                 ))
               )}

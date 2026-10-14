@@ -6,7 +6,7 @@ import { ContactForm } from '@/components/site/contact-form';
 import { Photo, PhotoReveal } from '@/components/site/photo';
 import { Reveal } from '@/components/motion';
 import { ButtonLink } from '@/components/ui/button';
-import { ADDRESS_PRIVACY_NOTE, BUSINESS, CRISIS_SUPPORT, HOURS_SUMMARY, LOCATIONS } from '@/config/business';
+import { BUSINESS, CRISIS_SUPPORT, HOURS_SUMMARY, LOCATIONS } from '@/config/business';
 import { PHOTOS } from '@/config/photos';
 import { formatPhone } from '@/lib/utils';
 
@@ -100,7 +100,7 @@ export default function ContactPage({
                 </span>
                 <span>
                   <span className="block text-sm text-ink-faint">Instagram</span>
-                  <span className="block font-display text-lg text-ink">@_bewhole</span>
+                  <span className="block font-display text-lg text-ink">{BUSINESS.instagramHandle}</span>
                 </span>
               </a>
 
@@ -134,7 +134,6 @@ export default function ContactPage({
                     </li>
                   ))}
                 </ul>
-                <p className="mt-4 text-xs leading-relaxed text-ink-muted">{ADDRESS_PRIVACY_NOTE}</p>
               </div>
 
               <div className="rounded-3xl border border-state-warning/25 bg-state-warningSoft p-6">

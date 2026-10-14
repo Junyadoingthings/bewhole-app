@@ -105,7 +105,8 @@ export const BUSINESS = {
   phone: '0638837170',
   phoneE164: '+27638837170',
   whatsapp: '27638837170',
-  instagram: 'https://www.instagram.com/_bewhole/',
+  instagram: 'https://www.instagram.com/bewholecare/',
+  instagramHandle: '@bewholecare',
   timezone: 'Africa/Johannesburg',
   currency: 'ZAR',
   currencySymbol: 'R',
@@ -131,9 +132,6 @@ export const HOURS_SUMMARY = [
  * Practice") but gives the address only to a client whose booking is
  * confirmed — in the confirmation email, their portal and reminders.
  */
-export const ADDRESS_PRIVACY_NOTE =
-  'For everyone\'s privacy and safety, the address is shared once your booking is confirmed.';
-
 export const LOCATIONS = [
   {
     slug: 'centurion',

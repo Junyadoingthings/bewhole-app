@@ -4,7 +4,7 @@ import { Instagram, Mail, MapPin, Phone, ShieldCheck } from 'lucide-react';
 import { Logo } from '@/components/brand/logo';
 import { PaymentMethods } from '@/components/booking/payment-methods';
 import { displayMethods } from '@/services/payments';
-import { ADDRESS_PRIVACY_NOTE, BUSINESS, HOURS_SUMMARY, LOCATIONS } from '@/config/business';
+import { BUSINESS, HOURS_SUMMARY, LOCATIONS } from '@/config/business';
 import { cn } from '@/lib/utils';
 
 /**
@@ -30,7 +30,6 @@ const COLUMNS = [
       { href: '/sign-in', label: 'Sign in' },
       { href: '/portal', label: 'Client portal' },
       { href: '/terms', label: 'Terms & conditions' },
-      { href: '/privacy', label: 'Privacy & POPIA' },
     ],
   },
 ];
@@ -82,7 +81,7 @@ export function SiteFooter({ className }: { className?: string }) {
                 className="flex items-center gap-3 text-cream-100/80 transition-colors hover:text-cream-100"
               >
                 <Instagram className="h-4 w-4 shrink-0 text-forest-300" />
-                @_bewhole
+                {BUSINESS.instagramHandle}
               </a>
             </div>
           </div>
@@ -128,7 +127,6 @@ export function SiteFooter({ className }: { className?: string }) {
               ))}
             </ul>
 
-            <p className="mt-4 text-xs leading-relaxed text-cream-100/50">{ADDRESS_PRIVACY_NOTE}</p>
           </div>
 
           <div>

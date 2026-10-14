@@ -35,10 +35,6 @@ export default async function FollowUpsPage() {
     <div className="mx-auto max-w-3xl">
       <Reveal>
         <h1 className="font-display text-3xl text-ink">Follow-ups</h1>
-        <p className="mt-2 max-w-lg leading-relaxed text-ink-soft">
-          Sessions your practitioner has set aside for you. Once payment is received we confirm the
-          booking and send your calendar invitation.
-        </p>
       </Reveal>
 
       <div className="mt-8 space-y-3">

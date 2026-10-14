@@ -9,6 +9,7 @@ import { NoteComposer } from '@/components/admin/note-composer';
 import { STATUS_META } from '@/components/portal/appointment-card';
 import { Reveal } from '@/components/motion';
 import { Badge, EmptyState, StatTile } from '@/components/ui/primitives';
+import { IntakeNote } from '@/components/admin/intake-note';
 import { requireStaff } from '@/lib/auth';
 import { displayTime, formatFullDate, parts, timeAgo } from '@/lib/date';
 import {
@@ -233,6 +234,7 @@ export default async function AdminClientPage({ params }: { params: { id: string
                                 <MapPin className="h-3.5 w-3.5" />
                               )}
                             </p>
+                            <IntakeNote reason={a.reason} isFirstSession={a.isFirstSession} />
                           </div>
                           <div className="flex items-center gap-3">
                             {a.amountCents > 0 && (
