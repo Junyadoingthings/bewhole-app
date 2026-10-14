@@ -891,7 +891,7 @@ export function BookingWizard({
                 >
                   <div className="grid gap-5 sm:grid-cols-2">
                     <div>
-                      <Label htmlFor="firstName">First name</Label>
+                      <Label htmlFor="firstName">First Name</Label>
                       <Input
                         id="firstName"
                         onBlur={touch('firstName')}
@@ -903,7 +903,7 @@ export function BookingWizard({
                       <FieldError id="firstName-error">{errors.firstName}</FieldError>
                     </div>
                     <div>
-                      <Label htmlFor="lastName">Last name</Label>
+                      <Label htmlFor="lastName">Last Name</Label>
                       <Input
                         id="lastName"
                         onBlur={touch('lastName')}
@@ -928,7 +928,7 @@ export function BookingWizard({
                       <FieldError id="email-error">{errors.email}</FieldError>
                     </div>
                     <div>
-                      <Label htmlFor="phone">Mobile number</Label>
+                      <Label htmlFor="phone">Mobile Number</Label>
                       <Input
                         id="phone"
                         onBlur={touch('phone')}
@@ -946,7 +946,7 @@ export function BookingWizard({
                   <div className="mt-5">
                     <div className="flex items-end justify-between gap-3">
                       <Label htmlFor="idNumber">
-                        {details.identity.type === 'sa_id' ? 'ID number' : 'Passport number'}
+                        {details.identity.type === 'sa_id' ? 'ID Number' : 'Passport Number'}
                       </Label>
                       <div
                         role="radiogroup"
@@ -1015,11 +1015,11 @@ export function BookingWizard({
 
                   <fieldset className="mt-5 rounded-3xl border border-line bg-canvas-sunk p-5">
                     <legend className="px-1 text-sm font-medium text-ink">
-                      Emergency contact
+                      Emergency Contact
                     </legend>
                     <div className="mt-4 grid gap-4 sm:grid-cols-2">
                       <div>
-                        <Label htmlFor="emergencyName">Full name</Label>
+                        <Label htmlFor="emergencyName">Full Name</Label>
                         {/* autoComplete off: browsers otherwise fill in the client's OWN details here. */}
                         <Input
                             id="emergencyName"
@@ -1034,7 +1034,7 @@ export function BookingWizard({
                         <FieldError id="emergencyName-error">{errors.emergencyName}</FieldError>
                       </div>
                       <div>
-                        <Label htmlFor="emergencyPhone">Contact number</Label>
+                        <Label htmlFor="emergencyPhone">Contact Number</Label>
                         <Input
                             id="emergencyPhone"
                             onBlur={touch('emergencyPhone')}
@@ -1083,7 +1083,7 @@ export function BookingWizard({
                             </div>
                             <div className="mt-3 grid gap-4 sm:grid-cols-2">
                               <div>
-                                <Label htmlFor={`participant-${n}-firstName`}>First name</Label>
+                                <Label htmlFor={`participant-${n}-firstName`}>First Name</Label>
                                 <Input
                                   id={`participant-${n}-firstName`}
                                   onBlur={touch(`participants.${n}.firstName`)}
@@ -1097,7 +1097,7 @@ export function BookingWizard({
                                 </FieldError>
                               </div>
                               <div>
-                                <Label htmlFor={`participant-${n}-lastName`}>Last name</Label>
+                                <Label htmlFor={`participant-${n}-lastName`}>Last Name</Label>
                                 <Input
                                   id={`participant-${n}-lastName`}
                                   onBlur={touch(`participants.${n}.lastName`)}
@@ -1126,7 +1126,7 @@ export function BookingWizard({
                                 </FieldError>
                               </div>
                               <div>
-                                <Label htmlFor={`participant-${n}-phone`}>Mobile number</Label>
+                                <Label htmlFor={`participant-${n}-phone`}>Mobile Number</Label>
                                 <Input
                                   id={`participant-${n}-phone`}
                                   onBlur={touch(`participants.${n}.phone`)}
@@ -1209,7 +1209,7 @@ export function BookingWizard({
                       id="consentTerms"
                       checked={consentTerms}
                       onChange={setConsentTerms}
-                      title="I accept the terms & conditions and privacy notice"
+                      title="I accept the terms & conditions"
                       error={errors.consentTerms}
                     />
                   </div>
@@ -1284,8 +1284,8 @@ export function BookingWizard({
                             selected={paymentMethod === 'card'}
                             onSelect={() => setPaymentMethod('card')}
                             icon={<CreditCard className="h-5 w-5" />}
-                            title="Pay by card or wallet"
-                            description="Apple Pay, Google Pay or any major card. We never see or store your card details."
+                            title="Pay by card"
+                            description="Apple Pay, Google Pay or any major card."
                             meta={money(
                               mode === 'online'
                                 ? (service?.priceOnlineCents ?? 0)
@@ -1350,7 +1350,7 @@ export function BookingWizard({
                                     <FieldError id="scheme-error">{errors['medicalAid.scheme']}</FieldError>
                                   </div>
                                   <div>
-                                    <Label htmlFor="memberNumber">Membership number</Label>
+                                    <Label htmlFor="memberNumber">Membership Number</Label>
                                     <Input
                                       id="memberNumber"
                                       onBlur={touch('medicalAid.memberNumber')}
@@ -1366,7 +1366,7 @@ export function BookingWizard({
                                   </div>
                                   <div>
                                     <Label htmlFor="dateOfBirth">
-                                      Date of birth
+                                      Date of Birth
                                     </Label>
                                     <Input
                                       id="dateOfBirth"
@@ -1385,7 +1385,7 @@ export function BookingWizard({
                                     </FieldError>
                                   </div>
                                   <div>
-                                    <Label htmlFor="mainMember">Main member</Label>
+                                    <Label htmlFor="mainMember">Main Member</Label>
                                     <Input
                                       id="mainMember"
                                       onBlur={touch('medicalAid.mainMember')}
@@ -1401,7 +1401,7 @@ export function BookingWizard({
                                     </FieldError>
                                   </div>
                                   <div>
-                                    <Label htmlFor="mainMemberId">Main member ID number</Label>
+                                    <Label htmlFor="mainMemberId">Main Member ID Number</Label>
                                     <Input
                                       id="mainMemberId"
                                       onBlur={touch('medicalAid.mainMemberId')}

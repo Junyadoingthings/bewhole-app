@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { CreditCard, ShieldCheck } from 'lucide-react';
+import { CreditCard } from 'lucide-react';
 
 import { Reveal } from '@/components/motion';
 import { ButtonLink } from '@/components/ui/button';
@@ -43,10 +43,6 @@ export default async function PaymentsPage() {
     <div className="mx-auto max-w-3xl">
       <Reveal>
         <h1 className="font-display text-3xl text-ink">Payments</h1>
-        <p className="mt-2 max-w-lg leading-relaxed text-ink-soft">
-          Every payment against your sessions. We never see or store your card details — payments
-          are handled entirely on our provider’s secure checkout.
-        </p>
       </Reveal>
 
       {payments.length > 0 && (
@@ -124,14 +120,6 @@ export default async function PaymentsPage() {
         )}
       </div>
 
-      <Reveal delay={0.1}>
-        <p className="mt-8 flex items-start gap-2.5 rounded-3xl border border-line bg-cream-100/70 dark:bg-card/70 p-6 text-sm leading-relaxed text-ink-muted">
-          <ShieldCheck className="mt-0.5 h-4.5 w-4.5 shrink-0 text-forest-700 dark:text-forest-300" />
-          Card details are entered on our payment provider’s own secure page and never reach Be
-          Whole Care. We keep only the amount, the date and a reference. Every paid session has a
-          receipt you can download for your medical aid.
-        </p>
-      </Reveal>
     </div>
   );
 }

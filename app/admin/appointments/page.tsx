@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { CalendarDays, MapPin, Video } from 'lucide-react';
 
 import { AppointmentRowActions } from '@/components/admin/appointment-row-actions';
+import { IntakeNote } from '@/components/admin/intake-note';
 import { MedicalAidActions } from '@/components/admin/medical-aid-actions';
 import { STATUS_META } from '@/components/portal/appointment-card';
 import { Reveal } from '@/components/motion';
@@ -158,7 +159,7 @@ export default async function AdminAppointmentsPage({
                             {displayTime(when.time)}
                           </span>
                         </td>
-                        <td className="px-5 py-4">
+                        <td className="min-w-[15rem] px-5 py-4">
                           <Link
                             href={`/admin/clients/${a.clientUserId}`}
                             className="text-ink hover:text-forest-700 dark:hover:text-forest-300"
@@ -167,6 +168,7 @@ export default async function AdminAppointmentsPage({
                           </Link>
                           <span className="block text-xs text-ink-faint">{a.reference}</span>
                           <Attendees people={a.participants} />
+                          <IntakeNote reason={a.reason} isFirstSession={a.isFirstSession} />
                           {a.status === 'pending_medical_aid' && (
                             <MedicalAidActions
                               appointmentId={a.id}
@@ -228,6 +230,7 @@ export default async function AdminAppointmentsPage({
                         <p className="font-medium text-ink">{a.client?.name ?? '—'}</p>
                         <Attendees people={a.participants} />
                         <p className="mt-1 text-sm text-ink-soft">{a.service?.name ?? 'Session'}</p>
+                        <IntakeNote reason={a.reason} isFirstSession={a.isFirstSession} />
                         {a.status === 'pending_medical_aid' && (
                           <MedicalAidActions
                             appointmentId={a.id}

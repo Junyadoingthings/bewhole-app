@@ -63,7 +63,7 @@ export default async function ServicesPage() {
             </p>
             <h1 className="mx-auto mt-4 max-w-3xl font-display text-[clamp(1.9rem,4.4vw,3rem)] font-bold uppercase leading-[1.1] text-forest-800 dark:text-forest-200">
               Professional counselling services
-              <span className="mt-2 block text-[0.62em] font-semibold normal-case tracking-normal text-ink">
+              <span className="mt-2 block text-[0.62em] font-semibold tracking-normal text-ink">
                 &amp; psychological support
               </span>
             </h1>

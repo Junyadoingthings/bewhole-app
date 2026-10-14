@@ -113,7 +113,7 @@ export function EmptyState({
   compact,
 }: {
   icon?: React.ReactNode;
-  title: string;
+  title?: string;
   description?: string;
   action?: React.ReactNode;
   className?: string;
@@ -132,11 +132,11 @@ export function EmptyState({
           {icon}
         </div>
       )}
-      <p className="font-display text-lg text-ink">{title}</p>
+      {title && <p className="font-display text-lg text-ink">{title}</p>}
       {description && (
         <p className="mt-2 max-w-sm text-sm leading-relaxed text-ink-soft text-pretty">{description}</p>
       )}
-      {action && <div className="mt-6">{action}</div>}
+      {action && <div className={title || description ? 'mt-6' : undefined}>{action}</div>}
     </div>
   );
 }

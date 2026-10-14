@@ -239,7 +239,7 @@ export function RegisterForm({ next }: { next?: string }) {
           name="consentTerms"
           checked={consent}
           onChange={setConsent}
-          title="I accept the terms & conditions and privacy notice"
+          title="I accept the terms & conditions"
           description="Including the 24-hour cancellation policy and the limits of confidentiality."
           error={state.errors?.consentTerms}
         />

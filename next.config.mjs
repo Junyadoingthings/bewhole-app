@@ -5,6 +5,13 @@ const nextConfig = {
     formats: ['image/avif', 'image/webp'],
     remotePatterns: [{ protocol: 'https', hostname: '**' }],
   },
+  async redirects() {
+    return [
+      // The separate privacy page was folded into the terms (2026-10, at the
+      // practice's request); old links land on that section.
+      { source: '/privacy', destination: '/terms#privacy', permanent: true },
+    ];
+  },
   async headers() {
     return [
       {

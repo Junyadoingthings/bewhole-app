@@ -1,15 +1,13 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ChevronRight, LogOut, ShieldCheck } from 'lucide-react';
+import { ChevronRight, LogOut } from 'lucide-react';
 
 import { ProfileForm } from '@/components/portal/profile-form';
 import { Reveal } from '@/components/motion';
-import { Badge } from '@/components/ui/primitives';
 import { logout } from '@/app/actions/auth';
 import { requireUser } from '@/lib/auth';
-import { formatFullDate, parts } from '@/lib/date';
-import { getProfile, listConsents } from '@/lib/db';
+import { getProfile } from '@/lib/db';
 
 export const metadata: Metadata = { title: 'Profile', robots: { index: false } };
 export const dynamic = 'force-dynamic';
@@ -22,7 +20,7 @@ const MOBILE_LINKS = [
 
 export default async function ProfilePage() {
   const user = await requireUser();
-  const [profile, consents] = await Promise.all([getProfile(user.id), listConsents(user.id)]);
+  const profile = await getProfile(user.id);
   if (!profile) notFound();
 
   return (
@@ -74,34 +72,6 @@ export default async function ProfilePage() {
               Held only to submit claims. Acceptance of these details does not guarantee payment by
               your scheme.
             </p>
-          </div>
-        </Reveal>
-      )}
-
-      {consents.length > 0 && (
-        <Reveal delay={0.1}>
-          <div className="mt-6 rounded-3xl border border-line bg-white p-6">
-            <h2 className="flex items-center gap-2 font-display text-lg text-ink">
-              <ShieldCheck className="h-4.5 w-4.5 text-forest-700 dark:text-forest-300" />
-              Your consents
-            </h2>
-            <ul className="mt-4 space-y-3">
-              {consents.slice(-4).map((consent) => (
-                <li key={consent.id} className="flex items-center justify-between gap-4 text-sm">
-                  <span className="capitalize text-ink-muted">
-                    {consent.type.replace(/_/g, ' ')}
-                  </span>
-                  <span className="flex items-center gap-3">
-                    <span className="text-xs text-ink-faint">
-                      {formatFullDate(parts(consent.grantedAt).date)}
-                    </span>
-                    <Badge tone={consent.granted ? 'success' : 'neutral'} size="sm">
-                      {consent.granted ? 'Given' : 'Withdrawn'}
-                    </Badge>
-                  </span>
-                </li>
-              ))}
-            </ul>
           </div>
         </Reveal>
       )}

@@ -8,7 +8,7 @@ export const revalidate = 86400;
 
 /** The public pages, plus one per active service category. */
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const pages = ['', '/services', '/about', '/contact', '/book', '/consent', '/privacy', '/terms'];
+  const pages = ['', '/services', '/about', '/contact', '/book', '/consent', '/terms'];
   // A sitemap must never fail the page: without the database it lists the
   // fixed pages only.
   const categories = await listCategories().catch(() => []);

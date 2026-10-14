@@ -4,6 +4,22 @@ What changed, newest first. Each entry links to the pull request on GitHub.
 
 ## October 2026
 
+### 14 October — practice feedback, round three
+- **Console:** every booking now shows **First session** / **Follow-up session** and the client's
+  answer to "What brings you here?" — on the Dashboard (Today and Next up), Appointments and the
+  client's page.
+- **Booking form:** field labels capitalised for every service ("First Name", "Mobile Number",
+  "ID Number", "Emergency Contact", …); the card option reads "Pay by card — Apple Pay, Google
+  Pay or any major card."
+- **Privacy:** the separate "Privacy & POPIA" page and its footer link are removed; a short "Your
+  personal information" section in the **Terms & conditions** replaces it (updated to mention the
+  ID number and address now collected), and `/privacy` redirects there.
+- Instagram handle corrected to **@bewholecare**; "& PSYCHOLOGICAL SUPPORT" in capitals on
+  Services; the address note removed from the public pages.
+- **Client portal:** removed the "Ready when you are" card and empty-state text, the Payments and
+  Follow-ups introductions, the card-details note, "Your information" in Settings and "Your
+  consents" in Profile.
+
 ### 7 October — wording removed at the practice's request
 - **Contact:** the heading and "Someone replies during business hours…" removed (now "Call,
   WhatsApp, email or send a message below."), as well as the photo caption, the "What is this
