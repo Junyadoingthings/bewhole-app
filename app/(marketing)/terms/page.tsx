@@ -19,6 +19,15 @@ const SECTIONS = [
     paragraphs: [POLICY.nature],
   },
   {
+    id: 'scope',
+    title: 'Scope of services and limitations',
+    paragraphs: [
+      'Please note that Be Whole Care does not provide psycholegal services, including the preparation of reports, assessments, or professional opinions specifically intended for use in court proceedings or other legal matters.',
+      'Clients requiring psycholegal assessments, court-related reports, or expert opinions for legal proceedings are kindly advised to consult a suitably qualified professional who specialises in psycholegal services.',
+      'We appreciate your understanding and thank you for respecting the scope of our services.',
+    ],
+  },
+  {
     id: 'eligibility',
     title: 'Eligibility',
     paragraphs: [POLICY.eligibility],

@@ -73,7 +73,11 @@ export default async function ConsentRecordPage({ params }: { params: { appointm
   });
 
   const clientName = view.client?.name ?? 'Client';
-  const agreed = Boolean(consent?.granted);
+  const agreedOnline = Boolean(consent?.granted);
+  // Points added to the form after this client agreed (see `since` in config/business.ts).
+  const laterPoints = COUNSELLING_CONSENT.items.some(
+    (item) => consent && 'since' in item && item.since && consent.version < item.since,
+  );
   const sameWording = !consent || consent.version === COUNSELLING_CONSENT.version;
   const people = view.participants ?? [];
   const where =
@@ -146,7 +150,12 @@ export default async function ConsentRecordPage({ params }: { params: { appointm
         <section className="mt-10">
           <h2 className="font-display text-lg text-ink">Points agreed</h2>
           <ol className="mt-4 space-y-3">
-            {COUNSELLING_CONSENT.items.map((item, i) => (
+            {COUNSELLING_CONSENT.items.map((item, i) => {
+              // A clause added after this client agreed was never shown to them.
+              const since = 'since' in item ? item.since : null;
+              const added = Boolean(consent && since && consent.version < since);
+              const agreed = agreedOnline && !added;
+              return (
               <li key={item.id} className="flex gap-4 rounded-2xl border border-line p-4 break-inside-avoid">
                 <span
                   className={
@@ -162,11 +171,16 @@ export default async function ConsentRecordPage({ params }: { params: { appointm
                   <p className="text-2xs font-medium text-ink-faint">{i + 1}</p>
                   <p className="text-sm leading-relaxed text-ink">{item.body}</p>
                   <p className="mt-1 text-xs font-medium text-forest-700">
-                    {agreed ? item.agreeLabel : 'Not agreed online'}
+                    {agreed
+                      ? item.agreeLabel
+                      : added
+                        ? 'Added after this client agreed online — take this point in person'
+                        : 'Not agreed online'}
                   </p>
                 </div>
               </li>
-            ))}
+              );
+            })}
           </ol>
         </section>
 
@@ -174,10 +188,10 @@ export default async function ConsentRecordPage({ params }: { params: { appointm
           <h2 className="font-display text-lg text-ink">Agreement</h2>
           {consent ? (
             <p className="mt-2 text-sm leading-relaxed text-ink-muted">
-              {agreed ? (
+              {agreedOnline ? (
                 <>
-                  <span className="font-medium text-ink">{clientName}</span> agreed to every point above
-                  online, through the {BUSINESS.name} booking form, on{' '}
+                  <span className="font-medium text-ink">{clientName}</span> agreed to{' '}
+                  {laterPoints ? 'the points ticked above' : 'every point above'} online, through the {BUSINESS.name} booking form, on{' '}
                   <span className="font-medium text-ink">{when(consent.grantedAt)}</span> (South African
                   time).
                 </>

@@ -4,6 +4,16 @@ What changed, newest first. Each entry links to the pull request on GitHub.
 
 ## October 2026
 
+### 16 October — psycholegal services
+- **Terms & conditions:** new "Scope of services and limitations" section, in the practice's
+  wording — Be Whole Care does not provide psycholegal services (court reports, assessments or
+  opinions for legal proceedings).
+- **Informed consent:** a fifth point, "I acknowledge that Be Whole Care does not provide
+  psycholegal services…", which every client (and everyone attending a group session) ticks when
+  booking. Consent form version is now **2026-10**. On the printable consent record, a client who
+  agreed before this point existed shows it as "added after this client agreed online", so it can
+  be taken in person.
+
 ### 14 October — practice feedback, round three
 - **Console:** every booking now shows **First session** / **Follow-up session** and the client's
   answer to "What brings you here?" — on the Dashboard (Today and Next up), Appointments and the
