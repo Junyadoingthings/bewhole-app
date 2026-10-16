@@ -53,7 +53,7 @@ export const PRACTITIONER = {
  * client could agree to wording the practice no longer uses.
  */
 export const COUNSELLING_CONSENT = {
-  version: '2026-01',
+  version: '2026-10',
   items: [
     {
       id: 'purpose',
@@ -85,6 +85,17 @@ export const COUNSELLING_CONSENT = {
         `(Registered Counsellor — PRC0038660 — HPCSA). I understand I may withdraw from ` +
         `counselling at any time.`,
       agreeLabel: 'I understand and consent',
+    },
+    {
+      /** Added in version 2026-10, at the practice's request. */
+      id: 'psycholegal',
+      since: '2026-10',
+      body:
+        'I acknowledge that Be Whole Care does not provide psycholegal services, including reports, ' +
+        'assessments, or professional opinions specifically intended for use in court proceedings or ' +
+        'other legal matters. I understand that, should I require such services, I will need to ' +
+        'consult a suitably qualified professional who specialises in psycholegal work.',
+      agreeLabel: 'I acknowledge',
     },
   ],
 } as const;
