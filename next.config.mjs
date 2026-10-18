@@ -2,8 +2,10 @@
 const nextConfig = {
   reactStrictMode: true,
   images: {
-    formats: ['image/avif', 'image/webp'],
-    remotePatterns: [{ protocol: 'https', hostname: '**' }],
+    // Only the site's own images (public/) are optimised: no remote hosts, and
+    // no AVIF — both are attack surface in Next.js's image optimiser and the
+    // site needs neither.
+    formats: ['image/webp'],
   },
   async redirects() {
     return [
@@ -21,6 +23,9 @@ const nextConfig = {
           { key: 'X-Content-Type-Options', value: 'nosniff' },
           { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
           { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
+          // A narrow policy that breaks nothing: no plugins, no <base> hijacking,
+          // and no framing by other sites (X-Frame-Options' modern equivalent).
+          { key: 'Content-Security-Policy', value: "object-src 'none'; base-uri 'self'; frame-ancestors 'self'" },
         ],
       },
       {

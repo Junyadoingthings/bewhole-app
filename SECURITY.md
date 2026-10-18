@@ -94,6 +94,29 @@ to reproduce it.
 
 ## Security changes in October 2026
 
+### 18 October audit
+
+Checked: the full git history (all commits) for secrets — none (only placeholders); tracked files
+and doc images for client data — none; every server action, API route and record page for
+access checks; the payment webhook (signature required, refuses without a secret); RLS on all
+24 tables; logs for personal data; live security headers; dependencies.
+
+Changes:
+- **Simulated payments only on a developer's machine.** Every Vercel deployment — previews
+  included — uses the production database, and previews have no Yoco key, so the simulator
+  could have marked a real booking paid on a preview. Previews are behind Vercel
+  Authentication, so this was not reachable by the public; it is now impossible regardless.
+- **Image optimiser narrowed:** only the site's own images, WebP only (no AVIF, no remote
+  hosts) — the parts of Next.js's optimiser with known critical advisories.
+- **Content-Security-Policy** added: `object-src 'none'; base-uri 'self'; frame-ancestors 'self'`.
+- The Supabase project id and pooler host were removed from the helper scripts (they now read
+  `SUPABASE_POOLER_USER` / `SUPABASE_POOLER_HOST`). They remain in old commits: not credentials
+  on their own, but the database password must be long and random.
+
+Outstanding: **Next.js 14.2.35 is the last 14.x release and no longer receives security
+fixes**; upgrading to 15.5 (latest patch) is the remaining step.
+
+
 - Removed `/api/fixdb`: a public, unauthenticated route that ran schema changes against the
   production database on every visit, leaked database errors and opened a connection each time.
 - Removed `/api/health/admin`: a temporary, unauthenticated diagnostic that ran the dashboard's

@@ -4,6 +4,11 @@ What changed, newest first. Each entry links to the pull request on GitHub.
 
 ## October 2026
 
+### 18 October — security audit
+- Simulated payments limited to local development; image optimiser restricted to the site's own
+  images (no AVIF, no remote hosts); a Content-Security-Policy header; the Supabase project id
+  removed from the helper scripts. Details in [SECURITY.md](../SECURITY.md).
+
 ### 16 October — psycholegal services
 - **Terms & conditions:** new "Scope of services and limitations" section, in the practice's
   wording — Be Whole Care does not provide psycholegal services (court reports, assessments or

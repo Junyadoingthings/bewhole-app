@@ -205,10 +205,10 @@ export async function settleMockPayment(
   checkoutId: string,
   outcome: 'paid' | 'failed',
 ): Promise<{ ok: boolean; error?: string }> {
-  const { getPaymentProvider, settleMockCheckout, isProductionRuntime } = await import(
+  const { getPaymentProvider, settleMockCheckout, simulatedPaymentsAllowed } = await import(
     '@/services/payments'
   );
-  if (isProductionRuntime()) {
+  if (!simulatedPaymentsAllowed()) {
     return { ok: false, error: 'Simulated payments are not available on the live site.' };
   }
   if (getPaymentProvider().name !== 'mock') {
