@@ -8,6 +8,8 @@ import {
   createUserWithProfile,
   findUserByEmail,
   getAppointment,
+  getPaymentForAppointment,
+  listAppointments,
   getService,
   getSettings,
   hydrateAppointments,
@@ -16,6 +18,7 @@ import {
   recordConsent,
   rescheduleAppointment,
   updateAppointment,
+  updatePayment,
   updateProfile,
 } from '@/lib/db';
 import { COUNSELLING_CONSENT, GROUP_SESSIONS } from '@/config/business';
@@ -169,6 +172,21 @@ export async function createBooking(
     return { ok: false, error: 'A session can include up to 6 people.', field: 'participants' };
   }
 
+  /**
+   * A client who opened the card checkout, left without paying and then books
+   * again would find their own unpaid booking holding the time. (A client who
+   * did exactly this, then chose medical aid, was told the time was no longer
+   * available.) Their earlier unpaid hold on an overlapping time is released
+   * first. Only ever their own, only ever unpaid.
+   */
+  const requestedStart = fromLocalParts(input.date, input.time);
+  const requestedEnd = new Date(requestedStart.getTime() + service.durationMinutes * 60_000);
+  const existingClientId =
+    actor && actor.role === 'CLIENT' ? actor.id : (await findUserByEmail(input.email))?.id;
+  if (existingClientId) {
+    await releaseOwnUnpaidHolds(existingClientId, requestedStart.toISOString(), requestedEnd.toISOString());
+  }
+
   // Availability is re-derived server-side; the client's view may be stale.
   const slot = await resolveSlot(input.date, input.time, query);
   if (!slot.ok) return { ok: false, error: slot.reason, field: 'time' };
@@ -189,13 +207,10 @@ export async function createBooking(
   }
 
   /**
-   * Persist what the booking form collected about the person, not just the
-   * appointment. Address and emergency contact belong on the profile: they are
-   * facts about the client that outlive any single session, and the practice
-   * needs them findable from the client record rather than by opening whichever
-   * booking happened to capture them.
-   *
-   * Written in one update so a booking costs at most one profile write.
+   * What the booking form collected about the person (address, ID, emergency
+   * contact, medical aid) belongs on the profile — but only once the booking
+   * has actually been made: a failed attempt must not leave, say, medical aid
+   * "on file" beside a card booking. Saved after the slot is claimed, below.
    */
   const profilePatch: Parameters<typeof updateProfile>[1] = {};
   if (input.paymentMethod === 'medical_aid' && input.medicalAid) {
@@ -209,9 +224,6 @@ export async function createBooking(
   if (input.emergencyName?.trim()) {
     profilePatch.emergencyContactName = input.emergencyName.trim();
     profilePatch.emergencyContactPhone = input.emergencyPhone.trim();
-  }
-  if (Object.keys(profilePatch).length > 0) {
-    await updateProfile(clientUserId, profilePatch);
   }
 
   /* ------------------------------------------------------- claim the slot */
@@ -266,6 +278,10 @@ export async function createBooking(
     return { ok: false, error: 'That time was taken a moment ago. Please choose another.', field: 'time' };
   }
   appointment.reference = claim.appointment.reference;
+
+  if (Object.keys(profilePatch).length > 0) {
+    await updateProfile(clientUserId, profilePatch);
+  }
 
   await recordConsent({
     userId: clientUserId,
@@ -546,6 +562,49 @@ export interface MedicalAidDecisionResult {
  * difference between invoicing the full fee and invoicing the co-payment for
  * the same session — silently, every time.
  */
+/**
+ * The practice moves an unpaid card booking onto medical aid (2026-10) — for a
+ * client who meant to use medical aid but ended up in the card checkout. The
+ * booking keeps its time, becomes "medical aid to verify", and the unpaid card
+ * payment is cancelled; the practice then accepts or declines the medical aid
+ * as usual, which is what tells the client. Nothing is emailed here.
+ */
+export async function switchToMedicalAid(
+  appointmentId: ID,
+  medicalAid: NonNullable<BookingInput['medicalAid']>,
+  actor: SessionUser,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const appointment = await getAppointment(appointmentId);
+  if (!appointment) return { ok: false, error: 'That appointment no longer exists.' };
+  if (appointment.status !== 'pending_payment' || appointment.paymentMethod !== 'card') {
+    return { ok: false, error: 'Only an unpaid card booking can be moved to medical aid.' };
+  }
+  const payment = await getPaymentForAppointment(appointment.id);
+  if (payment?.status === 'paid') {
+    return { ok: false, error: 'This booking has already been paid by card.' };
+  }
+
+  const pricing = await priceSession(appointment.serviceId, appointment.mode, 'medical_aid');
+  await updateProfile(appointment.clientUserId, { medicalAid });
+  if (payment && (payment.status === 'pending' || payment.status === 'processing')) {
+    await updatePayment(payment.id, { status: 'cancelled' });
+  }
+  await updateAppointment(appointment.id, {
+    paymentMethod: 'medical_aid',
+    status: 'pending_medical_aid',
+    amountCents: pricing.amountCents,
+  });
+  await audit({
+    actorUserId: actor.id,
+    actorRole: actor.role,
+    action: 'appointment.switched_to_medical_aid',
+    entity: 'appointment',
+    entityId: appointment.id,
+    meta: { reference: appointment.reference, cancelledPaymentId: payment?.id ?? null },
+  });
+  return { ok: true };
+}
+
 export async function decideMedicalAid(
   appointmentId: ID,
   decision: 'accepted' | 'declined',
@@ -652,4 +711,34 @@ export async function decideMedicalAid(
 
   emitAfterResponse({ type: 'appointment.medical_aid_declined', appointmentId });
   return { ok: true };
+}
+
+/**
+ * Release a client's own unpaid card bookings that overlap a time they are
+ * booking again. The earlier payment is cancelled with it, so an abandoned
+ * checkout cannot later confirm a booking that no longer exists.
+ */
+async function releaseOwnUnpaidHolds(clientUserId: ID, startISO: string, endISO: string) {
+  const own = await listAppointments({ clientUserId, statuses: ['pending_payment'] });
+  for (const a of own) {
+    if (!(a.startAt < endISO && a.endAt > startISO)) continue;
+    const payment = await getPaymentForAppointment(a.id);
+    if (payment && payment.status === 'paid') continue;
+    const ts = nowISO();
+    await updateAppointment(a.id, {
+      status: 'cancelled',
+      cancelledAt: ts,
+      cancellationReason: 'Replaced by a new booking from the same client before payment',
+    });
+    if (payment && (payment.status === 'pending' || payment.status === 'processing')) {
+      await updatePayment(payment.id, { status: 'cancelled' });
+    }
+    await audit({
+      actorUserId: clientUserId,
+      action: 'appointment.unpaid_hold_released',
+      entity: 'appointment',
+      entityId: a.id,
+      meta: { reference: a.reference },
+    });
+  }
 }

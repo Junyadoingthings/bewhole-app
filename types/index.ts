@@ -55,6 +55,8 @@ export interface Profile {
   idNumber?: string | null;
   /** Only captured when the client chooses to pay by medical aid. */
   medicalAid?: {
+    /** The medical aid's name; captured since 2026-10 (older records have only the scheme). */
+    name?: string;
     scheme: string;
     memberNumber: string;
     mainMember: string;

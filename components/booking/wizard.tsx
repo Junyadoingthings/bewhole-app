@@ -97,6 +97,7 @@ const FIELD_ORDER: readonly (readonly [errorKey: string, elementId: string])[] =
   ['reason', 'reason'],
   ['consentAge', 'consentAge'],
   ['consentTerms', 'consentTerms'],
+  ['medicalAid.name', 'medicalAidName'],
   ['medicalAid.scheme', 'scheme'],
   ['medicalAid.memberNumber', 'memberNumber'],
   ['medicalAid.dateOfBirth', 'dateOfBirth'],
@@ -228,7 +229,9 @@ export function BookingWizard({
   const [locationId, setLocationId] = React.useState<string | null>(null);
   const [date, setDate] = React.useState<string | null>(null);
   const [time, setTime] = React.useState<string | null>(null);
-  const [paymentMethod, setPaymentMethod] = React.useState<'card' | 'medical_aid'>('card');
+  // No default: a preselected card option with a big "Pay" button led a client
+  // who meant to use medical aid straight into a card checkout.
+  const [paymentMethod, setPaymentMethod] = React.useState<'card' | 'medical_aid' | null>(null);
 
   const [details, setDetails] = React.useState({
     firstName: user?.firstName ?? '',
@@ -244,6 +247,7 @@ export function BookingWizard({
     isFirstSession: true,
   });
   const [medicalAid, setMedicalAid] = React.useState({
+    name: '',
     scheme: '',
     memberNumber: '',
     mainMember: '',
@@ -332,6 +336,7 @@ export function BookingWizard({
   const noCharge = Boolean(service?.requiresQuote || service?.rateBand === 'free');
   const effectivePaymentMethod = noCharge ? 'card' : paymentMethod;
   const usingMedicalAid = effectivePaymentMethod === 'medical_aid';
+  const paymentChosen = effectivePaymentMethod !== null;
 
   const steps = React.useMemo<StepId[]>(() => {
     const base: StepId[] = ['service'];
@@ -480,14 +485,15 @@ export function BookingWizard({
         // Everyone attending must agree, not only the person booking.
         return isConsentComplete(clinicalConsent) && (!isGroup || people.every((p) => p.consented));
       case 'payment':
-        // As with details: validated when pressed, so the reason is shown.
-        return true;
+        // As with details: validated when pressed, so the reason is shown —
+        // but a way to pay must have been chosen first.
+        return paymentChosen;
       case 'checkout':
         return false;
       default:
         return false;
     }
-  }, [step, serviceId, mode, locationId, date, time, clinicalConsent, isGroup, people]);
+  }, [step, serviceId, mode, locationId, date, time, clinicalConsent, isGroup, people, paymentChosen]);
 
   /** Issues that must be fixed before leaving a step. */
   function blockingIssues(forStep: StepId): Record<string, string> {
@@ -565,7 +571,7 @@ export function BookingWizard({
   }, [formError]);
 
   async function submit() {
-    if (!service || !mode || !date || !time) return;
+    if (!service || !mode || !date || !time || !effectivePaymentMethod) return;
     if (submitLock.current) return;
     submitLock.current = true;
     setSubmitting(true);
@@ -1336,7 +1342,19 @@ export function BookingWizard({
                                 <div className="mt-5 grid gap-4 sm:grid-cols-2">
                                   {/* Date of birth and the main member's ID number are both required (see medicalAidSchema). */}
                                   <div className="sm:col-span-2">
-                                    <Label htmlFor="scheme">Scheme</Label>
+                                    <Label htmlFor="medicalAidName">Medical Aid Name</Label>
+                                    <Input
+                                      id="medicalAidName"
+                                      onBlur={touch('medicalAid.name')}
+                                      value={medicalAid.name}
+                                      onChange={(e) => setMedicalAid({ ...medicalAid, name: e.target.value })}
+                                      placeholder="e.g. Discovery Health"
+                                      error={errors['medicalAid.name']}
+                                    />
+                                    <FieldError id="medicalAidName-error">{errors['medicalAid.name']}</FieldError>
+                                  </div>
+                                  <div className="sm:col-span-2">
+                                    <Label htmlFor="scheme">Medical Scheme</Label>
                                     <Input
                                       id="scheme"
                                       onBlur={touch('medicalAid.scheme')}
@@ -1344,7 +1362,7 @@ export function BookingWizard({
                                       onChange={(e) =>
                                         setMedicalAid({ ...medicalAid, scheme: e.target.value })
                                       }
-                                      placeholder="e.g. Discovery Health"
+                                      placeholder="e.g. Classic Saver"
                                       error={errors['medicalAid.scheme']}
                                     />
                                     <FieldError id="scheme-error">{errors['medicalAid.scheme']}</FieldError>
@@ -1486,9 +1504,11 @@ export function BookingWizard({
             loadingText={chargeNowCents > 0 ? 'Opening secure checkout…' : 'Confirming…'}
           >
             {step === 'payment'
-              ? chargeNowCents > 0
-                ? `Pay ${money(chargeNowCents)} & confirm`
-                : 'Confirm booking'
+              ? !paymentChosen
+                ? 'Choose how to pay'
+                : chargeNowCents > 0
+                  ? `Pay ${money(chargeNowCents)} & confirm`
+                  : 'Confirm booking'
               : 'Continue'}
             {!submitting && <ArrowRight className="h-4 w-4" />}
           </Button>
@@ -1532,9 +1552,11 @@ export function BookingWizard({
           loadingText={chargeNowCents > 0 ? 'Opening checkout…' : 'Confirming…'}
         >
           {step === 'payment'
-            ? chargeNowCents > 0
-              ? `Pay ${money(chargeNowCents)}`
-              : 'Confirm booking'
+            ? !paymentChosen
+              ? 'Choose how to pay'
+              : chargeNowCents > 0
+                ? `Pay ${money(chargeNowCents)}`
+                : 'Confirm booking'
             : 'Continue'}
         </Button>
       </div>
@@ -1649,7 +1671,7 @@ function SummaryCard({
   date: string | null;
   time: string | null;
   amountCents: number;
-  paymentMethod: 'card' | 'medical_aid';
+  paymentMethod: 'card' | 'medical_aid' | null;
   requiresQuote: boolean;
   isFree: boolean;
   acceptedMethods: readonly PaymentMethodMark[];
@@ -1722,7 +1744,9 @@ function SummaryCard({
                     ? amountCents > 0
                       ? 'Co-payment'
                       : 'Medical aid'
-                    : 'To pay now'}
+                    : paymentMethod === 'card'
+                      ? 'To pay now'
+                      : 'Session fee'}
             </span>
             <span className="font-display text-2xl tabular text-ink">
               {isFree
@@ -1741,11 +1765,13 @@ function SummaryCard({
                 : 'Submitted to your scheme. Any amount not covered remains your responsibility.'}
             </p>
           )}
-          <Badge tone="success" size="sm" className="mt-4">
-            <ShieldCheck className="h-3 w-3" /> Card details never stored
-          </Badge>
+          {paymentMethod !== 'medical_aid' && (
+            <Badge tone="success" size="sm" className="mt-4">
+              <ShieldCheck className="h-3 w-3" /> Card details never stored
+            </Badge>
+          )}
 
-          {!isFree && !requiresQuote && (
+          {!isFree && !requiresQuote && paymentMethod !== 'medical_aid' && (
             acceptedMethods.length > 0 ? (
               <PaymentMethods methods={acceptedMethods} compact className="mt-4" />
             ) : (

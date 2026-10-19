@@ -12,10 +12,12 @@ import {
   Link2,
   MoreHorizontal,
   Send,
+  ShieldCheck,
   UserX,
   XCircle,
 } from 'lucide-react';
 
+import { SwitchToMedicalAid } from '@/components/admin/switch-to-medical-aid';
 import { Button } from '@/components/ui/button';
 import { Modal } from '@/components/ui/modal';
 import { Input, Label, Textarea } from '@/components/ui/field';
@@ -53,6 +55,7 @@ export function AppointmentRowActions({
   const [link, setLink] = React.useState(sessionLink ?? '');
   const [reason, setReason] = React.useState('');
   const [payOpen, setPayOpen] = React.useState(false);
+  const [aidOpen, setAidOpen] = React.useState(false);
   const [payAmount, setPayAmount] = React.useState('');
   const [payBy, setPayBy] = React.useState<'card' | 'medical_aid'>('card');
   const [payOn, setPayOn] = React.useState(today());
@@ -154,6 +157,11 @@ export function AppointmentRowActions({
             <MenuButton icon={<Banknote className="h-4 w-4" />} onClick={() => setPayOpen(true)}>
               Record a payment
             </MenuButton>
+            {status === 'pending_payment' && (
+              <MenuButton icon={<ShieldCheck className="h-4 w-4" />} onClick={() => setAidOpen(true)}>
+                Switch to medical aid
+              </MenuButton>
+            )}
             <MenuButton
               icon={<Send className="h-4 w-4" />}
               onClick={() => run(() => resendConfirmation(appointmentId), 'Confirmation resent')}
@@ -184,6 +192,13 @@ export function AppointmentRowActions({
           </motion.div>
         )}
       </AnimatePresence>
+
+      <SwitchToMedicalAid
+        open={aidOpen}
+        onClose={() => setAidOpen(false)}
+        appointmentId={appointmentId}
+        clientUserId={clientUserId}
+      />
 
       <Modal
         open={payOpen}
