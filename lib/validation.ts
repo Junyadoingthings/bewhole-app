@@ -146,7 +146,13 @@ export const identitySchema = z
   });
 
 export const medicalAidSchema = z.object({
-  scheme: z.string().trim().min(2, 'Which scheme are you with?').max(80),
+  /** The medical aid's name (2026-10, at the practice's request), alongside the scheme. */
+  name: z
+    .string({ required_error: "Enter your medical aid's name" })
+    .trim()
+    .min(2, "Enter your medical aid's name")
+    .max(80),
+  scheme: z.string().trim().min(2, 'Which medical scheme are you on?').max(80),
   memberNumber: z.string().trim().min(3, 'Enter your membership number').max(40),
   mainMember: z.string().trim().min(2, 'Who is the main member?').max(80),
   /**

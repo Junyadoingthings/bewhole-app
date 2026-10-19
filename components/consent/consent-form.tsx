@@ -21,11 +21,14 @@ export function ConsentForm({
 }) {
   const allAgreed = isConsentComplete(value);
 
+  // The latest value, so two quick taps build on each other instead of the
+  // second overwriting the first with a stale copy.
+  const latest = React.useRef(value);
+  latest.current = value;
   const handleToggle = (id: string) => {
-    onChange({
-      ...value,
-      [id]: !value[id],
-    });
+    const next = { ...latest.current, [id]: !latest.current[id] };
+    latest.current = next;
+    onChange(next);
   };
 
   return (
@@ -51,7 +54,16 @@ export function ConsentForm({
           return (
             <div
               key={item.id}
+              role="checkbox"
+              aria-checked={isChecked}
+              tabIndex={0}
               onClick={() => handleToggle(item.id)}
+              onKeyDown={(e) => {
+                if (e.key === ' ' || e.key === 'Enter') {
+                  e.preventDefault();
+                  handleToggle(item.id);
+                }
+              }}
               className={cn(
                 'cursor-pointer border rounded-2xl p-5 transition-all duration-200',
                 isChecked

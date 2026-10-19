@@ -4,7 +4,7 @@ import { mockProvider } from './mock';
 import { payfastProvider } from './payfast';
 import { peachProvider } from './peach';
 import { yocoProvider } from './yoco';
-import { isProductionRuntime } from './runtime';
+import { isProductionRuntime, simulatedPaymentsAllowed } from './runtime';
 import type { PaymentMethodMark, PaymentProvider } from './types';
 
 /**
@@ -69,8 +69,8 @@ export function getPaymentProvider(): PaymentProvider {
 export function paymentsAreLive(): boolean {
   const provider = getPaymentProvider();
   if (provider.live) return true;
-  // A deliberately-enabled simulator counts as live only outside production.
-  return !isProductionRuntime();
+  // The simulator counts as live only on a developer's machine.
+  return simulatedPaymentsAllowed();
 }
 
 /**
@@ -124,7 +124,7 @@ export function acceptedMethods(): readonly PaymentMethodMark[] {
 }
 
 export * from './types';
-export { isProductionRuntime } from './runtime';
+export { isProductionRuntime, simulatedPaymentsAllowed } from './runtime';
 export { settleMockCheckout, getMockCheckout } from './mock';
 export { buildPayfastForm } from './payfast';
 export { yocoKeyMode } from './yoco';

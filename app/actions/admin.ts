@@ -12,11 +12,17 @@ import {
   deleteAvailabilityBlock,
   getAppointment,
   getPayment,
+  getProfile,
   updateAppointment,
 } from '@/lib/db';
 import { calendarFeedUrls } from '@/lib/links';
-import { noteSchema, fieldErrors } from '@/lib/validation';
-import { cancelAppointment, decideMedicalAid, markAppointmentStatus } from '@/services/booking.service';
+import { medicalAidSchema, noteSchema, fieldErrors } from '@/lib/validation';
+import {
+  cancelAppointment,
+  decideMedicalAid,
+  markAppointmentStatus,
+  switchToMedicalAid,
+} from '@/services/booking.service';
 import {
   recordDirectPayment,
   recordPaymentNotReceived,
@@ -325,4 +331,29 @@ export async function resetCalendarFeedLink(): Promise<AdminResult & { https?: s
   });
   revalidatePath('/admin/calendar');
   return { ok: true, ...calendarFeedUrls(version) };
+}
+
+/* ---------------------------------------------- switch a booking to medical aid */
+
+/** The client's medical aid on file, for prefilling the switch form. Staff only. */
+export async function getClientMedicalAid(clientUserId: string) {
+  await requireStaff();
+  return (await getProfile(clientUserId))?.medicalAid ?? null;
+}
+
+export async function switchAppointmentToMedicalAid(
+  appointmentId: string,
+  input: unknown,
+): Promise<AdminResult> {
+  const actor = await requireStaff();
+  const parsed = medicalAidSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: 'Please check the medical aid details.', errors: fieldErrors(parsed.error) };
+  }
+  const result = await switchToMedicalAid(appointmentId, parsed.data, actor);
+  if (!result.ok) return { ok: false, error: result.error };
+  revalidatePath('/admin/appointments');
+  revalidatePath('/admin');
+  revalidatePath('/admin/payments');
+  return { ok: true };
 }

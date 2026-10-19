@@ -28,17 +28,23 @@ import { money } from '@/lib/utils';
 export function MedicalAidActions({
   appointmentId,
   clientName,
+  medicalAidName,
   scheme,
   memberNumber,
   mainMember,
+  mainMemberId,
+  dateOfBirth,
   coPaymentCents,
   privateFeeCents,
 }: {
   appointmentId: string;
   clientName: string;
+  medicalAidName?: string | null;
   scheme?: string | null;
   memberNumber?: string | null;
   mainMember?: string | null;
+  mainMemberId?: string | null;
+  dateOfBirth?: string | null;
   coPaymentCents: number;
   privateFeeCents: number;
 }) {
@@ -130,9 +136,12 @@ export function MedicalAidActions({
           </p>
           <dl className="mt-3 space-y-2">
             <Row label="Client" value={clientName} />
-            <Row label="Scheme" value={scheme || 'Not captured'} />
+            <Row label="Medical aid" value={medicalAidName || 'Not captured'} />
+            <Row label="Medical scheme" value={scheme || 'Not captured'} />
             <Row label="Member number" value={memberNumber || 'Not captured'} />
             <Row label="Main member" value={mainMember || 'Not captured'} />
+            <Row label="Main member ID" value={mainMemberId || 'Not captured'} />
+            <Row label="Date of birth" value={dateOfBirth || 'Not captured'} />
           </dl>
         </div>
 

@@ -9,6 +9,7 @@ import { NoteComposer } from '@/components/admin/note-composer';
 import { STATUS_META } from '@/components/portal/appointment-card';
 import { Reveal } from '@/components/motion';
 import { Badge, EmptyState, StatTile } from '@/components/ui/primitives';
+import { ClientFile } from '@/components/admin/client-file';
 import { IntakeNote } from '@/components/admin/intake-note';
 import { requireStaff } from '@/lib/auth';
 import { displayTime, formatFullDate, parts, timeAgo } from '@/lib/date';
@@ -119,56 +120,6 @@ export default async function AdminClientPage({ params }: { params: { id: string
                 {user.isDemo && <Badge tone="outline" size="sm">Demo record</Badge>}
               </div>
 
-              {/*
-                Emergency contact and address, shown on the client record.
-                The booking form insists on an emergency contact; if the
-                practice cannot see it here, collecting it achieves nothing.
-                Both are rendered only when present, so records created before
-                these fields existed do not show empty rows.
-              */}
-              {(profile.emergencyContactName || profile.address || profile.idNumber) && (
-                <dl className="mt-4 grid gap-3 rounded-2xl border border-line bg-canvas-sunk p-4 sm:grid-cols-2">
-                  {profile.emergencyContactName && (
-                    <div>
-                      <dt className="text-2xs uppercase tracking-[0.14em] text-ink-faint">
-                        Emergency contact
-                      </dt>
-                      <dd className="mt-1 text-sm text-ink">
-                        {profile.emergencyContactName}
-                        {profile.emergencyContactPhone && (
-                          <>
-                            {' · '}
-                            <a
-                              href={`tel:${profile.emergencyContactPhone}`}
-                              className="text-forest-700 hover:underline"
-                            >
-                              {profile.emergencyContactPhone}
-                            </a>
-                          </>
-                        )}
-                      </dd>
-                    </div>
-                  )}
-                  {profile.idNumber && (
-                    <div>
-                      <dt className="text-2xs uppercase tracking-[0.14em] text-ink-faint">
-                        {profile.idType === 'passport' ? 'Passport number' : 'ID number'}
-                      </dt>
-                      <dd className="mt-1 font-mono text-sm text-ink">{profile.idNumber}</dd>
-                    </div>
-                  )}
-                  {profile.address && (
-                    <div>
-                      <dt className="text-2xs uppercase tracking-[0.14em] text-ink-faint">
-                        Address
-                      </dt>
-                      <dd className="mt-1 whitespace-pre-line text-sm text-ink">
-                        {profile.address}
-                      </dd>
-                    </div>
-                  )}
-                </dl>
-              )}
             </div>
           </div>
 
@@ -184,6 +135,8 @@ export default async function AdminClientPage({ params }: { params: { id: string
           />
         </div>
       </Reveal>
+
+      <ClientFile profile={profile} email={user.email} clientSince={user.createdAt} appointments={views} />
 
       <div className="mt-8 grid gap-4 sm:grid-cols-4">
         <StatTile label="Sessions" value={completed.length} hint="Completed" />

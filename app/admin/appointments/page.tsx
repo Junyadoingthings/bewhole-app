@@ -173,9 +173,12 @@ export default async function AdminAppointmentsPage({
                             <MedicalAidActions
                               appointmentId={a.id}
                               clientName={a.client?.name ?? 'This client'}
+                              medicalAidName={aidProfiles.get(a.clientUserId)?.name}
                               scheme={aidProfiles.get(a.clientUserId)?.scheme}
                               memberNumber={aidProfiles.get(a.clientUserId)?.memberNumber}
                               mainMember={aidProfiles.get(a.clientUserId)?.mainMember}
+                              mainMemberId={aidProfiles.get(a.clientUserId)?.mainMemberId}
+                              dateOfBirth={aidProfiles.get(a.clientUserId)?.dateOfBirth}
                               coPaymentCents={a.amountCents}
                               privateFeeCents={privateFee(a)}
                             />
@@ -235,9 +238,12 @@ export default async function AdminAppointmentsPage({
                           <MedicalAidActions
                             appointmentId={a.id}
                             clientName={a.client?.name ?? 'This client'}
+                            medicalAidName={aidProfiles.get(a.clientUserId)?.name}
                             scheme={aidProfiles.get(a.clientUserId)?.scheme}
                             memberNumber={aidProfiles.get(a.clientUserId)?.memberNumber}
                             mainMember={aidProfiles.get(a.clientUserId)?.mainMember}
+                            mainMemberId={aidProfiles.get(a.clientUserId)?.mainMemberId}
+                            dateOfBirth={aidProfiles.get(a.clientUserId)?.dateOfBirth}
                             coPaymentCents={a.amountCents}
                             privateFeeCents={privateFee(a)}
                           />

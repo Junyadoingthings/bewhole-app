@@ -82,9 +82,6 @@ export function Hero() {
             <p className="mt-0.5 text-xs text-ink-muted sm:text-sm lg:text-base">
               {PRACTITIONER.title} ({PRACTITIONER.council})
             </p>
-            <p className="mt-0.5 text-2xs text-ink-soft sm:text-xs lg:text-sm">
-              Pr.No. {PRACTITIONER.practiceNumber}
-            </p>
           </div>
         </div>
 

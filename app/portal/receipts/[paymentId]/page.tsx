@@ -117,7 +117,9 @@ export default async function ReceiptPage({ params }: { params: { paymentId: str
               <p className="text-2xs font-medium uppercase tracking-[0.16em] text-ink-faint">
                 Medical aid
               </p>
-              <p className="mt-2 font-medium text-ink">{profile.medicalAid.scheme}</p>
+              <p className="mt-2 font-medium text-ink">
+                {[profile.medicalAid.name, profile.medicalAid.scheme].filter(Boolean).join(' · ')}
+              </p>
               <p className="text-sm tabular text-ink-soft">
                 Member {profile.medicalAid.memberNumber}
               </p>

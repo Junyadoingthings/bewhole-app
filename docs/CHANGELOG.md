@@ -4,6 +4,26 @@ What changed, newest first. Each entry links to the pull request on GitHub.
 
 ## October 2026
 
+### 19 October — client file, medical aid fixes
+- **Booking fix (a client ended up in the card checkout and then lost her slot):** the payment
+  step no longer preselects card — the client must choose, and the button reads "Choose how to
+  pay" until they do; a client who left a card checkout unpaid and books the same time again has
+  their own unpaid booking released instead of being told the time is taken; details are saved to
+  the client's profile only once the booking succeeds.
+- **Medical Aid Name** added alongside **Medical Scheme** (both required).
+- **Client file** on each client's page: personal details, emergency contact, the full medical
+  aid, every "What brings you here?" answer, and everyone who has attended with them.
+- **Switch to medical aid** (Appointments → **…** on an unpaid card booking): moves it to "Medical
+  aid to verify" with the client's medical aid, cancels the unpaid card payment, keeps the time.
+- The practice number is no longer shown on the home page.
+- Consent points: quick taps no longer cancel each other out, and each point works with a
+  keyboard and screen reader.
+
+### 18 October — security audit
+- Simulated payments limited to local development; image optimiser restricted to the site's own
+  images (no AVIF, no remote hosts); a Content-Security-Policy header; the Supabase project id
+  removed from the helper scripts. Details in [SECURITY.md](../SECURITY.md).
+
 ### 16 October — psycholegal services
 - **Terms & conditions:** new "Scope of services and limitations" section, in the practice's
   wording — Be Whole Care does not provide psycholegal services (court reports, assessments or

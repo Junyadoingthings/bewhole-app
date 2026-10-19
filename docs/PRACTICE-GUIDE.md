@@ -14,6 +14,21 @@ The menu: **Dashboard · Appointments · Calendar · Clients · Follow-ups · Pa
 Every booking gets a running number — **BWC0001, BWC0002, BWC0003…** — with no gaps. It appears in
 every email and in the console, so you can use it as the invoice number.
 
+## A client's file
+
+Open **Clients** → the client. The **Client file** shows everything on record: personal details
+(date of birth, ID or passport number, contact details, address), emergency contact, the full
+medical aid (medical aid name, scheme, membership number, main member and their ID, date of
+birth), every answer to "What brings you here?" with its booking, and everyone who has attended
+with them (partner or family members, with their contact details).
+
+## A client meant to use medical aid but booked by card
+
+**Appointments** → **…** on their unpaid booking → **Switch to medical aid**. Check or enter their
+medical aid details and confirm. The booking keeps its time, the card payment request is cancelled,
+and it moves to **Medical aid to verify** — then **Accept aid** or **Decline** as usual (that is
+when the client is emailed).
+
 ## What brings each client
 
 Every booking shows whether it is the client's **first session** or a **follow-up**, and their

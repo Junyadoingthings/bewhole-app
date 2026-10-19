@@ -328,7 +328,8 @@ async function onMedicalAidPending(appointmentId: ID) {
       'automatically either way.',
     details: [
       ...staffDetails(a),
-      { label: 'Scheme', value: profile?.medicalAid?.scheme || 'Not captured' },
+      { label: 'Medical aid', value: profile?.medicalAid?.name || 'Not captured' },
+      { label: 'Medical scheme', value: profile?.medicalAid?.scheme || 'Not captured' },
       { label: 'Member number', value: profile?.medicalAid?.memberNumber || 'Not captured' },
       { label: 'Main member', value: profile?.medicalAid?.mainMember || 'Not captured' },
     ],

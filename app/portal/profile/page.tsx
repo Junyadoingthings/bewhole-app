@@ -55,8 +55,14 @@ export default async function ProfilePage() {
           <div className="mt-6 rounded-3xl border border-line bg-white p-6">
             <h2 className="font-display text-lg text-ink">Medical aid on file</h2>
             <dl className="mt-4 space-y-3 text-sm">
+              {profile.medicalAid.name && (
+                <div className="flex justify-between gap-4">
+                  <dt className="text-ink-faint">Medical aid</dt>
+                  <dd className="text-ink">{profile.medicalAid.name}</dd>
+                </div>
+              )}
               <div className="flex justify-between gap-4">
-                <dt className="text-ink-faint">Scheme</dt>
+                <dt className="text-ink-faint">Medical scheme</dt>
                 <dd className="text-ink">{profile.medicalAid.scheme}</dd>
               </div>
               <div className="flex justify-between gap-4">
