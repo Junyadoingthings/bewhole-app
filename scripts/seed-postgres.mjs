@@ -202,11 +202,11 @@ async function main() {
       await tx`
         alter table appointments add constraint appointments_no_overlap
           exclude using gist (practitioner_id with =, tstzrange(start_at, end_at) with &&)
-          where (status in ('pending_payment','pending_medical_aid','confirmed','completed'))`;
+          where (status in ('pending_medical_aid','confirmed','completed'))`;
     });
-    console.log('  ✓ double-booking constraint covers medical aid holds');
+    console.log('  ✓ double-booking constraint: medical aid holds and confirmed sessions (unpaid card bookings do not hold time)');
   } catch (error) {
-    console.warn(`  ⚠ double-booking constraint not widened (${error.message}); previous constraint kept`);
+    console.warn(`  ⚠ double-booking constraint not updated (${error.message}); previous constraint kept`);
   }
 
   // Everyone else attending a couples, family or pre-marital session.

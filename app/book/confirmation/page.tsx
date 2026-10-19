@@ -209,8 +209,8 @@ export default async function ConfirmationPage({
               Payment outstanding — {money(view.amountCents)}
             </p>
             <p className="mt-2 text-sm leading-relaxed text-ink-muted">
-              This time is held for you but is not confirmed until payment clears. You can complete
-              it from your appointment page whenever you’re ready.
+              Your booking is saved, but the time is only reserved for you once payment is made —
+              until then someone else may book it. Complete payment to secure it.
             </p>
             <ButtonLink href={`/portal/appointments/${view.id}`} size="sm" className="mt-4">
               Complete payment

@@ -44,7 +44,7 @@ export function MockCardForm({
       toast({
         tone: 'error',
         title: 'Payment declined (simulated)',
-        description: 'Your time is still held — try again.',
+        description: 'Your booking is saved — try again.',
       });
       return;
     }

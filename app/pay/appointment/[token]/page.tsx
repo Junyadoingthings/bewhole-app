@@ -8,7 +8,7 @@ import { BUSINESS } from '@/config/business';
 import { readLinkToken } from '@/lib/links';
 import { displayTime, formatFullDate, parts } from '@/lib/date';
 import { getAppointment, getLocation, getService } from '@/lib/db';
-import { createCheckoutForAppointment } from '@/services/payment.service';
+import { TIME_TAKEN_MESSAGE, createCheckoutForAppointment } from '@/services/payment.service';
 import { paymentsAreLive } from '@/services/payments';
 import { money } from '@/lib/utils';
 
@@ -64,7 +64,7 @@ export default async function AppointmentPaymentPage({
     return (
       <Notice
         title="Card payment is not available online yet"
-        body={`Your session is still held. Please contact the practice on ${BUSINESS.phone} and we will arrange payment with you directly.`}
+        body={`Your booking is saved. Please contact the practice on ${BUSINESS.phone} and we will arrange payment with you directly.`}
       />
     );
   }
@@ -85,11 +85,15 @@ export default async function AppointmentPaymentPage({
 
   if (checkout.ok) redirect(checkout.redirectUrl);
 
+  if (checkout.error === TIME_TAKEN_MESSAGE) {
+    return <Notice title="This time is no longer available" body={checkout.error} />;
+  }
+
   return (
     <Shell>
       <h1 className="mt-6 font-display text-2xl text-ink">We could not open the payment page</h1>
       <p className="mt-3 text-sm leading-relaxed text-ink-soft">
-        Your session is still held — nothing is lost. Please try again in a moment, or contact the
+        Your booking is saved — nothing is lost. Please try again in a moment, or contact the
         practice on {BUSINESS.phone} and we will take it from there.
       </p>
 

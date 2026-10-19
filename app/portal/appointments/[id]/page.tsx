@@ -58,7 +58,8 @@ export default async function AppointmentDetailPage({
         <div className="mt-6 rounded-3xl border border-state-danger/25 bg-state-dangerSoft p-6">
           <p className="font-medium text-ink">Your payment didn’t go through.</p>
           <p className="mt-2 text-sm leading-relaxed text-ink-muted">
-            Nothing was charged and your time is still held. You can try again below.
+            Nothing was charged and your booking is saved. The time is reserved once payment is
+            made — you can try again below.
           </p>
         </div>
       )}
@@ -66,7 +67,8 @@ export default async function AppointmentDetailPage({
         <div className="mt-6 rounded-3xl border border-line bg-cream-100 dark:bg-card p-6">
           <p className="font-medium text-ink">Payment cancelled.</p>
           <p className="mt-2 text-sm leading-relaxed text-ink-muted">
-            Your time is still held — you can complete payment whenever you’re ready.
+            Your booking is saved. The time is reserved once payment is made, so complete it soon
+            to secure your session.
           </p>
         </div>
       )}

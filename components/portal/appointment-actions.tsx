@@ -142,7 +142,7 @@ export function AppointmentActions({
         }
       >
         <p className="text-sm leading-relaxed text-ink-soft">
-          Your time stays held while you decide. If a payment doesn’t go through, nothing is
+          Your time is reserved once payment is made. If a payment doesn’t go through, nothing is
           charged and you can try again.
         </p>
       </Modal>

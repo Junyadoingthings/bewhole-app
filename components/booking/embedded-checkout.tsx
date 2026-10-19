@@ -105,7 +105,7 @@ export function EmbeddedCheckout({
                   We couldn’t load the payment form.
                 </p>
                 <p className="mt-2 text-sm leading-relaxed text-ink-muted">
-                  Your time is still held. Refresh the page to try again, or call the practice on
+                  Your booking is saved. Refresh the page to try again, or call the practice on
                   063 883 7170 and we’ll take it from there.
                 </p>
               </div>

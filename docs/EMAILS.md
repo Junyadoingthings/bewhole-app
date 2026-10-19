@@ -17,7 +17,8 @@ delivered).
 | Email | Sent when | What it contains |
 |---|---|---|
 | **Booking received — medical aid verification in progress** | A booking is made with medical aid | The booking details. No session link or address yet. |
-| **Payment required to confirm your appointment** | A card booking is waiting for payment | The amount and a payment button. |
+| **Payment required to confirm your appointment** | A card booking is waiting for payment | The amount and a payment button, and that the time is only reserved once payment is made. |
+| **Your payment was received — we will contact you about your time** | A client paid, but someone else had booked the same time first | That the payment is safe and the practice will arrange another time or a refund. |
 | **Appointment confirmation — {date}** | Payment clears, the practice marks a payment received, or a no-charge booking is made | Ntombi's confirmation: date, time and duration; **online** — the session link and the "Kindly ensure that you…" checklist; **in person** — the practice address. |
 | **Medical aid verified — appointment confirmed for {date}** | The practice accepts the medical aid | Ntombi's verified template: date, time, and the address or session link. |
 | **Update regarding your medical aid** | The practice declines the medical aid | Ntombi's wording: the session will be on a cash basis, with a **Make payment** button (the practice's Yoco payment link). Includes the practice's note if one was typed. |
@@ -50,6 +51,7 @@ reminder off is no longer available in Settings — both reminders always go out
 | **New booking — {client}, {date}** | A booking is confirmed. |
 | **Rescheduled — {client}, now {date}** | A session is moved. |
 | **Cancelled — {client}, {date}** | A session is cancelled. |
+| **Action needed — {client} paid, but the time was taken** | A client paid for a time someone else had booked first; contact them to rearrange or refund. |
 | **Website enquiry** | The contact form is sent. |
 
 Booking emails to the practice list the client's name, email and phone, the service, date, time,

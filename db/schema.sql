@@ -265,7 +265,7 @@ alter table appointments add constraint appointments_no_overlap
   exclude using gist (
     practitioner_id with =,
     tstzrange(start_at, end_at) with &&
-  ) where (status in ('pending_payment','pending_medical_aid','confirmed','completed'));
+  ) where (status in ('pending_medical_aid','confirmed','completed'));
 
 create index if not exists appointments_client_idx on appointments(client_user_id, start_at desc);
 create index if not exists appointments_start_idx on appointments(start_at);

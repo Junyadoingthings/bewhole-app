@@ -51,6 +51,14 @@ member.
      You can add a note for the client; it is included word for word. A line appears on
      **Payments**, awaiting the client's payment.
 
+## Unpaid card bookings
+
+A card booking that has not been paid shows as **Payment pending** and stays until you cancel it.
+It does **not** reserve the time: until it is paid, someone else can book that slot. If that
+happens, the unpaid client cannot pay any more (they are told the time has gone). If their payment
+went through just as someone else booked, you get an **Action needed** email — contact them to
+arrange another time or refund them.
+
 ## Payments — ticking money off
 
 **Payments** lists every amount owed to or received by the practice. The four boxes at the top
