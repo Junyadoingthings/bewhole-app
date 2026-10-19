@@ -18,6 +18,10 @@ What changed, newest first. Each entry links to the pull request on GitHub.
 - The practice number is no longer shown on the home page.
 - Consent points: quick taps no longer cancel each other out, and each point works with a
   keyboard and screen reader.
+### 18 October — security audit
+- Simulated payments limited to local development; image optimiser restricted to the site's own
+  images (no AVIF, no remote hosts); a Content-Security-Policy header; the Supabase project id
+  removed from the helper scripts. Details in [SECURITY.md](../SECURITY.md).
 
 ### 16 October — psycholegal services
 - **Terms & conditions:** new "Scope of services and limitations" section, in the practice's

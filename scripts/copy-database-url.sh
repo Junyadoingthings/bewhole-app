@@ -11,8 +11,8 @@
 
 set -euo pipefail
 
-PROJECT_REF='postgres.mtisvygwkhakwebsaaya'
-DB_HOST='aws-1-eu-west-1.pooler.supabase.com'
+PROJECT_REF="${SUPABASE_POOLER_USER:?Set SUPABASE_POOLER_USER first — Supabase → Connect → Transaction pooler, the user name (postgres.<project-ref>)}"
+DB_HOST="${SUPABASE_POOLER_HOST:?Set SUPABASE_POOLER_HOST first — Supabase → Connect → Transaction pooler, the host}"
 DB_PORT='6543' # transaction pooler; 5432 exhausts connections on serverless
 
 echo

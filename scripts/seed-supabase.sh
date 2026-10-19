@@ -16,8 +16,8 @@ set -euo pipefail
 
 # The project-specific part of the connection string. Everything except the
 # password, which is the only thing that differs per person.
-PROJECT_REF='postgres.mtisvygwkhakwebsaaya'
-DB_HOST='aws-1-eu-west-1.pooler.supabase.com'
+PROJECT_REF="${SUPABASE_POOLER_USER:?Set SUPABASE_POOLER_USER first — Supabase → Connect → Transaction pooler, the user name (postgres.<project-ref>)}"
+DB_HOST="${SUPABASE_POOLER_HOST:?Set SUPABASE_POOLER_HOST first — Supabase → Connect → Transaction pooler, the host}"
 DB_PORT='6543' # transaction pooler — NOT 5432, which runs out of connections
 
 cd "$(dirname "$0")/.."

@@ -4,7 +4,12 @@ import { Lock, ShieldCheck } from 'lucide-react';
 
 import { LogoCompact } from '@/components/brand/logo';
 import { Button } from '@/components/ui/button';
-import { getMockCheckout, settleMockCheckout, simulatedPaymentsAreExposed } from '@/services/payments';
+import {
+  getMockCheckout,
+  settleMockCheckout,
+  simulatedPaymentsAllowed,
+  simulatedPaymentsAreExposed,
+} from '@/services/payments';
 import { money } from '@/lib/utils';
 
 export const metadata: Metadata = { title: 'Secure payment', robots: { index: false } };
@@ -28,7 +33,7 @@ export default function MockCheckoutPage({ params }: { params: { checkoutId: str
    * development and unacceptable in production, so it refuses to render there
    * even if some other code path were to link to it.
    */
-  if (simulatedPaymentsAreExposed()) notFound();
+  if (simulatedPaymentsAreExposed() || !simulatedPaymentsAllowed()) notFound();
 
   const checkout = getMockCheckout(params.checkoutId);
   if (!checkout) notFound();
@@ -37,6 +42,7 @@ export default function MockCheckoutPage({ params }: { params: { checkoutId: str
     'use server';
     const outcome = formData.get('outcome');
     const id = String(formData.get('checkoutId'));
+    if (!simulatedPaymentsAllowed()) return;
     const current = getMockCheckout(id);
     if (!current) return;
 
