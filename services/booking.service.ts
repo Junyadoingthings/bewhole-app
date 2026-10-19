@@ -9,7 +9,6 @@ import {
   findUserByEmail,
   getAppointment,
   getPaymentForAppointment,
-  listAppointments,
   getService,
   getSettings,
   hydrateAppointments,
@@ -170,21 +169,6 @@ export async function createBooking(
   }
   if (others.length + 1 > GROUP_SESSIONS.maxPeople) {
     return { ok: false, error: 'A session can include up to 6 people.', field: 'participants' };
-  }
-
-  /**
-   * A client who opened the card checkout, left without paying and then books
-   * again would find their own unpaid booking holding the time. (A client who
-   * did exactly this, then chose medical aid, was told the time was no longer
-   * available.) Their earlier unpaid hold on an overlapping time is released
-   * first. Only ever their own, only ever unpaid.
-   */
-  const requestedStart = fromLocalParts(input.date, input.time);
-  const requestedEnd = new Date(requestedStart.getTime() + service.durationMinutes * 60_000);
-  const existingClientId =
-    actor && actor.role === 'CLIENT' ? actor.id : (await findUserByEmail(input.email))?.id;
-  if (existingClientId) {
-    await releaseOwnUnpaidHolds(existingClientId, requestedStart.toISOString(), requestedEnd.toISOString());
   }
 
   // Availability is re-derived server-side; the client's view may be stale.
@@ -711,34 +695,4 @@ export async function decideMedicalAid(
 
   emitAfterResponse({ type: 'appointment.medical_aid_declined', appointmentId });
   return { ok: true };
-}
-
-/**
- * Release a client's own unpaid card bookings that overlap a time they are
- * booking again. The earlier payment is cancelled with it, so an abandoned
- * checkout cannot later confirm a booking that no longer exists.
- */
-async function releaseOwnUnpaidHolds(clientUserId: ID, startISO: string, endISO: string) {
-  const own = await listAppointments({ clientUserId, statuses: ['pending_payment'] });
-  for (const a of own) {
-    if (!(a.startAt < endISO && a.endAt > startISO)) continue;
-    const payment = await getPaymentForAppointment(a.id);
-    if (payment && payment.status === 'paid') continue;
-    const ts = nowISO();
-    await updateAppointment(a.id, {
-      status: 'cancelled',
-      cancelledAt: ts,
-      cancellationReason: 'Replaced by a new booking from the same client before payment',
-    });
-    if (payment && (payment.status === 'pending' || payment.status === 'processing')) {
-      await updatePayment(payment.id, { status: 'cancelled' });
-    }
-    await audit({
-      actorUserId: clientUserId,
-      action: 'appointment.unpaid_hold_released',
-      entity: 'appointment',
-      entityId: a.id,
-      meta: { reference: a.reference },
-    });
-  }
 }

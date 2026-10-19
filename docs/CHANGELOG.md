@@ -4,6 +4,18 @@ What changed, newest first. Each entry links to the pull request on GitHub.
 
 ## October 2026
 
+### 19 October — unpaid bookings no longer hold the time
+- At the practice's request, an unpaid card booking **stays in the console until it is cancelled
+  by hand but does not reserve its time**: the slot stays bookable until payment is made.
+  (Medical aid bookings still hold their time while they are verified.)
+- Before a client is sent to pay, the time is checked; if someone else has taken it they are told
+  so and not charged. If a payment completes after the time was taken, the booking is not
+  confirmed on top of the other one: the client is told their payment is safe and the practice is
+  emailed to arrange another time or a refund.
+- Wording that promised the time was "held" or "reserved" before payment is corrected,
+  including the "Payment required" email.
+- The automatic release of a client's own unpaid booking (added earlier the same day) is removed.
+
 ### 19 October — client file, medical aid fixes
 - **Booking fix (a client ended up in the card checkout and then lost her slot):** the payment
   step no longer preselects card — the client must choose, and the button reads "Choose how to

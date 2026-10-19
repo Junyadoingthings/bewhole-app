@@ -50,6 +50,7 @@ export type DomainEvent =
   | { type: 'appointment.cancelled'; appointmentId: ID; byStaff: boolean; late: boolean }
   | { type: 'appointment.completed'; appointmentId: ID }
   | { type: 'appointment.no_show'; appointmentId: ID }
+  | { type: 'appointment.paid_time_taken'; appointmentId: ID }
   | { type: 'payment.success'; paymentId: ID; appointmentId?: ID | null; followUpId?: ID | null }
   | { type: 'payment.failed'; paymentId: ID; appointmentId?: ID | null; reason?: string }
   | { type: 'followup.created'; followUpId: ID }
@@ -87,6 +88,9 @@ export async function emit(event: DomainEvent): Promise<void> {
         break;
       case 'appointment.completed':
         await onAppointmentCompleted(event.appointmentId);
+        break;
+      case 'appointment.paid_time_taken':
+        await onPaidTimeTaken(event.appointmentId);
         break;
       case 'payment.failed':
         await onPaymentFailed(event.appointmentId ?? null, event.reason);
@@ -337,6 +341,48 @@ async function onMedicalAidPending(appointmentId: ID) {
   });
 }
 
+/**
+ * A client paid for a booking whose time someone else booked first (an unpaid
+ * booking does not hold its time). Nothing is confirmed on top of the other
+ * booking; the client is told their payment is safe and the practice arranges
+ * a new time or a refund.
+ */
+async function onPaidTimeTaken(appointmentId: ID) {
+  const a = await view(appointmentId);
+  if (!a) return;
+  await notify({
+    type: 'appointment.paid_time_taken',
+    audience: 'client',
+    channels: ['email', 'in_app'],
+    to: clientRecipient(a),
+    subject: 'Your payment was received — we will contact you about your time',
+    heading: 'Thank you, your payment was received',
+    greeting: firstNameOf(a),
+    body: joinParagraphs(
+      'Thank you for your payment.',
+      'Unfortunately, the time you chose was booked by someone else shortly before your payment ' +
+        'was completed, so we could not confirm it. Your payment is safe.',
+      'We will be in touch shortly to arrange another time that suits you, or a refund if you ' +
+        'prefer.',
+    ),
+    details: appointmentDetails(a),
+    signOff: practitionerSignOff('Kind regards,', 'Practice No'),
+    href: appointmentHref(a),
+  });
+  await notify({
+    type: 'appointment.paid_time_taken.staff',
+    audience: 'staff',
+    channels: ['in_app', 'email'],
+    to: PRACTICE_INBOX,
+    subject: `Action needed — ${a.client?.name ?? 'Client'} paid, but the time was taken`,
+    body:
+      'This client paid for their booking, but someone else booked the same time first, so it ' +
+      'was not confirmed. Please contact them to arrange another time, or refund the payment.',
+    details: staffDetails(a),
+    href: `/admin/appointments?ref=${a.reference}`,
+  });
+}
+
 async function onMedicalAidDeclined(appointmentId: ID) {
   const a = await view(appointmentId);
   if (!a) return;
@@ -394,12 +440,13 @@ async function onAppointmentCreated(appointmentId: ID) {
       channels: [...settings.reminders.channels, 'in_app'],
       to: clientRecipient(a),
       subject: 'Payment required to confirm your appointment',
-      heading: 'Your appointment is reserved',
+      heading: 'Complete payment to secure your appointment',
       greeting: firstNameOf(a),
       body:
-        'Thank you for booking with Be Whole Care. We have reserved the time below for you.\n\n' +
-        'Your appointment will be confirmed once payment has been received. You may complete the ' +
-        'payment securely using the button below.',
+        'Thank you for booking with Be Whole Care. Your booking details are below.\n\n' +
+        'Please note that the time is only reserved for you once payment has been received — until ' +
+        'then, it may still be booked by someone else. You may complete the payment securely using ' +
+        'the button below.',
       details: [...appointmentDetails(a), { label: 'Amount due', value: money(a.amountCents) }],
       cta: { label: 'Complete payment', url: appointmentPaymentUrl(a.id) },
       href: appointmentHref(a),

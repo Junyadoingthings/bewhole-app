@@ -10,6 +10,7 @@ import {
   getPaymentForAppointment,
   getService,
   getProfile,
+  listBookedIntervals,
   listPaymentEvents,
   findUserById,
   newId,
@@ -20,7 +21,26 @@ import {
 } from '@/lib/db';
 import { emitAfterResponse } from '@/services/events';
 import { getPaymentProvider } from '@/services/payments';
-import type { ID, Payment } from '@/types';
+import type { Appointment, ID, Payment } from '@/types';
+
+/**
+ * An unpaid card booking does not hold its time (the practice's rule): until
+ * it is paid, someone else may book the same slot. Is this booking's time
+ * still free of every booking that does hold time?
+ */
+export async function isTimeStillFree(appointment: Appointment): Promise<boolean> {
+  const taken = await listBookedIntervals(appointment.startAt, appointment.endAt);
+  return !taken.some(
+    (t) =>
+      t.id !== appointment.id &&
+      (t.practitionerId ?? null) === (appointment.practitionerId ?? null) &&
+      t.start < appointment.endAt &&
+      t.end > appointment.startAt,
+  );
+}
+
+export const TIME_TAKEN_MESSAGE =
+  'Sorry — this time has since been booked by someone else, so it can no longer be paid for. You have not been charged. Please book another time, or contact the practice.';
 
 /**
  * Payment orchestration.
@@ -43,6 +63,10 @@ export async function createCheckoutForAppointment(
   const appointment = await getAppointment(appointmentId);
   if (!appointment) return { ok: false, error: 'Appointment not found' };
   if (appointment.amountCents <= 0) return { ok: false, error: 'Nothing to pay' };
+  // Checked before any checkout opens (or is reused): never take money for a time that has gone.
+  if (appointment.status === 'pending_payment' && !(await isTimeStillFree(appointment))) {
+    return { ok: false, error: TIME_TAKEN_MESSAGE };
+  }
 
   // Reuse a live checkout rather than creating a second one for the same session.
   const existing = await getPaymentForAppointment(appointmentId);
@@ -134,6 +158,10 @@ export async function createEmbeddedCheckoutForAppointment(
   const appointment = await getAppointment(appointmentId);
   if (!appointment) return { ok: false, error: 'Appointment not found' };
   if (appointment.amountCents <= 0) return { ok: false, error: 'Nothing to pay' };
+  // Checked before any checkout opens (or is reused): never take money for a time that has gone.
+  if (appointment.status === 'pending_payment' && !(await isTimeStillFree(appointment))) {
+    return { ok: false, error: TIME_TAKEN_MESSAGE };
+  }
 
   const [service, client, clientProfile] = await Promise.all([
     getService(appointment.serviceId),
@@ -341,8 +369,31 @@ export async function applyPaymentSuccess(paymentId: ID) {
   if (payment.appointmentId) {
     const appointment = await getAppointment(payment.appointmentId);
     if (appointment && appointment.status === 'pending_payment') {
-      await updateAppointment(appointment.id, { status: 'confirmed' });
-      emitAfterResponse({ type: 'appointment.confirmed', appointmentId: appointment.id });
+      // Someone may have booked the time while this client was paying (unpaid
+      // bookings do not hold time). Then the booking is not confirmed on top of
+      // theirs: it stays awaiting, and the practice is told to rearrange or refund.
+      let confirmed = false;
+      if (await isTimeStillFree(appointment)) {
+        try {
+          await updateAppointment(appointment.id, { status: 'confirmed' });
+          confirmed = true;
+        } catch {
+          // The database's double-booking rule caught a race at the last moment.
+          confirmed = false;
+        }
+      }
+      if (confirmed) {
+        emitAfterResponse({ type: 'appointment.confirmed', appointmentId: appointment.id });
+      } else {
+        await audit({
+          actorUserId: payment.clientUserId,
+          action: 'appointment.paid_but_time_taken',
+          entity: 'appointment',
+          entityId: appointment.id,
+          meta: { paymentId, reference: appointment.reference },
+        });
+        emitAfterResponse({ type: 'appointment.paid_time_taken', appointmentId: appointment.id });
+      }
     }
   }
 

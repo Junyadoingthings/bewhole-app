@@ -673,7 +673,9 @@ export async function deleteAvailabilityBlock(id: ID) {
  * Statuses that hold a time — the same list as the appointments_no_overlap
  * constraint. A medical aid booking holds its time while cover is verified.
  */
-const BLOCKING: Appointment['status'][] = ['pending_payment', 'pending_medical_aid', 'confirmed', 'completed'];
+// An unpaid card booking does not hold its time (the practice's rule, 2026-10):
+// the slot stays bookable until the payment is made.
+const BLOCKING: Appointment['status'][] = ['pending_medical_aid', 'confirmed', 'completed'];
 
 export async function listAppointments(filter?: {
   clientUserId?: ID;
