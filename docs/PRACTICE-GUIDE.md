@@ -111,11 +111,34 @@ The link is private: anyone who has it can see your bookings. If it is ever shar
 open the same window and click **Reset link** — the old one stops working everywhere, and you add
 the calendar again.
 
+## Your own calendar decides when you're free
+
+**Calendar** → **Add my calendar to BWC** → paste your calendar's private link → **Connect**.
+Everything in your own calendar (church, supervision, a dentist appointment, leave) then shows on
+the BWC calendar as blocked time, and clients can't book over it. Change your calendar on your
+phone or laptop and BWC follows within a few minutes; **Refresh now** checks straight away.
+
+Where to find the link:
+- **Google Calendar** (on a computer): Settings → your calendar → *Integrate calendar* → copy
+  *Secret address in iCal format*.
+- **iPhone, iPad or Mac:** Calendar app → the calendar's ⓘ → turn on *Public Calendar* → *Share
+  Link*.
+- **Outlook:** Outlook on the web → Settings → Calendar → *Shared calendars* → *Publish a
+  calendar* → copy the ICS link.
+
+You can keep **Add to my calendar** as well: BWC recognises its own sessions in your calendar
+and skips them, so nothing is booked twice. Events you mark as *free* don't block time. BWC only
+reads your calendar — it never changes it. **Disconnect** in the same window stops it.
+
 ## Days off and holidays
 
 **Calendar** → **Block time** → choose the date, the whole day or part of it, and a reason →
 **Block it**. Clients can no longer book that time; existing bookings are not affected. Remove a
 block from the same window.
+
+Cancelled and missed sessions are kept in **Appointments** but no longer crowd the calendar. To
+see them, click **Show cancelled and missed** under the calendar. Nothing is deleted and no one is
+emailed.
 
 ## Other things you can do with a booking
 

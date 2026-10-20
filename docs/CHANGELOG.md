@@ -4,6 +4,19 @@ What changed, newest first. Each entry links to the pull request on GitHub.
 
 ## October 2026
 
+### 20 October — your calendar decides your availability
+- **Add my calendar to BWC** (Calendar page): paste the private link to your Google, iPhone/iCloud
+  or Outlook calendar and every event in it becomes blocked time — shown on the BWC calendar in
+  the same style as a manual block, and clients can't book over it. BWC checks it every few
+  minutes and only reads it. Repeating events, all-day events and edited single occurrences are
+  understood; events marked *free* don't block time.
+- **No more double bookings from syncing both ways:** BWC's own sessions, already in your calendar
+  through "Add to my calendar" or the Google sync, are recognised and skipped.
+- **Times in order:** each day on the calendar now runs from morning to evening, with blocked time
+  and sessions together (a 15:30 block no longer sits above a 9:00 session).
+- **Cancelled and missed sessions are hidden from the calendar** by default — still in
+  Appointments, nothing deleted, no email sent. **Show cancelled and missed** brings them back.
+
 ### 19 October — unpaid bookings no longer hold the time
 - At the practice's request, an unpaid card booking **stays in the console until it is cancelled
   by hand but does not reserve its time**: the slot stays bookable until payment is made.

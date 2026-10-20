@@ -19,7 +19,14 @@ import {
   today,
   weekdayOf,
 } from '@/lib/date';
-import type { DayAvailability, ID, TimeSlot } from '@/types';
+import { listExternalBlocks } from '@/services/external-calendar.service';
+import type { AvailabilityBlock, DayAvailability, ID, TimeSlot } from '@/types';
+
+/** Manual blocks plus busy time from the practitioner's connected calendar. */
+async function allBlocks(): Promise<AvailabilityBlock[]> {
+  const [own, external] = await Promise.all([listAvailabilityBlocks(), listExternalBlocks()]);
+  return [...own, ...external];
+}
 
 /**
  * Availability engine.
@@ -30,7 +37,7 @@ import type { DayAvailability, ID, TimeSlot } from '@/types';
  * can never take a time that has since gone.
  *
  * Inputs considered: business hours, per-practitioner rules, blocked dates and
- * part-days, existing appointments, session duration, buffer, minimum notice,
+ * part-days (manual, or from the practitioner's connected calendar), existing appointments, session duration, buffer, minimum notice,
  * booking horizon, and whether the service supports the requested mode.
  */
 
@@ -50,7 +57,7 @@ interface Window {
 async function windowsForDate(date: ISODateLike, query: AvailabilityQuery): Promise<Window[]> {
   const [rules, blocks, practitioners] = await Promise.all([
     listAvailabilityRules(),
-    listAvailabilityBlocks(),
+    allBlocks(),
     listPractitioners(),
   ]);
 
@@ -172,7 +179,7 @@ export async function getRangeAvailability(
 ): Promise<DayAvailability[]> {
   const t = today();
   const [blocks, practitioners] = await Promise.all([
-    listAvailabilityBlocks(),
+    allBlocks(),
     listPractitioners(),
   ]);
 
