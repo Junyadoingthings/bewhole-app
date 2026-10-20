@@ -14,6 +14,7 @@ import {
   getPayment,
   getProfile,
   updateAppointment,
+  updateSettings,
 } from '@/lib/db';
 import { calendarFeedUrls } from '@/lib/links';
 import { medicalAidSchema, noteSchema, fieldErrors } from '@/lib/validation';
@@ -33,6 +34,12 @@ import {
 } from '@/services/payment.service';
 import { emit, emitAfterResponse } from '@/services/events';
 import { getCalendarProvider } from '@/services/calendar';
+import {
+  clearExternalCalendarCache,
+  normaliseCalendarUrl,
+  readExternalCalendar,
+  testCalendarUrl,
+} from '@/services/external-calendar.service';
 import { getCalendarEventForAppointment, upsertCalendarEvent, nowISO } from '@/lib/db';
 
 export interface AdminResult {
@@ -355,5 +362,56 @@ export async function switchAppointmentToMedicalAid(
   revalidatePath('/admin/appointments');
   revalidatePath('/admin');
   revalidatePath('/admin/payments');
+  return { ok: true };
+}
+
+/* ------------------------------------------ "Add my calendar to BWC" (import) */
+
+/**
+ * Connects the practitioner's own calendar by its private iCal link. The link
+ * is read once before it is saved, so a wrong or expired link is caught here
+ * rather than silently blocking nothing.
+ */
+export async function connectCalendarImport(rawUrl: string): Promise<AdminResult & { events?: number }> {
+  const actor = await requireAdmin();
+  const parsed = normaliseCalendarUrl(String(rawUrl ?? ''));
+  if (!parsed.ok) return { ok: false, error: parsed.error };
+
+  const test = await testCalendarUrl(parsed.url);
+  if (!test.ok) return { ok: false, error: test.error };
+
+  await updateSettings({ calendarImport: { url: parsed.url, connectedAt: nowISO() } });
+  await audit({
+    actorUserId: actor.id,
+    actorRole: actor.role,
+    action: 'calendar_import.connect',
+    entity: 'settings',
+    meta: { host: new URL(parsed.url).hostname, events: test.events },
+  });
+  revalidatePath('/admin/calendar');
+  return { ok: true, events: test.events };
+}
+
+/** Re-reads the connected calendar now instead of waiting for the next refresh. */
+export async function refreshCalendarImport(): Promise<AdminResult & { events?: number }> {
+  await requireAdmin();
+  const { status } = await readExternalCalendar(true);
+  revalidatePath('/admin/calendar');
+  if (!status.connected) return { ok: false, error: 'No calendar is connected.' };
+  if (!status.ok) return { ok: false, error: status.error };
+  return { ok: true, events: status.events };
+}
+
+export async function disconnectCalendarImport(): Promise<AdminResult> {
+  const actor = await requireAdmin();
+  await updateSettings({ calendarImport: null });
+  clearExternalCalendarCache();
+  await audit({
+    actorUserId: actor.id,
+    actorRole: actor.role,
+    action: 'calendar_import.disconnect',
+    entity: 'settings',
+  });
+  revalidatePath('/admin/calendar');
   return { ok: true };
 }

@@ -1,8 +1,9 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { ChevronLeft, ChevronRight, Lock, MapPin, Video } from 'lucide-react';
+import { CalendarDays, ChevronLeft, ChevronRight, Lock, MapPin, Video } from 'lucide-react';
 
 import { BlockTimeControl } from '@/components/admin/block-time';
+import { CalendarImport, type CalendarImportStatus } from '@/components/admin/calendar-import';
 import { CalendarSubscribe } from '@/components/admin/calendar-subscribe';
 import { Reveal } from '@/components/motion';
 import { Badge } from '@/components/ui/primitives';
@@ -20,10 +21,11 @@ import {
   timeToMinutes,
   today,
 } from '@/lib/date';
-import { getCounter, hydrateAppointments, listAppointments, listAvailabilityBlocks } from '@/lib/db';
+import { getCounter, getSettings, hydrateAppointments, listAppointments, listAvailabilityBlocks } from '@/lib/db';
 import { withTimeout } from '@/lib/db/with-timeout';
 import { calendarFeedUrls } from '@/lib/links';
 import { cn } from '@/lib/utils';
+import { periodsToBlocks, readExternalCalendar } from '@/services/external-calendar.service';
 import type { AppointmentStatus, AppointmentView, AvailabilityBlock } from '@/types';
 
 export const metadata: Metadata = { title: 'Calendar', robots: { index: false } };
@@ -61,17 +63,53 @@ const STATUS_LABEL: Record<AppointmentStatus, string> = {
 };
 
 const DAY_START = 7 * 60;
+
+/** Cancelled and missed sessions stay in Appointments but are hidden here unless asked for. */
+const HIDDEN_BY_DEFAULT = new Set<AppointmentStatus>(['cancelled', 'no_show']);
+
+type DayItem =
+  | { kind: 'block'; key: string; sort: number; block: AvailabilityBlock }
+  | { kind: 'appointment'; key: string; sort: number; appointment: AppointmentView };
+
+/**
+ * One list per day, in time order: whole-day blocks first, then timed blocks
+ * and sessions together from morning to evening.
+ */
+function dayItems(date: string, appointments: AppointmentView[], blocks: AvailabilityBlock[]): DayItem[] {
+  const items: DayItem[] = [
+    ...blocks
+      .filter((b) => b.date === date)
+      .map((b) => ({
+        kind: 'block' as const,
+        key: b.id,
+        sort: b.start && b.end ? timeToMinutes(b.start) : -1,
+        block: b,
+      })),
+    ...appointments
+      .filter((a) => parts(a.startAt).date === date)
+      .map((a) => ({
+        kind: 'appointment' as const,
+        key: a.id,
+        sort: timeToMinutes(parts(a.startAt).time),
+        appointment: a,
+      })),
+  ];
+  // Equal times: a block is shown before the session that sits in it.
+  return items.sort((x, y) => x.sort - y.sort || (x.kind === 'block' ? -1 : 1));
+}
 const DAY_END = 18 * 60;
 
 export default async function AdminCalendarPage({
   searchParams,
 }: {
-  searchParams: { view?: string; date?: string };
+  searchParams: { view?: string; date?: string; cancelled?: string };
 }) {
   const user = await requireStaff();
+  const isAdmin = user.role === 'ADMIN' || user.role === 'SUPER_ADMIN';
+  const showCancelled = searchParams.cancelled === '1';
   // The subscription link shows client names, so only the administrator sees it.
   const feed =
-    user.role === 'ADMIN' || user.role === 'SUPER_ADMIN'
+    isAdmin
       ? await withTimeout(
           getCounter('calendar_feed').then((version) => calendarFeedUrls(version)),
           null,
@@ -89,7 +127,32 @@ export default async function AdminCalendarPage({
   // on a refresh.
   const appointments = await withTimeout(listAppointments(), [], 9000);
   const blocks = await withTimeout<AvailabilityBlock[]>(listAvailabilityBlocks(), [], 9000);
-  const views = await withTimeout<AppointmentView[]>(hydrateAppointments(appointments), [], 9000);
+  const allViews = await withTimeout<AppointmentView[]>(hydrateAppointments(appointments), [], 9000);
+  const views = showCancelled ? allViews : allViews.filter((a) => !HIDDEN_BY_DEFAULT.has(a.status));
+  const hiddenCount = allViews.length - views.length;
+
+  // Busy time from the practitioner's own calendar. Titles are private, so
+  // only administrators see them; other staff see "Busy".
+  const external = await withTimeout(readExternalCalendar(), null, 9000);
+  const externalBlocks = periodsToBlocks(external?.periods ?? []).map((b) =>
+    isAdmin ? b : { ...b, reason: 'Busy' },
+  );
+  const shownBlocks = [...blocks, ...externalBlocks];
+  let importHost: string | null = null;
+  if (isAdmin) {
+    const settings = await withTimeout(getSettings(), null, 9000);
+    try {
+      importHost = settings?.calendarImport?.url ? new URL(settings.calendarImport.url).hostname : null;
+    } catch {
+      importHost = null;
+    }
+  }
+  const importStatus: CalendarImportStatus = {
+    ...(external?.status ?? { connected: false, ok: true, events: 0, checkedAt: null }),
+    host: importHost,
+  };
+  const keep = (extra: string) =>
+    `/admin/calendar?${extra}${showCancelled ? '&cancelled=1' : ''}`;
 
   const step = view === 'day' ? 1 : view === 'week' ? 7 : 30;
   const prev = addISODays(anchor, -step);
@@ -115,7 +178,7 @@ export default async function AdminCalendarPage({
               {(['day', 'week', 'month'] as const).map((v) => (
                 <Link
                   key={v}
-                  href={`/admin/calendar?view=${v}&date=${anchor}`}
+                  href={keep(`view=${v}&date=${anchor}`)}
                   className={cn(
                     'rounded-full px-4 py-1.5 text-sm capitalize transition-colors duration-200',
                     view === v ? 'bg-forest-800 text-cream-100' : 'text-ink-soft hover:text-ink',
@@ -127,20 +190,20 @@ export default async function AdminCalendarPage({
             </div>
             <div className="flex items-center gap-1">
               <Link
-                href={`/admin/calendar?view=${view}&date=${prev}`}
+                href={keep(`view=${view}&date=${prev}`)}
                 className="flex h-10 w-10 items-center justify-center rounded-full border border-line bg-white text-ink transition-colors hover:bg-cream-100 dark:hover:bg-card"
                 aria-label="Previous"
               >
                 <ChevronLeft className="h-4 w-4" />
               </Link>
               <Link
-                href={`/admin/calendar?view=${view}&date=${today()}`}
+                href={keep(`view=${view}&date=${today()}`)}
                 className="rounded-full border border-line bg-white px-4 py-2 text-sm text-ink transition-colors hover:bg-cream-100 dark:hover:bg-card"
               >
                 Today
               </Link>
               <Link
-                href={`/admin/calendar?view=${view}&date=${next}`}
+                href={keep(`view=${view}&date=${next}`)}
                 className="flex h-10 w-10 items-center justify-center rounded-full border border-line bg-white text-ink transition-colors hover:bg-cream-100 dark:hover:bg-card"
                 aria-label="Next"
               >
@@ -156,18 +219,31 @@ export default async function AdminCalendarPage({
                 reason: b.reason,
               }))}
             />
+            {isAdmin && <CalendarImport status={importStatus} />}
             {feed && <CalendarSubscribe https={feed.https} webcal={feed.webcal} />}
           </div>
         </div>
       </Reveal>
 
       <div className="mt-6">
-        {view === 'day' && <DayView date={anchor} appointments={views} blocks={blocks} />}
-        {view === 'week' && <WeekView anchor={anchor} appointments={views} blocks={blocks} />}
-        {view === 'month' && <MonthView anchor={anchor} appointments={views} blocks={blocks} />}
+        {view === 'day' && <DayView date={anchor} appointments={views} blocks={shownBlocks} />}
+        {view === 'week' && <WeekView anchor={anchor} appointments={views} blocks={shownBlocks} />}
+        {view === 'month' && <MonthView anchor={anchor} appointments={views} blocks={shownBlocks} />}
       </div>
 
-      <Legend />
+      <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
+        <Legend />
+        <Link
+          href={`/admin/calendar?view=${view}&date=${anchor}${showCancelled ? '' : '&cancelled=1'}`}
+          className="text-xs font-medium text-ink-muted underline-offset-4 hover:text-ink hover:underline"
+        >
+          {showCancelled
+            ? 'Hide cancelled and missed'
+            : hiddenCount > 0
+              ? `Show cancelled and missed (${hiddenCount})`
+              : 'Show cancelled and missed'}
+        </Link>
+      </div>
     </div>
   );
 }
@@ -183,11 +259,7 @@ function DayView({
   appointments: AppointmentView[];
   blocks: AvailabilityBlock[];
 }) {
-  const rows = appointments
-    .filter((a) => parts(a.startAt).date === date)
-    .sort((a, b) => a.startAt.localeCompare(b.startAt));
-
-  const dayBlocks = blocks.filter((b) => b.date === date);
+  const items = dayItems(date, appointments, blocks);
 
   const hours = Array.from({ length: (DAY_END - DAY_START) / 60 }, (_, i) => DAY_START + i * 60);
 
@@ -195,17 +267,16 @@ function DayView({
     <div className="overflow-hidden rounded-3xl border border-line bg-white">
       {hours.map((minute) => {
         const label = `${String(Math.floor(minute / 60)).padStart(2, '0')}:00`;
-        const inHour = rows.filter((a) => {
-          const start = timeToMinutes(parts(a.startAt).time);
-          return start >= minute && start < minute + 60;
-        });
-
-        const hourBlocks = dayBlocks.filter((b) => {
-          if (!b.start || !b.end) return true; // Whole day block covers all hours
-          const bStart = timeToMinutes(b.start);
-          const bEnd = timeToMinutes(b.end);
-          return bStart < minute + 60 && bEnd > minute;
-        });
+        // A block is listed in the hour it starts (whole-day blocks in the first
+        // hour), so nothing repeats and each hour reads in time order.
+        const inHourItems = items.filter((it) =>
+          it.kind === 'block' && it.sort < 0
+            ? minute === DAY_START
+            : (it.sort >= minute && it.sort < minute + 60) ||
+              // anything before opening or after closing goes in the first / last row
+              (minute === DAY_START && it.sort >= 0 && it.sort < DAY_START) ||
+              (minute === DAY_END - 60 && it.sort >= DAY_END),
+        );
 
         return (
           <div key={minute} className="flex border-b border-line-soft last:border-0">
@@ -213,13 +284,16 @@ function DayView({
               {displayTime(label)}
             </div>
             <div className="flex-1 space-y-2 p-3">
-              {hourBlocks.map((b) => (
-                <BlockEventBlock key={b.id} block={b} />
-              ))}
-              {inHour.length === 0 && hourBlocks.length === 0 ? (
+              {inHourItems.length === 0 ? (
                 <div className="h-8" />
               ) : (
-                inHour.map((a) => <EventBlock key={a.id} appointment={a} detailed />)
+                inHourItems.map((it) =>
+                  it.kind === 'block' ? (
+                    <BlockEventBlock key={it.key} block={it.block} />
+                  ) : (
+                    <EventBlock key={it.key} appointment={it.appointment} detailed />
+                  ),
+                )
               )}
             </div>
           </div>
@@ -246,10 +320,7 @@ function WeekView({
       <div className="grid min-w-[52rem] grid-cols-7">
         {days.map((date) => {
           const isToday = date === today();
-          const rows = appointments
-            .filter((a) => parts(a.startAt).date === date)
-            .sort((a, b) => a.startAt.localeCompare(b.startAt));
-          const dayBlocks = blocks.filter((b) => b.date === date);
+          const items = dayItems(date, appointments, blocks);
 
           return (
             <div key={date} className="min-h-[26rem] border-r border-line-soft last:border-0">
@@ -272,13 +343,16 @@ function WeekView({
                 </p>
               </div>
               <div className="space-y-2 p-2">
-                {dayBlocks.map((b) => (
-                  <BlockEventBlock key={b.id} block={b} compact />
-                ))}
-                {rows.length === 0 && dayBlocks.length === 0 ? (
+                {items.length === 0 ? (
                   <p className="px-1 py-4 text-center text-2xs text-ink-faint">—</p>
                 ) : (
-                  rows.map((a) => <EventBlock key={a.id} appointment={a} compact />)
+                  items.map((it) =>
+                    it.kind === 'block' ? (
+                      <BlockEventBlock key={it.key} block={it.block} compact />
+                    ) : (
+                      <EventBlock key={it.key} appointment={it.appointment} compact />
+                    ),
+                  )
                 )}
               </div>
             </div>
@@ -314,10 +388,9 @@ function MonthView({
       <div className="grid grid-cols-7">
         {cells.map((date, i) => {
           if (!date) return <div key={`pad-${i}`} className="min-h-28 border-b border-r border-line-soft bg-cream-50/40 dark:bg-card/40" />;
-          const rows = appointments
-            .filter((a) => parts(a.startAt).date === date)
-            .sort((a, b) => a.startAt.localeCompare(b.startAt));
-          const dayBlocks = blocks.filter((b) => b.date === date);
+          const items = dayItems(date, appointments, blocks);
+          const rows = items.flatMap((it) => (it.kind === 'appointment' ? [it.appointment] : []));
+          const dayBlocks = items.flatMap((it) => (it.kind === 'block' ? [it.block] : []));
           const isToday = date === today();
 
           return (
@@ -355,17 +428,22 @@ function MonthView({
               )}
 
               <div className="mt-1.5 hidden space-y-1 sm:block">
-                {dayBlocks.map((b) => (
-                  <div
-                    key={b.id}
-                    className="relative block truncate rounded-md bg-stone-100 py-1 pl-2.5 pr-1.5 text-2xs text-stone-700 dark:bg-stone-800 dark:text-stone-300"
-                    title={`Blocked: ${b.reason ?? 'Unavailable'}`}
-                  >
-                    <span className="absolute inset-y-1 left-1 w-0.5 rounded-full bg-stone-400" />
-                    🚫 {b.reason || 'Blocked'}
-                  </div>
-                ))}
-                {rows.slice(0, 3).map((a) => (
+                {items.slice(0, 3).map((it) => {
+                  if (it.kind === 'block') {
+                    const b = it.block;
+                    return (
+                      <div
+                        key={it.key}
+                        className="relative block truncate rounded-md bg-stone-100 py-1 pl-2.5 pr-1.5 text-2xs text-stone-700 dark:bg-stone-800 dark:text-stone-300"
+                        title={`${b.source === 'external' ? 'Your calendar' : 'Blocked'}: ${b.reason ?? 'Unavailable'}`}
+                      >
+                        <span className="absolute inset-y-1 left-1 w-0.5 rounded-full bg-stone-400" />
+                        {b.start ? `${b.start} ` : ''}{b.reason || 'Blocked'}
+                      </div>
+                    );
+                  }
+                  const a = it.appointment;
+                  return (
                   <Link
                     key={a.id}
                     href={`/admin/appointments?ref=${a.reference}`}
@@ -382,11 +460,15 @@ function MonthView({
                     />
                     {displayTime(parts(a.startAt).time).replace(':00', '')} {a.client?.name}
                   </Link>
-                ))}
-                {rows.length + dayBlocks.length > 3 && (
-                  <p className="px-1.5 text-2xs text-ink-faint">
-                    +{rows.length + dayBlocks.length - 3} more
-                  </p>
+                  );
+                })}
+                {items.length > 3 && (
+                  <Link
+                    href={`/admin/calendar?view=day&date=${date}`}
+                    className="block px-1.5 text-2xs text-ink-faint hover:text-ink"
+                  >
+                    +{items.length - 3} more
+                  </Link>
                 )}
               </div>
             </div>
@@ -409,9 +491,12 @@ function BlockEventBlock({ block, compact }: { block: AvailabilityBlock; compact
         {block.start && block.end ? `${block.start} – ${block.end}` : 'Full Day Block'}
       </p>
       <p className={cn('truncate opacity-80', compact ? 'text-2xs' : 'text-sm flex items-center gap-1.5')}>
-        <Lock className="h-3 w-3" />
+        {block.source === 'external' ? <CalendarDays className="h-3 w-3" /> : <Lock className="h-3 w-3" />}
         {block.reason || 'Time Blocked'}
       </p>
+      {block.source === 'external' && !compact && (
+        <p className="mt-0.5 text-2xs uppercase tracking-[0.08em] opacity-60">From your calendar</p>
+      )}
     </div>
   );
 }
@@ -467,7 +552,7 @@ function EventBlock({
 
 function Legend() {
   return (
-    <div className="mt-5 flex flex-wrap items-center gap-x-6 gap-y-2 text-xs text-ink-soft">
+    <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-xs text-ink-soft">
       {(
         [
           ['confirmed', 'Confirmed'],
@@ -483,7 +568,7 @@ function Legend() {
       ))}
       <span className="flex items-center gap-2">
         <span className="h-3 w-[3px] rounded-full bg-stone-400" />
-        Blocked / Unavailable time
+        Blocked or busy in your calendar
       </span>
     </div>
   );

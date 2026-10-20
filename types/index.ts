@@ -172,6 +172,8 @@ export interface AvailabilityBlock {
   end?: TimeString | null;
   reason: string;
   createdAt: ISODateTime;
+  /** Set when the block comes from the practitioner's own connected calendar (read-only). */
+  source?: 'external';
 }
 
 export interface TimeSlot {
@@ -520,6 +522,15 @@ export interface Settings {
     calendarId: string;
     connected: boolean;
   };
+  /**
+   * The practitioner's own calendar, read in as busy time ("Add my calendar to
+   * BWC"). Optional: absent until she connects one. The link is private —
+   * anyone with it can read her calendar — so only administrators see it.
+   */
+  calendarImport?: {
+    url: string;
+    connectedAt: ISODateTime;
+  } | null;
   policy: {
     cancellation: string;
     minimumAge: number;
