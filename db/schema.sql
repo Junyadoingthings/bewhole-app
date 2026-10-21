@@ -356,6 +356,32 @@ alter table appointments add constraint appointments_follow_up_fk
   foreign key (follow_up_id) references follow_ups(id) on delete set null;
 
 -- --------------------------------------------------------------- calendar --
+-- The practice's Outlook calendar (two-way sync, 2026-10). One row. The
+-- refresh token is encrypted by the app before it is stored.
+create table if not exists outlook_connection (
+  id                       text primary key check (id = 'outlook'),
+  account_email            text not null,
+  refresh_token_enc        text not null,
+  connected_by_user_id     text not null references users(id) on delete cascade,
+  subscription_id          text,
+  subscription_expires_at  timestamptz,
+  client_state             text not null,
+  last_synced_at           timestamptz,
+  last_sync_error          text,
+  issues                   jsonb not null default '[]'::jsonb,
+  sync_lock_until          timestamptz,
+  created_at               timestamptz not null default now(),
+  updated_at               timestamptz not null default now()
+);
+
+-- Busy times from the practitioner's own Outlook events. Times only.
+create table if not exists outlook_busy (
+  id        text primary key,
+  start_at  timestamptz not null,
+  end_at    timestamptz not null
+);
+create index if not exists outlook_busy_range_idx on outlook_busy(start_at, end_at);
+
 create table if not exists calendar_events (
   id             text primary key,
   appointment_id text not null unique references appointments(id) on delete cascade,
@@ -498,7 +524,7 @@ begin
     'practitioners','availability_rules','availability_blocks','appointments',
     'payments','payment_events','follow_ups','calendar_events','notifications',
     'notification_logs','resources','workshops','client_notes','consents',
-    'audit_logs','settings','counters','password_reset_codes'
+    'audit_logs','settings','counters','password_reset_codes','outlook_connection','outlook_busy'
   ] loop
     execute format('alter table %I enable row level security', t);
     execute format('alter table %I force row level security', t);

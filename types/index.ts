@@ -349,7 +349,7 @@ export interface FollowUp {
 export interface CalendarEvent {
   id: ID;
   appointmentId: ID;
-  provider: 'google' | 'mock';
+  provider: 'google' | 'outlook' | 'mock';
   externalId: string;
   calendarId: string;
   htmlLink?: string | null;
@@ -358,6 +358,41 @@ export interface CalendarEvent {
   syncedAt?: ISODateTime | null;
   createdAt: ISODateTime;
   updatedAt: ISODateTime;
+}
+
+/**
+ * The practice's Outlook calendar, connected once by the administrator. The
+ * refresh token is stored encrypted (lib/outlook/token-crypto.ts).
+ */
+export interface OutlookConnection {
+  id: 'outlook';
+  accountEmail: string;
+  refreshTokenEnc: string;
+  connectedByUserId: ID;
+  subscriptionId?: string | null;
+  subscriptionExpiresAt?: ISODateTime | null;
+  /** Shared secret Microsoft echoes on every change notification. */
+  clientState: string;
+  lastSyncedAt?: ISODateTime | null;
+  lastSyncError?: string | null;
+  /** Things the sync could not apply on its own, newest first. */
+  issues: OutlookIssue[];
+  syncLockUntil?: ISODateTime | null;
+  createdAt: ISODateTime;
+  updatedAt: ISODateTime;
+}
+
+export interface OutlookIssue {
+  at: ISODateTime;
+  message: string;
+  appointmentId?: ID | null;
+}
+
+/** A busy time from Ntombi's own Outlook events. Times only — never their subject. */
+export interface OutlookBusy {
+  id: string;
+  startAt: ISODateTime;
+  endAt: ISODateTime;
 }
 
 /* ------------------------------------------------------------ notifications */

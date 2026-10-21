@@ -4,6 +4,13 @@ What changed, newest first. Each entry links to the pull request on GitHub.
 
 ## October 2026
 
+### 21 October — Outlook calendar, two-way
+- Console **Settings → Connect Outlook**. Once connected: every confirmed session appears in her
+  Outlook (and phone) **coloured by service** with a reminder; **moving** a session in Outlook
+  reschedules it on the website and **deleting** it cancels it (the client is emailed either
+  way); her **own Outlook events block those times** on the booking page. Clashes and mass
+  deletions are flagged in Settings rather than applied. Setup: DEPLOY.md §7a.
+
 ### 19 October — unpaid bookings no longer hold the time
 - At the practice's request, an unpaid card booking **stays in the console until it is cancelled
   by hand but does not reserve its time**: the slot stays bookable until payment is made.

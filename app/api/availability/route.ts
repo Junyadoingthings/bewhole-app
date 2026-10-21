@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { waitUntil } from '@vercel/functions';
 
 import { getDaySlots, getRangeAvailability } from '@/services/availability.service';
 import { LIMITS, clientKey, rateLimit } from '@/lib/rate-limit';
@@ -14,6 +15,9 @@ export const dynamic = 'force-dynamic';
  * action, so this response is a convenience for the UI, not a reservation.
  */
 export async function GET(request: Request) {
+  // Keep the practitioner's Outlook busy times fresh, after this response.
+  waitUntil(import('@/services/outlook').then((m) => m.syncIfStale(120)).catch(() => undefined));
+
   const limit = rateLimit(clientKey(request.headers, 'availability'), LIMITS.availability);
   if (!limit.ok) {
     return NextResponse.json(

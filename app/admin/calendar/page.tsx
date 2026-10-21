@@ -20,7 +20,13 @@ import {
   timeToMinutes,
   today,
 } from '@/lib/date';
-import { getCounter, hydrateAppointments, listAppointments, listAvailabilityBlocks } from '@/lib/db';
+import {
+  getCounter,
+  getOutlookConnection,
+  hydrateAppointments,
+  listAppointments,
+  listAvailabilityBlocks,
+} from '@/lib/db';
 import { withTimeout } from '@/lib/db/with-timeout';
 import { calendarFeedUrls } from '@/lib/links';
 import { cn } from '@/lib/utils';
@@ -70,8 +76,11 @@ export default async function AdminCalendarPage({
 }) {
   const user = await requireStaff();
   // The subscription link shows client names, so only the administrator sees it.
+  // Once Outlook is connected the sessions are already in her calendar, so the
+  // read-only subscription link is hidden (it would show them twice).
+  const outlookConnected = Boolean(await withTimeout(getOutlookConnection(), null, 4000));
   const feed =
-    user.role === 'ADMIN' || user.role === 'SUPER_ADMIN'
+    !outlookConnected && (user.role === 'ADMIN' || user.role === 'SUPER_ADMIN')
       ? await withTimeout(
           getCounter('calendar_feed').then((version) => calendarFeedUrls(version)),
           null,

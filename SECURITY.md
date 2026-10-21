@@ -82,6 +82,19 @@ to reproduce it.
 - `robots.txt` keeps search engines out of `/admin`, `/portal`, `/print`, `/api` and `/pay`
   (a courtesy — access control is on the server).
 
+### Outlook calendar (two-way)
+
+- Connected only by an administrator, through Microsoft's sign-in, with a random `state` checked
+  on return. Permissions: her calendar (`Calendars.ReadWrite`), staying signed in
+  (`offline_access`) and her account name (`User.Read`) — nothing else in her mailbox.
+- The refresh token is stored **encrypted** (AES-256-GCM, key derived from `SESSION_SECRET`) in
+  `outlook_connection`; access tokens are kept only in memory. Both new tables have row-level
+  security.
+- Change notifications must carry the secret `clientState`; even then they only trigger a re-read
+  of her calendar — nothing in a notification is trusted.
+- Her own events are stored as **times only** (`outlook_busy`), never their titles or details,
+  and are never shown to clients.
+
 ### Calendar subscription
 
 - `/api/calendar/feed/<token>.ics` serves the practice's sessions to Outlook, Apple or Google

@@ -9,6 +9,8 @@ import type {
   AvailabilityBlock,
   AvailabilityRule,
   CalendarEvent,
+  OutlookBusy,
+  OutlookConnection,
   ClientNote,
   Consent,
   FollowUp,
@@ -818,4 +820,50 @@ export async function markPasswordResetCodeUsed(id: ID): Promise<void> {
     const code = (db.passwordResetCodes ?? []).find((c) => c.id === id);
     if (code) code.usedAt = nowISO();
   });
+}
+
+/* ----------------------------------------------------------- outlook sync */
+
+export async function getOutlookConnection(): Promise<OutlookConnection | null> {
+  return (await getDb()).outlookConnection ?? null;
+}
+
+export async function saveOutlookConnection(c: OutlookConnection): Promise<OutlookConnection> {
+  return transact((db) => {
+    db.outlookConnection = { ...c, updatedAt: nowISO() };
+    return db.outlookConnection;
+  });
+}
+
+export async function deleteOutlookConnection(): Promise<void> {
+  await transact((db) => {
+    db.outlookConnection = null;
+    db.outlookBusy = [];
+  });
+}
+
+export async function tryLockOutlookSync(seconds: number): Promise<boolean> {
+  return transact((db) => {
+    const c = db.outlookConnection;
+    if (!c) return false;
+    if (c.syncLockUntil && c.syncLockUntil > nowISO()) return false;
+    c.syncLockUntil = new Date(Date.now() + seconds * 1000).toISOString();
+    return true;
+  });
+}
+
+export async function unlockOutlookSync(): Promise<void> {
+  await transact((db) => {
+    if (db.outlookConnection) db.outlookConnection.syncLockUntil = null;
+  });
+}
+
+export async function replaceOutlookBusy(rows: OutlookBusy[]): Promise<void> {
+  await transact((db) => {
+    db.outlookBusy = rows.map((r) => ({ ...r }));
+  });
+}
+
+export async function listOutlookBusy(from: string, to: string): Promise<OutlookBusy[]> {
+  return ((await getDb()).outlookBusy ?? []).filter((r) => r.endAt > from && r.startAt < to);
 }

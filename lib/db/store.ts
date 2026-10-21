@@ -18,6 +18,8 @@ import type {
   NotificationLog,
   NotificationRecord,
   Payment,
+  OutlookBusy,
+  OutlookConnection,
   PasswordResetCode,
   PaymentEvent,
   Practitioner,
@@ -67,6 +69,8 @@ export interface Database {
   /** Running numbers, e.g. the last invoice number handed out. */
   counters?: Record<string, number>;
   passwordResetCodes?: PasswordResetCode[];
+  outlookConnection?: OutlookConnection | null;
+  outlookBusy?: OutlookBusy[];
 }
 
 const DATA_DIR = path.join(process.cwd(), '.data');

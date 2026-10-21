@@ -32,7 +32,6 @@ import {
   verifyAndApplyPayment,
 } from '@/services/payment.service';
 import { emit, emitAfterResponse } from '@/services/events';
-import { getCalendarProvider } from '@/services/calendar';
 import { getCalendarEventForAppointment, upsertCalendarEvent, nowISO } from '@/lib/db';
 
 export interface AdminResult {
@@ -355,5 +354,35 @@ export async function switchAppointmentToMedicalAid(
   revalidatePath('/admin/appointments');
   revalidatePath('/admin');
   revalidatePath('/admin/payments');
+  return { ok: true };
+}
+
+/* ---------------------------------------------------------- outlook calendar */
+
+/** Re-read Outlook now (administrator). */
+export async function syncOutlookNow(): Promise<AdminResult & { summary?: string }> {
+  await requireAdmin();
+  const { ensureSubscription, syncFromOutlook } = await import('@/services/outlook');
+  await ensureSubscription().catch(() => undefined);
+  const r = await syncFromOutlook();
+  revalidatePath('/admin/settings');
+  revalidatePath('/admin/calendar');
+  if (!r.ok) return { ok: false, error: r.error ?? 'Outlook could not be reached.' };
+  if (r.skipped === 'locked') return { ok: true, summary: 'A sync was already running — refresh in a moment.' };
+  return {
+    ok: true,
+    summary: `${r.moved} moved, ${r.cancelled} cancelled, ${r.busy} busy times from your own events${r.issues ? `, ${r.issues} needing attention` : ''}.`,
+  };
+}
+
+/** Unlink Outlook (administrator). Events already in Outlook stay there. */
+export async function disconnectOutlook(): Promise<AdminResult> {
+  const actor = await requireAdmin();
+  const { removeSubscription } = await import('@/services/outlook');
+  await removeSubscription();
+  const { deleteOutlookConnection } = await import('@/lib/db');
+  await deleteOutlookConnection();
+  await audit({ actorUserId: actor.id, actorRole: actor.role, action: 'outlook.disconnected', entity: 'outlook_connection' });
+  revalidatePath('/admin/settings');
   return { ok: true };
 }

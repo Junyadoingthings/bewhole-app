@@ -28,6 +28,10 @@ export interface CalendarEventInput {
   attendeeEmail?: string | null;
   attendeeName?: string | null;
   conference?: boolean;
+  /** For colouring by service (Outlook categories). */
+  serviceId?: string | null;
+  /** This provider's existing event for the appointment, if any — updated rather than duplicated. */
+  existingId?: string | null;
 }
 
 export interface CalendarResult {
@@ -39,7 +43,7 @@ export interface CalendarResult {
 }
 
 export interface CalendarProvider {
-  readonly name: 'google' | 'mock';
+  readonly name: 'google' | 'outlook' | 'mock';
   readonly live: boolean;
   readonly calendarId: string;
   createOrUpdate(input: CalendarEventInput): Promise<CalendarResult>;
@@ -211,6 +215,25 @@ const mockProvider: CalendarProvider = {
     return { ok: true, externalId };
   },
 };
+
+/**
+ * The calendar the practice's sessions go to: her Outlook calendar once she
+ * has connected it in console Settings, otherwise Google (if configured).
+ */
+export async function getActiveCalendarProvider(): Promise<CalendarProvider> {
+  const { outlookConfigured } = await import('@/services/outlook/graph');
+  if (outlookConfigured()) {
+    const { getOutlookConnection } = await import('@/lib/db');
+    if (await getOutlookConnection()) return (await import('@/services/outlook')).outlookProvider;
+  }
+  return getCalendarProvider();
+}
+
+/** The provider that owns an already-created event. */
+export async function providerFor(name: string): Promise<CalendarProvider> {
+  if (name === 'outlook') return (await import('@/services/outlook')).outlookProvider;
+  return getCalendarProvider();
+}
 
 export function getCalendarProvider(): CalendarProvider {
   return googleProvider.live ? googleProvider : mockProvider;
