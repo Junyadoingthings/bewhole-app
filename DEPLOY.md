@@ -258,6 +258,41 @@ admin menu.
 
 ---
 
+## 7a. Outlook calendar (two-way sync)
+
+The practitioner's Outlook calendar (and so her phone) shows every confirmed session, coloured by
+service with a reminder; moving or deleting a session in Outlook reschedules or cancels it on the
+website (the client is emailed); and her own Outlook events block those times on the booking page.
+
+**One-time registration with Microsoft (about 10 minutes):**
+
+1. Go to **portal.azure.com**, sign in with any Microsoft account, and open **App registrations**
+   → **New registration**.
+   - Name: `Be Whole Care website`
+   - Supported account types: **Accounts in any organizational directory and personal Microsoft
+     accounts**
+   - Redirect URI: **Web** → `https://www.bewholecare.co.za/api/outlook/callback`
+2. On the new app's **Overview**, copy the **Application (client) ID** → Vercel env
+   `MS_CLIENT_ID` (Production).
+3. **Certificates & secrets** → **New client secret** (24 months) → copy its **Value** (shown
+   once) → Vercel env `MS_CLIENT_SECRET` (Production). Put a reminder in the calendar to renew it
+   before it expires.
+4. **API permissions** → **Add a permission** → Microsoft Graph → **Delegated** →
+   `Calendars.ReadWrite` and `offline_access` (`User.Read` is already there).
+5. Redeploy.
+
+**Then the practitioner connects it:** console → **Settings** → **Connect Outlook** → sign in with
+her Outlook account → **Accept**. Her upcoming sessions are added straight away. If she had added
+the read-only "Be Whole Care sessions" calendar link before, she should remove it from Outlook (it
+would show every session twice).
+
+How it stays in sync: Microsoft notifies `/api/outlook/notify` the moment her calendar changes;
+the daily job renews that notification (it lapses after ~3 days) and runs a full sync; the
+booking page also refreshes her busy times if they are more than two minutes old. Safety rules:
+only upcoming confirmed sessions are ever changed; a deletion is applied only after Outlook
+confirms the event is gone, and never more than three at once; a move onto another booking is
+flagged in Settings instead of applied.
+
 ## 8. Email
 
 1. Create a Resend account, add the domain, and set the DNS records it gives you.

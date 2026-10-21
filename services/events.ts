@@ -20,7 +20,7 @@ import { BUSINESS, CLIENT_EMAIL } from '@/config/business';
 import { addISODays, displayTime, formatFullDate, fromLocalParts, parts } from '@/lib/date';
 import { appUrl, appointmentPaymentUrl } from '@/lib/links';
 import { money } from '@/lib/utils';
-import { getCalendarProvider } from '@/services/calendar';
+import { getActiveCalendarProvider, providerFor } from '@/services/calendar';
 import { notify } from '@/services/notifications';
 import type { AppointmentView, FollowUpView, ID } from '@/types';
 
@@ -461,8 +461,11 @@ async function onAppointmentCreated(appointmentId: ID) {
  * is held at the practice's own link (CLIENT_EMAIL.onlineSessionLink).
  */
 async function syncCalendar(a: AppointmentView, description: string) {
-  const calendar = getCalendarProvider();
+  const calendar = await getActiveCalendarProvider();
+  const before = await getCalendarEventForAppointment(a.id);
   const result = await calendar.createOrUpdate({
+    serviceId: a.serviceId,
+    existingId: before?.provider === calendar.name ? before.externalId || null : null,
     appointmentId: a.id,
     summary: `${a.service.name} — ${a.client?.name ?? 'Client'}`,
     description,
@@ -790,7 +793,7 @@ async function onAppointmentCancelled(appointmentId: ID, byStaff: boolean, late:
 
   const event = await getCalendarEventForAppointment(a.id);
   if (event?.externalId) {
-    const result = await getCalendarProvider().cancel(event.externalId);
+    const result = await (await providerFor(event.provider)).cancel(event.externalId);
     await upsertCalendarEvent({
       ...event,
       status: result.ok ? 'cancelled' : 'failed',

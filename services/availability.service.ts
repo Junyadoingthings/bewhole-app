@@ -8,6 +8,7 @@ import {
   listAvailabilityBlocks,
   listAvailabilityRules,
   listBookedIntervals,
+  listOutlookBusy,
   listPractitioners,
 } from '@/lib/db';
 import {
@@ -122,7 +123,16 @@ export async function getDaySlots(
 
   const dayStart = fromLocalParts(date, '00:00').toISOString();
   const dayEnd = fromLocalParts(addISODays(date, 1), '00:00').toISOString();
-  const booked = await listBookedIntervals(dayStart, dayEnd);
+  // Bookings that hold time, plus the practitioner's own Outlook events
+  // (times only), which the booking page must not offer either.
+  const [bookings, outlookBusy] = await Promise.all([
+    listBookedIntervals(dayStart, dayEnd),
+    listOutlookBusy(dayStart, dayEnd),
+  ]);
+  const booked = [
+    ...bookings,
+    ...outlookBusy.map((b) => ({ id: b.id, start: b.startAt, end: b.endAt, practitionerId: null })),
+  ];
 
   const slots: TimeSlot[] = [];
   const seen = new Set<string>();

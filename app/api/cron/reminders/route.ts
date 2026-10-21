@@ -64,6 +64,18 @@ export async function GET(request: Request) {
     console.error('[bwc:cron] session prune failed', error);
   }
 
+  /* ------------------------------------------------------------ outlook */
+  // Keep Microsoft's change notifications alive (they lapse after ~3 days) and
+  // run a full sync as a safety net. Never fails the run.
+  let outlook: unknown = 'not connected';
+  try {
+    const { ensureSubscription, syncFromOutlook } = await import('@/services/outlook');
+    await ensureSubscription();
+    outlook = await syncFromOutlook();
+  } catch (error) {
+    outlook = { ok: false, error: error instanceof Error ? error.message : 'failed' };
+  }
+
   /* ---------------------------------------------------- follow-up reminders */
   const dueFollowUps = await pendingReminders();
   const followUpResults: { followUpId: string; ok: boolean; error?: string }[] = [];
@@ -129,5 +141,6 @@ export async function GET(request: Request) {
     finishedAt: new Date().toISOString(),
     followUps: { due: dueFollowUps.length, results: followUpResults },
     messages: { due: due.length, sent, failed },
+    outlook,
   });
 }

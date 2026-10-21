@@ -171,6 +171,9 @@ export async function createBooking(
     return { ok: false, error: 'A session can include up to 6 people.', field: 'participants' };
   }
 
+  // Her Outlook may have changed in the last few minutes: refresh busy times first.
+  await import('@/services/outlook').then((m) => m.syncIfStale(120)).catch(() => undefined);
+
   // Availability is re-derived server-side; the client's view may be stale.
   const slot = await resolveSlot(input.date, input.time, query);
   if (!slot.ok) return { ok: false, error: slot.reason, field: 'time' };

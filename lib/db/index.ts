@@ -105,6 +105,13 @@ export const updateFollowUp = repo.updateFollowUp;
 export const getCalendarEventForAppointment = repo.getCalendarEventForAppointment;
 export const upsertCalendarEvent = repo.upsertCalendarEvent;
 export const listCalendarEvents = repo.listCalendarEvents;
+export const getOutlookConnection = repo.getOutlookConnection;
+export const saveOutlookConnection = repo.saveOutlookConnection;
+export const deleteOutlookConnection = repo.deleteOutlookConnection;
+export const tryLockOutlookSync = repo.tryLockOutlookSync;
+export const unlockOutlookSync = repo.unlockOutlookSync;
+export const replaceOutlookBusy = repo.replaceOutlookBusy;
+export const listOutlookBusy = repo.listOutlookBusy;
 
 /* ----------------------------------------------------------- notifications */
 export const createNotification = repo.createNotification;

@@ -232,11 +232,38 @@ async function main() {
   // Deny-by-default, like every other table (db/schema.sql): Supabase exposes
   // tables through its public API, and row-level security with no policies
   // is what keeps these two out of it. The app's own connection bypasses it.
-  for (const table of ['counters', 'password_reset_codes']) {
+  // Outlook calendar sync (2026-10): the connection (encrypted refresh token)
+  // and the practitioner's busy times (times only).
+  await sql`
+    create table if not exists outlook_connection (
+      id                       text primary key check (id = 'outlook'),
+      account_email            text not null,
+      refresh_token_enc        text not null,
+      connected_by_user_id     text not null references users(id) on delete cascade,
+      subscription_id          text,
+      subscription_expires_at  timestamptz,
+      client_state             text not null,
+      last_synced_at           timestamptz,
+      last_sync_error          text,
+      issues                   jsonb not null default '[]'::jsonb,
+      sync_lock_until          timestamptz,
+      created_at               timestamptz not null default now(),
+      updated_at               timestamptz not null default now()
+    )`;
+  await sql`
+    create table if not exists outlook_busy (
+      id        text primary key,
+      start_at  timestamptz not null,
+      end_at    timestamptz not null
+    )`;
+  await sql`create index if not exists outlook_busy_range_idx on outlook_busy(start_at, end_at)`;
+  console.log('  ✓ outlook calendar tables');
+
+  for (const table of ['counters', 'password_reset_codes', 'outlook_connection', 'outlook_busy']) {
     await sql.unsafe(`alter table ${table} enable row level security`);
     await sql.unsafe(`alter table ${table} force row level security`);
   }
-  console.log('  ✓ row-level security on counters and password_reset_codes');
+  console.log('  ✓ row-level security on counters, password_reset_codes and outlook tables');
 
   for (const c of CATEGORIES) {
     await sql`

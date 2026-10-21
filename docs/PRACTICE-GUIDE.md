@@ -99,6 +99,21 @@ name in **Appointments** ("With …"), in your booking emails and on the consent
 - If a booking was made without online consent (for example, one you made yourself), the form says
   so — take consent in person and sign it.
 
+## Your Outlook calendar (two-way)
+
+**Settings** → **Connect Outlook** → sign in with your Outlook account → **Accept**. From then on:
+
+- Every confirmed session appears in Outlook and on your phone, **coloured by service**
+  (Individual green, Couples purple, Family orange, Pre-marital cranberry, Trauma & grief teal,
+  Workplace olive, Assessment blue), with a reminder an hour before. You can change any colour in
+  Outlook — right-click the category.
+- **Move** a session in Outlook and it moves on the website; the client is emailed the new time.
+- **Delete** a session in Outlook and it is cancelled; the client is emailed.
+- Anything else in your Outlook (personal appointments, leave) is **blocked on the booking page**.
+  Clients never see what it is. Events you mark as **Free** do not block.
+- If something cannot be applied — for example you moved a session onto another client's time —
+  it is listed under **Needs your attention** in Settings, and nothing changes until you fix it.
+
 ## Your bookings in Outlook, Apple or Google Calendar
 
 **Calendar** → **Add to my calendar** → choose where you keep your calendar (Outlook on your

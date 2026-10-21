@@ -17,6 +17,8 @@ import type {
   AvailabilityBlock,
   AvailabilityRule,
   CalendarEvent,
+  OutlookBusy,
+  OutlookConnection,
   ClientNote,
   Consent,
   FollowUp,
@@ -1561,4 +1563,92 @@ export async function recordPasswordResetAttempt(id: ID): Promise<number> {
 export async function markPasswordResetCodeUsed(id: ID): Promise<void> {
   const sql = getSql();
   await sql`update password_reset_codes set used_at = now() where id = ${id}`;
+}
+
+/* ----------------------------------------------------------- outlook sync */
+
+function mapOutlookConnection(r: any): OutlookConnection {
+  return {
+    id: 'outlook',
+    accountEmail: r.account_email,
+    refreshTokenEnc: r.refresh_token_enc,
+    connectedByUserId: r.connected_by_user_id,
+    subscriptionId: r.subscription_id ?? null,
+    subscriptionExpiresAt: iso(r.subscription_expires_at),
+    clientState: r.client_state,
+    lastSyncedAt: iso(r.last_synced_at),
+    lastSyncError: r.last_sync_error ?? null,
+    issues: Array.isArray(r.issues) ? r.issues : [],
+    syncLockUntil: iso(r.sync_lock_until),
+    createdAt: isoRequired(r.created_at),
+    updatedAt: isoRequired(r.updated_at),
+  };
+}
+
+export async function getOutlookConnection(): Promise<OutlookConnection | null> {
+  const sql = getSql();
+  const rows = await sql`select * from outlook_connection where id = 'outlook' limit 1`;
+  return rows[0] ? mapOutlookConnection(rows[0]) : null;
+}
+
+export async function saveOutlookConnection(c: OutlookConnection): Promise<OutlookConnection> {
+  const sql = getSql();
+  const [row] = await sql`
+    insert into outlook_connection (
+      id, account_email, refresh_token_enc, connected_by_user_id, subscription_id,
+      subscription_expires_at, client_state, last_synced_at, last_sync_error, issues,
+      sync_lock_until, created_at, updated_at
+    ) values (
+      'outlook', ${c.accountEmail}, ${c.refreshTokenEnc}, ${c.connectedByUserId}, ${c.subscriptionId ?? null},
+      ${c.subscriptionExpiresAt ?? null}, ${c.clientState}, ${c.lastSyncedAt ?? null}, ${c.lastSyncError ?? null},
+      ${sql.json(c.issues as never)}, ${c.syncLockUntil ?? null}, ${c.createdAt}, now()
+    )
+    on conflict (id) do update set
+      account_email = excluded.account_email, refresh_token_enc = excluded.refresh_token_enc,
+      connected_by_user_id = excluded.connected_by_user_id, subscription_id = excluded.subscription_id,
+      subscription_expires_at = excluded.subscription_expires_at, client_state = excluded.client_state,
+      last_synced_at = excluded.last_synced_at, last_sync_error = excluded.last_sync_error,
+      issues = excluded.issues, sync_lock_until = excluded.sync_lock_until, updated_at = now()
+    returning *`;
+  return mapOutlookConnection(row);
+}
+
+export async function deleteOutlookConnection(): Promise<void> {
+  const sql = getSql();
+  await sql`delete from outlook_connection where id = 'outlook'`;
+  await sql`delete from outlook_busy`;
+}
+
+/** Take the sync lock for `seconds`; false if another sync holds it. Atomic. */
+export async function tryLockOutlookSync(seconds: number): Promise<boolean> {
+  const sql = getSql();
+  const rows = await sql`
+    update outlook_connection
+       set sync_lock_until = now() + make_interval(secs => ${seconds})
+     where id = 'outlook' and (sync_lock_until is null or sync_lock_until < now())
+    returning id`;
+  return rows.length === 1;
+}
+
+export async function unlockOutlookSync(): Promise<void> {
+  const sql = getSql();
+  await sql`update outlook_connection set sync_lock_until = null where id = 'outlook'`;
+}
+
+/** Replace every stored busy time with the latest set from Outlook. */
+export async function replaceOutlookBusy(rows: OutlookBusy[]): Promise<void> {
+  const sql = getSql();
+  await sql.begin(async (tx) => {
+    await tx`delete from outlook_busy`;
+    for (const r of rows) {
+      await tx`insert into outlook_busy (id, start_at, end_at) values (${r.id}, ${r.startAt}, ${r.endAt})
+               on conflict (id) do update set start_at = excluded.start_at, end_at = excluded.end_at`;
+    }
+  });
+}
+
+export async function listOutlookBusy(from: string, to: string): Promise<OutlookBusy[]> {
+  const sql = getSql();
+  const rows = await sql`select * from outlook_busy where end_at > ${from} and start_at < ${to}`;
+  return rows.map((r: any) => ({ id: r.id, startAt: isoRequired(r.start_at), endAt: isoRequired(r.end_at) }));
 }
