@@ -32,7 +32,11 @@ export function CalendarSubscribe({ https, webcal }: { https: string; webcal: st
     {
       label: 'Outlook.com / Hotmail',
       hint: 'In the browser',
-      href: `https://outlook.live.com/calendar/0/addfromweb?url=${encoded}&name=${name}`,
+      // Through Microsoft sign-in first: signed out, outlook.live.com shows its
+      // marketing page instead of the calendar. Signed in, this passes straight through.
+      href: `https://login.live.com/login.srf?wa=wsignin1.0&wreply=${encodeURIComponent(
+        `https://outlook.live.com/calendar/0/addfromweb?url=${encoded}&name=${name}`,
+      )}`,
     },
     {
       label: 'Microsoft 365 (work Outlook)',
