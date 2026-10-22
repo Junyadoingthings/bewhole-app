@@ -25,13 +25,36 @@ export function CalendarSubscribe({ https, webcal }: { https: string; webcal: st
 
   React.useEffect(() => setLinks({ https, webcal }), [https, webcal]);
 
+  // A webcal:// link opens the device's calendar app — if it has one for it.
+  // When nothing takes over the page within two seconds, say so and point to
+  // the copy option, instead of a button that seems to do nothing.
+  const [appMissing, setAppMissing] = React.useState(false);
+  function watchAppOpen() {
+    setAppMissing(false);
+    let left = false;
+    const onLeave = () => {
+      left = true;
+    };
+    window.addEventListener('blur', onLeave, { once: true });
+    document.addEventListener('visibilitychange', onLeave, { once: true });
+    window.setTimeout(() => {
+      window.removeEventListener('blur', onLeave);
+      document.removeEventListener('visibilitychange', onLeave);
+      if (!left) setAppMissing(true);
+    }, 2000);
+  }
+
   const encoded = encodeURIComponent(links.https);
   const name = encodeURIComponent(CALENDAR_NAME);
   const options = [
-    { label: 'Outlook on this computer or phone', hint: 'Opens the Outlook app', href: links.webcal },
     {
-      label: 'Outlook.com / Hotmail',
-      hint: 'In the browser',
+      // One Outlook button for every device. A webcal:// link cannot open the
+      // Outlook app (Outlook for Mac and the phone app do not register for it,
+      // and some browsers block it silently), so the calendar is added to the
+      // Outlook account on the web — and then appears in the Outlook app on her
+      // phone and computer by itself, as the same account.
+      label: 'Outlook (phone, computer or web)',
+      hint: 'Outlook.com, Hotmail, Live',
       // Through Microsoft sign-in first: signed out, outlook.live.com shows its
       // marketing page instead of the calendar. Signed in, this passes straight through.
       href: `https://login.live.com/login.srf?wa=wsignin1.0&wreply=${encodeURIComponent(
@@ -43,7 +66,7 @@ export function CalendarSubscribe({ https, webcal }: { https: string; webcal: st
       hint: 'In the browser',
       href: `https://outlook.office.com/calendar/0/addfromweb?url=${encoded}&name=${name}`,
     },
-    { label: 'iPhone, iPad or Mac', hint: 'Apple Calendar', href: links.webcal },
+    { label: 'iPhone, iPad or Mac', hint: 'Apple Calendar', href: links.webcal, app: true },
     {
       label: 'Google Calendar',
       hint: 'In the browser',
@@ -101,6 +124,7 @@ export function CalendarSubscribe({ https, webcal }: { https: string; webcal: st
                   href={o.href}
                   target={o.href.startsWith('https:') ? '_blank' : undefined}
                   rel="noopener noreferrer"
+                  onClick={'app' in o && o.app ? watchAppOpen : undefined}
                   className="flex items-center justify-between gap-3 rounded-2xl border border-line bg-white px-4 py-3 text-sm text-ink transition-colors hover:border-forest-300 hover:bg-cream-50 dark:bg-card dark:hover:bg-canvas"
                 >
                   <span className="font-medium">{o.label}</span>
@@ -109,6 +133,14 @@ export function CalendarSubscribe({ https, webcal }: { https: string; webcal: st
               </li>
             ))}
           </ul>
+
+          {appMissing && (
+            <p role="status" className="rounded-2xl bg-cream-100 px-4 py-3 text-sm leading-relaxed text-ink dark:bg-canvas-sunk">
+              Nothing opened? This browser or device has no calendar app set up for the link. Copy the
+              link below and paste it in your calendar under “Add calendar from internet” / “New
+              calendar subscription”.
+            </p>
+          )}
 
           <div>
             <p className="text-sm font-medium text-ink">Or copy the link</p>

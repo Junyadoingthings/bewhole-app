@@ -116,8 +116,9 @@ name in **Appointments** ("With …"), in your booking emails and on the consent
 
 ## Your bookings in Outlook, Apple or Google Calendar
 
-**Calendar** → **Add to my calendar** → choose where you keep your calendar (Outlook on your
-computer or phone, Outlook.com, Microsoft 365, iPhone/iPad/Mac, or Google Calendar). Your sessions
+**Calendar** → **Add to my calendar** → choose where you keep your calendar (**Outlook** — it then
+appears in the Outlook app on your phone and computer too — Microsoft 365, iPhone/iPad/Mac, or
+Google Calendar). Your sessions
 and blocked time then appear there and update by themselves — Apple within minutes, Outlook and
 Google within a few hours. Each session shows the service, the client's name, the reference and
 where it takes place; medical aid holds and unpaid bookings are marked.
